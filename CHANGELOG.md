@@ -17,6 +17,8 @@ repository created from the template.
 - The expired release-age exceptions for Better Auth 1.7.7 and Effect 4.0.0 are gone.
 - `@effect/tsgo` 0.53: `schemaClassMissingBrand` is a warning (the tagged errors carry a brand), and
   `unstableApiUsage` is off, since the contract is built on HttpApi, which Effect 4 marks unstable.
+- The Lighthouse gate runs Chrome with `--renderer-process-limit=1`. With Chrome 156, a page loaded in a new
+  renderer process can lose its `navigationStart` from the trace, and the run fails with `NO_NAVSTART`.
 
 ### Security
 

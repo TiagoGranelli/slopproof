@@ -63,6 +63,12 @@ export const SMALL_SHM = SHM_BYTES < 1024 ** 3
 export const chromeFlags = (options: { edgeCertificateSpki?: string; http1: boolean }): string[] => [
   '--headless=new',
   '--no-sandbox',
+  // Lighthouse opens about:blank, then the page. Chrome 156 loads the page in a new renderer process, and that
+  // process can start tracing too late: the trace loses the page's navigationStart and Lighthouse stops with
+  // NO_NAVSTART (1 desktop run in 5 on a 4-vCPU CI runner, 1 in 25 locally). One renderer process keeps the page
+  // in the process already traced; the metrics do not move. No upstream issue yet. Remove it when 25 desktop runs
+  // without it pass: pnpm lighthouse --runs=25 --page=home --form-factor=desktop.
+  '--renderer-process-limit=1',
   ...(SMALL_SHM ? ['--disable-dev-shm-usage'] : []),
   ...(options.edgeCertificateSpki ? [`--ignore-certificate-errors-spki-list=${options.edgeCertificateSpki}`] : []),
   ...(options.http1 ? ['--disable-http2', '--disable-quic'] : []),
