@@ -83,7 +83,7 @@
     "drizzle-orm": "0.45.4",
     "effect": "4.0.5",
     "get-nonce": "1.0.1",
-    "nodemailer": "10.1.2",
+    "nodemailer": "10.1.7",
     "pg": "8.23.1",
     "radix-ui": "1.8.1",
     "react": "19.3.1",

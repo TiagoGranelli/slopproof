@@ -14,12 +14,16 @@ repository created from the template.
   `@tanstack/react-start` 1.169.3, Effect 4.0.5, Better Auth 1.7.10, MSW 3.0.3, Playwright 1.64.1, Vite 8.3.4,
   Vitest 5.0.5, `oxfmt` 0.73.0 and the Hey API snapshot `0.0.0-next-20260930190945`; Node 26.12.0 and pnpm
   12.14.0. `lefthook` stops at 2.2.1: 2.2.2 was published without provenance and fails `trustPolicy`.
-- The expired release-age exceptions for Better Auth 1.7.7 and Effect 4.0.0 and the `js-yaml` override are
-  gone; the Hey API snapshot now depends on a fixed `js-yaml`.
+- The expired release-age exceptions for Better Auth 1.7.7 and Effect 4.0.0 are gone.
 - `@effect/tsgo` 0.53: `schemaClassMissingBrand` is a warning (the tagged errors carry a brand), and
   `unstableApiUsage` is off, since the contract is built on HttpApi, which Effect 4 marks unstable.
 
 ### Security
+
+- Advisories published since 0.1.0 are fixed: `nodemailer` 10.1.7 (three moderate), and in transitive
+  dependencies `body-parser`, `undici`, `fast-uri`, `hono` and `ip-address` (re-resolved), `source-map-js` and
+  `js-yaml` (overrides, their parents pin the vulnerable version). GHSA-mrhx-c7xc-m3w5 in the `zod` 3 that only
+  Lighthouse's Chrome driver uses is accepted in `auditConfig` with its reason.
 
 - Start 1.169 serializes an error thrown before a server function runs, so an unknown `/_serverFn/<id>`
   answered with the id and Start's message. A request middleware (`src/lib/server-function-errors.ts`) now
