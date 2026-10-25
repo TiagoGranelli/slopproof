@@ -1,7 +1,7 @@
 // SSR's side of the business API without a database: the in-process client (GET only) and the per-request session
-// lookup, inside a real Start request context (`requestHandler`) with Better Auth's lookup stubbed. The db project
+// lookup, inside a real Start request context (`createServerEntry`) with Better Auth's lookup stubbed. The db project
 // counts the same composition in SQL statements (tests/db/ssr-session.test.ts).
-import { requestHandler } from '@tanstack/react-start/server'
+import { createServerEntry } from '@tanstack/react-start/server'
 import { describe, expect, it } from 'vitest'
 import { meGet, systemHealth } from '#/sdk/sdk.gen.ts'
 import { createInProcessApiClient } from '#/server/api/in-process-client.ts'
@@ -12,10 +12,12 @@ import { recordSessionLookups } from './better-auth-sessions.ts'
 /** Runs `work` as Start runs one request with `cookie` (none when null), and returns what `work` returned. */
 const serve = async <T>(work: () => Promise<T>, cookie: string | null = 'session=a'): Promise<T> => {
   const returned: T[] = []
-  await requestHandler(async () => {
-    returned.push(await work())
-    return new Response(null, { status: 204 })
-  })(new Request(`${env.appUrl}/dashboard`, { headers: cookie === null ? {} : { cookie } }), {})
+  await createServerEntry({
+    fetch: async () => {
+      returned.push(await work())
+      return new Response(null, { status: 204 })
+    },
+  }).fetch(new Request(`${env.appUrl}/dashboard`, { headers: cookie === null ? {} : { cookie } }), {})
   return returned[0]!
 }
 

@@ -72,6 +72,7 @@
           "returnEffectInGen": "warning",
           "runEffectInsideEffect": "warning",
           "runOfExitToRunExit": "warning",
+          "schemaClassMissingBrand": "warning",
           "schemaNumber": "warning",
           "schemaStructWithTag": "warning",
           "schemaSyncInEffect": "warning",
@@ -82,7 +83,11 @@
           "unnecessaryFailYieldableError": "warning",
           "unnecessaryPipe": "warning",
           "unnecessaryPipeChain": "warning",
-          "unnecessaryTypeofType": "warning"
+          "unnecessaryTypeofType": "warning",
+          // Effect 4 marks HttpApi, HttpRouter and @effect/vitest `@stability unstable`, and the contract, the API
+          // and the api tests are built on them by design. The rule would flag every use; upgrades of those modules
+          // are reviewed through `pnpm codegen` and the api tests instead (upgrade-prerelease-deps skill).
+          "unstableApiUsage": "off"
         }
       }
     ]

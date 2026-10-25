@@ -3,10 +3,10 @@
   "skills": {
     "shadcn": {
       "source": "shadcn-ui/ui",
-      "ref": "7c9eaba1c0a6404c990c144a654792e3313c650d",
+      "ref": "ad0a097d30cf9524ac4a3b5294c9513c5c344672",
       "sourceType": "github",
       "skillPath": "skills/shadcn/SKILL.md",
-      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+      "computedHash": "b864a958765563321f485a96f4d59c0bb6539f4286ab6d8b8b66895b7ebd302d"
     }
   }
 }

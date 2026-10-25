@@ -26,24 +26,9 @@ minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
 # `pnpm install`, `add`, `update` and `remove` drop exclude entries the lockfile no longer resolves.
 minimumReleaseAgeExcludePrune: true
-# Exceptions name one exact version and say why, for example a security fix needed before it is a day old:
+# Exceptions go in `minimumReleaseAgeExclude`, each naming one exact version and why, for example a security fix
+# needed before it is a day old:
 #   - 'some-package@1.2.3' # GHSA-xxxx-xxxx-xxxx fix; remove once older than a day (2026-10-01)
-minimumReleaseAgeExclude:
-  # Better Auth 1.7.7 (2026-09-30): the atomic rate-limit fix (better-auth#11331), taken for the 0.1.0 release
-  # before it was a day old. Published with provenance. Remove on 2026-10-02 or later.
-  - 'better-auth@1.7.7'
-  - 'auth@1.7.7'
-  - '@better-auth/core@1.7.7'
-  - '@better-auth/drizzle-adapter@1.7.7'
-  - '@better-auth/kysely-adapter@1.7.7'
-  - '@better-auth/memory-adapter@1.7.7'
-  - '@better-auth/mongo-adapter@1.7.7'
-  - '@better-auth/prisma-adapter@1.7.7'
-  - '@better-auth/telemetry@1.7.7'
-  # Effect 4.0.0 (2026-10-01): the first stable release of v4, taken for the 0.1.0 release in place of the release
-  # candidate before it was a day old. Published with provenance. Remove on 2026-10-03 or later.
-  - 'effect@4.0.0'
-  - '@effect/vitest@4.0.0'
 
 # Fails a version published with weaker provenance than an earlier one of the same package (a trusted
 # publisher replaced by a token, the usual sign of a takeover). Versions older than 30 days are not checked:
@@ -52,12 +37,9 @@ minimumReleaseAgeExclude:
 trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 43200
 
-# Transitive versions forced for a security fix; each names the advisory. Remove an entry once the parent ships
-# the fix (`pnpm why <package>`).
-overrides:
-  # GHSA-pm4m-ph32-ghv5 (high) and GHSA-724g-mxrg-4qvm (moderate): @hey-api/json-schema-ref-parser pins js-yaml
-  # 5.2.0 exactly. 5.2.2 is the first release with both fixes, a patch release of the same line.
-  'js-yaml@5.2.0': 5.2.2
+# Transitive versions forced for a security fix go in `overrides`, each naming the advisory, for example:
+#   'some-package@1.2.3': 1.2.4 # GHSA-xxxx-xxxx-xxxx
+# Remove an entry once the parent ships the fix (`pnpm why <package>`).
 
 # Advisories `pnpm audit:check` (`pnpm audit --audit-level high`, CI `supply-chain`) accepts. Only one that cannot
 # apply here goes in, with the reason and a review date; the usual fix is an upgrade or an `overrides` entry.

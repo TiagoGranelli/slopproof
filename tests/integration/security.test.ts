@@ -161,8 +161,9 @@ describe('requests', () => {
     }
   })
 
-  // Start answers an unknown id with a bare 500 until TanStack/router#8246 ships; then this expects 404
-  // (ADR 0009).
+  // Start throws on an unknown id before the function runs; serverFunctionRequestErrors
+  // (src/lib/server-function-errors.ts) turns that into a generic 500. Once TanStack/router#8246 ships, this
+  // expects 404 (ADR 0009).
   it('answers an unknown server function with an error that leaks nothing', async () => {
     const get = await fetch(`${appUrl}/_serverFn/does-not-exist`)
     const post = await fetch(`${appUrl}/_serverFn/does-not-exist`, {

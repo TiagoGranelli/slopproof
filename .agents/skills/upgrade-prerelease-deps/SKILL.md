@@ -34,7 +34,7 @@ description: Upgrade dependencies in this repo, above all the pinned pre-release
    - **Effect** (stable since 4.0.0): upgrade `@effect/vitest` with it, run `pnpm codegen`, and review the
      `openapi.json` diff. A check the document lost is a reason to stop: 4.0.0 exports a `Schema.isPattern` only
      when its RegExp has the `u` flag.
-   - **Hey API:** stays on the `next` snapshot `0.0.0-next-20260824173136`. The stable 0.99.0 needs the JS
+   - **Hey API:** stays on the `next` snapshot `0.0.0-next-20260930190945`. The stable 0.99.0 needs the JS
      compiler API that TypeScript 7 no longer has, and crashes; Renovate follows `next` only
      ([ADR 0002](../../../docs/decisions/0002-typescript-7.md)). After any bump, run `pnpm codegen` and review
      the `src/sdk` diff.

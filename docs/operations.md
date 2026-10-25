@@ -659,6 +659,9 @@ entry can appear on the same line in a log collector. `node .output/migrate.mjs`
   not-found, whether the browser or SSR called it. The global function middleware
   (`src/lib/server-function-errors.ts`) logs the error and hands the caller `Error('Internal error')`
   instead, so no raw message reaches the browser; an SSR caller renders the route error page.
+- `server function request failed`: a request to `/_serverFn/<id>` (`path`) failed before the function ran,
+  most often an id the current build does not know (a tab open across a deploy). The global request middleware
+  in the same file logs it and the caller gets `Error('Internal error')` with a 500 (ADR 0009).
 - `request error`: an error that reached Nitro's `error` hook from the request pipeline (`tags`,
   `method`, `path`). Nitro answers it with a bare JSON 500.
 - `starting` and `shutdown complete` bracket the process lifetime. `starting` records `appUrl`,
@@ -685,11 +688,10 @@ parameter.
 Nothing patches `console`, so a few framework paths still print raw, multi-line text to stderr. None of
 them carries request data beyond the URL path:
 
-- h3 inside Start prints the error for a request Start cannot route, such as an unknown
-  `/_serverFn/<id>` (the id is part of the path), until TanStack/router#8246 ships
-  ([ADR 0009](decisions/0009-unknown-server-function-id.md)).
-- Start prints `Server Fn Error!` for a server-function request that fails before the function runs,
-  for example an unparsable payload.
+- Start prints every error it serializes for a failed server-function request (`console.error`, with its
+  stack). After the two middlewares in `src/lib/server-function-errors.ts` that is the generic
+  `Error('Internal error')`, next to their JSON line with the cause; an unknown `/_serverFn/<id>` is one of
+  them until TanStack/router#8246 ships ([ADR 0009](decisions/0009-unknown-server-function-id.md)).
 - Nitro prints `[uncaughtException]` or `[unhandledRejection]` with the error before it calls the `error`
   hook, which then logs the JSON line. Such an error is a bug by definition; if it carried a Drizzle error,
   its parameters would be in that raw line.
@@ -722,9 +724,9 @@ rejections are logged and the process continues.
   already held; changing the password ends every other session, and resetting it ends all of them.
 - **Server functions:** an error inside a server function reaches the browser only as
   `Error('Internal error')` (see [Logs](#logs)); expected account failures (wrong password, rate limit)
-  are returned as values, not thrown. A request to `/_serverFn/<id>` with an unknown id gets Nitro's bare
-  JSON 500 (`{"status":500,"unhandled":true,"message":"HTTPError"}`), without the id or a stack, until
-  TanStack/router#8246 makes it a 404 ([ADR 0009](decisions/0009-unknown-server-function-id.md)).
+  are returned as values, not thrown. A request to `/_serverFn/<id>` with an unknown id gets a 500 with
+  `Error('Internal error')`, without the id or a stack, until TanStack/router#8246 makes it a 404
+  ([ADR 0009](decisions/0009-unknown-server-function-id.md)).
 - **Cookies:** `HttpOnly`, `SameSite=Lax`, `Path=/`, 7-day expiry, and `__Secure-` plus `Secure` over
   https.
 - **Headers:** every response gets `X-Content-Type-Options`, `X-Frame-Options: DENY`,
@@ -783,7 +785,7 @@ browsers, Postgres and (for `verify`) Mailpit, and moves artifacts. The logic li
 
 `pnpm ci:local [job ...]` is the faithful local equivalent (default: every job, in CI order). The container jobs
 (`static`, `supply-chain`, `drift`, `build`, `verify`, `lighthouse`) run in `.github/compose.ci.yaml`: a `runner` built
-from the official Playwright image for `@playwright/test` 1.63.0 (Ubuntu 24.04, all browsers including WebKit)
+from the official Playwright image for `@playwright/test` 1.64.1 (Ubuntu 24.04, all browsers including WebKit)
 with pnpm from `packageManager` and the pinned Caddy binary, next to Postgres 18.6 and Mailpit
 (`MAILPIT_HOST=mailpit`). pnpm installs the Node of `devEngines.runtime` there as it does everywhere. The host
 jobs (`workflows`, `secrets`, `docker`) drive Docker themselves and run on the host.

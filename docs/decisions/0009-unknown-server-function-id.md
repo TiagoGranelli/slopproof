@@ -23,6 +23,17 @@ Do not match the message. Keep Start's behavior until #8246 ships. The response 
 leaks nothing; the cost is a 500 instead of a 404, and a raw h3 error print in the log per unknown id (see
 docs/operations.md, Logs).
 
+## Update (2026-10-25): Start 1.169
+
+`@tanstack/react-start` 1.169 catches errors thrown before a server function runs and serializes them to the
+client with their message, so an unknown id answered `Server function info not found for does-not-exist`: the
+id the client sent, and Start's internals. The request middleware `serverFunctionRequestErrors`
+(`src/lib/server-function-errors.ts`, first in `src/start.ts`) catches every such error, whatever its message,
+logs it as `server function request failed` and throws `Error('Internal error')`, as the function middleware
+does for errors inside a function. It still matches no message text, so the decision above stands: a 500
+until #8246 ships. The log gets the JSON line with the cause and Start's print of the generic error instead
+of h3's print.
+
 ## Evidence
 
 `tests/integration/security.test.ts`, test "answers an unknown server function with an error that leaks
@@ -38,5 +49,5 @@ Monitoring sees 5xx for stale clients after a deploy until the upgrade.
 
 A `@tanstack/react-start` release contains #8246. Then, in that test, replace
 `expect(res.status).toBeGreaterThanOrEqual(400)` with `expect(res.status).toBe(404)`, delete the
-comment above it, and remove the h3 bullet from docs/operations.md (Logs) and the unknown-id sentence from
-Security settings.
+comment above it, update the `server function request failed` bullet in docs/operations.md (Logs) and the
+unknown-id sentence in Security settings.

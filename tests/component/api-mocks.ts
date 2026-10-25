@@ -63,11 +63,23 @@ export const apiFailure = (
       : new HttpResponse(failure.text, { status: failure.status, headers: { 'content-type': 'text/plain' } }),
   )
 
+const pendingReleases = new Set<() => void>()
+
 /** A response that waits until `release()`, to observe pending states. */
 export const held = () => {
   let release!: () => void
   const released = new Promise<void>((resolve) => (release = resolve))
+  pendingReleases.add(release)
   return { release, wait: () => released }
+}
+
+/**
+ * Releases every `held()` response a test left pending. Called by tests/component/setup.ts after each test:
+ * since MSW 3, `worker.stop()` waits for in-flight requests and would otherwise never return.
+ */
+export const releaseHeld = (): void => {
+  for (const release of pendingReleases) release()
+  pendingReleases.clear()
 }
 
 export const post = (overrides: Partial<Post> = {}): Post => ({
