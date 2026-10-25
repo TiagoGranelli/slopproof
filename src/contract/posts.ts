@@ -28,7 +28,7 @@ const PostPage = pageOf(Post).annotate({
 })
 export type PostPage = typeof PostPage.Type
 
-export class PostNotFound extends Schema.TaggedError<PostNotFound>()(
+export class PostNotFound extends Schema.TaggedError<PostNotFound, { readonly brand: unique symbol }>()(
   'PostNotFound',
   { id: PostId },
   { httpApiStatus: 404 },

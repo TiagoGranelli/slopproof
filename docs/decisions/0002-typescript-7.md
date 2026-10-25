@@ -13,7 +13,7 @@ published on the `next` dist-tag, but is not yet in a stable release.
 ## Decision
 
 - `typescript` is `7.0.2`: one TypeScript in the project, used by `tsc` (`pnpm typecheck`).
-- `@hey-api/openapi-ts` is pinned exactly to `0.0.0-next-20260824173136` (the `next` dist-tag), which has no
+- `@hey-api/openapi-ts` is pinned exactly to `0.0.0-next-20260930190945` (the `next` dist-tag), which has no
   `typescript` dependency or peer.
 - Renovate follows the `next` dist-tag for `@hey-api/openapi-ts` (`.github/renovate.json`): it would otherwise
   propose `0.99.0`, which sorts higher but crashes on TS 7. It does not report a stable release either;

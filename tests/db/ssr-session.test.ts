@@ -1,8 +1,8 @@
-// What an authed SSR page costs in session lookups, inside a real Start request context (`requestHandler`, which
+// What an authed SSR page costs in session lookups, inside a real Start request context (`createServerEntry`, which
 // Start wraps around every request): the `_authed` guard's read (requestSession, what getSession in
 // src/lib/session.functions.ts runs) and then the dashboard loader's API call through the in-process client, whose
 // Authentication middleware asks for the same cookie's session. Counted at pg's Client (helpers.ts).
-import { getRequestHeaders, requestHandler } from '@tanstack/react-start/server'
+import { createServerEntry, getRequestHeaders } from '@tanstack/react-start/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { meGet } from '#/sdk/sdk.gen.ts'
 import { createInProcessApiClient } from '#/server/api/in-process-client.ts'
@@ -33,10 +33,12 @@ const signIn = async (label: string) => {
 /** Runs `work` as Start runs a request for `/dashboard` with `cookie`, and returns what `work` returned. */
 const serve = async <T>(cookie: string, work: () => Promise<T>): Promise<T> => {
   const returned: T[] = []
-  await requestHandler(async () => {
-    returned.push(await work())
-    return new Response(null, { status: 204 })
-  })(new Request(`${env.appUrl}/dashboard`, { headers: { cookie } }), {})
+  await createServerEntry({
+    fetch: async () => {
+      returned.push(await work())
+      return new Response(null, { status: 204 })
+    },
+  }).fetch(new Request(`${env.appUrl}/dashboard`, { headers: { cookie } }), {})
   return returned[0]!
 }
 

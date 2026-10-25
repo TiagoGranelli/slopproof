@@ -20,3 +20,22 @@ export const serverFunctionErrors = createMiddleware({ type: 'function' }).serve
     throw new Error('Internal error')
   }
 })
+
+/**
+ * Global request middleware (src/start.ts) for the server-function errors Start throws before the function and
+ * its middleware run: an unknown or unresolved id (`Server function info not found for <id>`) or a payload it
+ * cannot read. Since Start 1.169 these are serialized to the client with their message, which echoes the id the
+ * client sent and names Start's internals. Logged here and replaced by the same generic error as above.
+ */
+export const serverFunctionRequestErrors = createMiddleware().server(async ({ next, handlerType, pathname }) => {
+  if (handlerType !== 'serverFn') return next()
+  try {
+    return await next()
+  } catch (error) {
+    if (error instanceof Response || isRedirect(error) || isNotFound(error)) throw error
+    log('error', 'server function request failed', { path: pathname, error })
+    // No `cause` on purpose: Start serializes the thrown error to the client; the original stays in the log.
+    // oxlint-disable-next-line preserve-caught-error
+    throw new Error('Internal error')
+  }
+})

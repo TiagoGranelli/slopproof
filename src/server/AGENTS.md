@@ -9,8 +9,8 @@ shutdown (`lifecycle.ts`). Read this before you change anything here. The root `
   plugins and `db/schema/`, which drizzle-kit and Better Auth's CLI load outside Start.
 - Only the server adapters import `src/server`: `src/routes/api/**`, `src/lib/*.functions.ts`,
   `src/lib/api-client.ts`, `src/lib/app-origin.ts` (the validated APP_URL for `src/start.ts`, through
-  `createServerOnlyFn`) and `src/lib/server-function-errors.ts`, the global function middleware (Fallow zone
-  `server-adapters`).
+  `createServerOnlyFn`) and `src/lib/server-function-errors.ts`, the global function and request middleware
+  (Fallow zone `server-adapters`).
 - SSR loaders call the same SDK as the browser. On the server it dispatches in-process to the Effect handler
   (`api/in-process-client.ts`), so every business operation goes through the contract. It sends GET only:
   writes come from the browser, through the CSRF check. The session is looked up once per request and shared

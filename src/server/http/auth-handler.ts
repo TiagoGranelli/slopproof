@@ -1,5 +1,5 @@
 import '@tanstack/react-start/server-only'
-import { getRequestHeaders, getRequestIP, getResponseHeaders } from '@tanstack/react-start/server'
+import { appendResponseHeader, getRequestHeaders, getRequestIP } from '@tanstack/react-start/server'
 import type { BASE_ERROR_CODES } from 'better-auth'
 import { auth } from '../auth.ts'
 import { finishBeforeShutdown } from '../background-tasks.ts'
@@ -147,8 +147,8 @@ export const callAuthEndpoint = async (
   input: EndpointInput = {},
 ): Promise<AuthEndpointResult> => {
   const response = await dispatch(endpointRequest(method, path, input))
-  const outgoing = getResponseHeaders()
-  for (const cookie of response.headers.getSetCookie()) outgoing.append('set-cookie', cookie)
+  const cookies = response.headers.getSetCookie()
+  if (cookies.length > 0) appendResponseHeader('set-cookie', cookies)
   return readOutcome(response, path)
 }
 

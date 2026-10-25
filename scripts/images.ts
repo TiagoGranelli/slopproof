@@ -8,12 +8,12 @@ import { readFileSync } from 'node:fs'
 export const IMAGES = {
   /** Same version as @playwright/test in package.json (browsers match the installed library): the ci:local runner. */
   playwright:
-    'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27',
+    'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea',
   /**
    * Same version as devEngines.runtime in package.json (Renovate's `node` group moves both): the base of the
    * Dockerfile and the Node of the eval image (.agents/evals/Dockerfile).
    */
-  node: 'node:26.10.0-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1',
+  node: 'node:26.12.0-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11',
   postgres: 'postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722',
   caddy: 'caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b',
   /** The mail catcher the test servers send account emails to (compose.yaml `mailpit`). */

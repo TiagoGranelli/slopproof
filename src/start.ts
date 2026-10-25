@@ -1,6 +1,6 @@
 import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/react-start'
 import { appOrigin } from '#/lib/app-origin.ts'
-import { serverFunctionErrors } from '#/lib/server-function-errors.ts'
+import { serverFunctionErrors, serverFunctionRequestErrors } from '#/lib/server-function-errors.ts'
 
 // Security headers and request logging live in the Nitro plugin src/server/nitro/http.ts, which also sees
 // static files that never reach this middleware. The Content-Security-Policy of SSR pages comes from the
@@ -33,6 +33,6 @@ const bodyLimit = createMiddleware().server(({ request, next }) => {
 })
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [csrf, bodyLimit],
+  requestMiddleware: [serverFunctionRequestErrors, csrf, bodyLimit],
   functionMiddleware: [serverFunctionErrors],
 }))
