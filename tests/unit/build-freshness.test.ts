@@ -32,7 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
-  rmSync(root, { recursive: true, force: true })
+  rmSync(root, { force: true, recursive: true })
 })
 
 describe('assertFreshBuild', () => {

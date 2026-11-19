@@ -15,7 +15,9 @@ export const forwardedFor = (
   peer: string | undefined,
   trustsProxies: boolean,
 ): string | undefined => {
-  if (!peer) return undefined
+  if (!peer) {
+    return undefined
+  }
   const chain = trustsProxies ? received?.trim() : undefined
   return chain ? `${chain}, ${peer}` : peer
 }

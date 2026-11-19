@@ -2,21 +2,22 @@
 // instead of at the end of `verify:app` (tests/integration/api.test.ts checks the app serves this same file).
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import type { Json } from '#/contract/json.ts'
 
 describe('openapi.json', () => {
   it('documents cookie auth on private operations and 400 only where there is a body or a query', () => {
     type Operation = {
-      security?: Array<Record<string, string[]>>
-      responses: Record<string, unknown>
-      requestBody?: unknown
-      parameters?: unknown[]
+      parameters?: Array<Json>
+      requestBody?: Json
+      responses: Record<string, Json>
+      security?: Array<Record<string, Array<string>>>
     }
     const spec = JSON.parse(readFileSync('openapi.json', 'utf8')) as {
-      paths: Record<string, Record<string, Operation>>
       components: {
-        schemas: Record<string, unknown>
-        securitySchemes?: Record<string, { type: string; in?: string; name?: string }>
+        schemas: Record<string, Json>
+        securitySchemes?: Record<string, { in?: string; name?: string; type: string }>
       }
+      paths: Record<string, Record<string, Operation>>
     }
     const schemes = spec.components.securitySchemes ?? {}
     expect(
@@ -27,10 +28,10 @@ describe('openapi.json', () => {
     // Generated names like Post_1 mean two schemas collided; the SDK types would get unstable names.
     expect(Object.keys(spec.components.schemas).filter((name) => /_\d+$/.test(name))).toEqual([])
     const operations = Object.entries(spec.paths).flatMap(([path, ops]) =>
-      Object.entries(ops).map(([method, op]) => ({ id: `${method.toUpperCase()} ${path}`, path, op })),
+      Object.entries(ops).map(([method, op]) => ({ id: `${method.toUpperCase()} ${path}`, op, path })),
     )
     expect(operations.length).toBeGreaterThan(0)
-    for (const { id, path, op } of operations) {
+    for (const { id, op, path } of operations) {
       const alternatives = (op.security ?? []).flatMap((requirement) => Object.keys(requirement)).toSorted()
       const privatePath = path === '/api/me' || path.startsWith('/api/me/')
       // An operation that needs a session lives under /api/me/ (POST /api/me/posts, not POST /api/posts), so the

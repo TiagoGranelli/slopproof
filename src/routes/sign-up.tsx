@@ -9,21 +9,25 @@ export const Route = createFileRoute('/sign-up')({
   // With AUTH_SIGN_UP=closed the page does not exist (404), like the endpoint behind it.
   beforeLoad: async () => {
     const [policy, session] = await Promise.all([getSignUpPolicy(), getSession()])
-    if (!policy.open) throw notFound()
-    if (session) throw redirect({ to: '/dashboard' })
+    if (!policy.open) {
+      throw notFound()
+    }
+    if (session) {
+      throw redirect({ to: '/dashboard' })
+    }
   },
+  component: SignUp,
   head: () => ({ meta: [{ title: pageTitle('Create an account') }, { name: 'robots', content: 'noindex' }] }),
   headers: () => ({ 'cache-control': 'private, no-store' }),
-  component: SignUp,
 })
 
 function SignUp() {
   return (
-    <Page title="Create an account" narrow>
+    <Page narrow title="Create an account">
       <SignUpForm />
       <p className="text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link to="/login" className="underline underline-offset-4">
+        <Link className="underline underline-offset-4" to="/login">
           Sign in
         </Link>
         .

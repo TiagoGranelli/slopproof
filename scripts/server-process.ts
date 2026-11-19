@@ -60,9 +60,12 @@ export const answersReady = async (url: string): Promise<boolean> => {
 /** Polls /api/ready for up to 30 s; fails at once, with the log's tail, if the server exits. */
 export const waitForServer = async (server: ChildProcess, directUrl: string, logFile: string): Promise<void> => {
   for (let attempt = 0; attempt < 120; attempt++) {
-    if (server.exitCode !== null)
+    if (server.exitCode !== null) {
       throw new Error(`server exited with ${server.exitCode}. Log (${logFile}):\n${tail(logFile)}`)
-    if (await answersReady(directUrl)) return
+    }
+    if (await answersReady(directUrl)) {
+      return
+    }
     await new Promise((r) => setTimeout(r, 250))
   }
   throw new Error(`server did not become ready in 30 s. Log (${logFile}):\n${tail(logFile)}`)

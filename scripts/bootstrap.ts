@@ -6,7 +6,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { xSync } from 'tinyexec'
 
 /** Exit code of `command`, or the reason it could not start (tinyexec throws when spawning fails). */
-const exitOf = (command: string, args: string[]) => {
+const exitOf = (command: string, args: Array<string>) => {
   try {
     return xSync(command, args, { nodeOptions: { stdio: 'inherit' } }).exitCode ?? 1
   } catch (error) {
@@ -14,7 +14,7 @@ const exitOf = (command: string, args: string[]) => {
   }
 }
 
-const step = (label: string, [command, ...args]: [string, ...string[]], hint: string) => {
+const step = (label: string, [command, ...args]: [string, ...Array<string>], hint: string) => {
   console.log(`\n> ${label}`)
   const exit = exitOf(command, args)
   if (exit !== 0) {
@@ -23,8 +23,9 @@ const step = (label: string, [command, ...args]: [string, ...string[]], hint: st
   }
 }
 
-if (existsSync('.env')) console.log('.env exists, keeping it')
-else {
+if (existsSync('.env')) {
+  console.log('.env exists, keeping it')
+} else {
   copyFileSync('.env.example', '.env')
   console.log('created .env from .env.example')
 }
@@ -44,10 +45,11 @@ if (!url) {
   console.error('DATABASE_URL is missing from .env; copy it from .env.example.')
   process.exit(1)
 }
-if (['127.0.0.1', 'localhost'].includes(url.hostname) && url.port !== port)
+if (['127.0.0.1', 'localhost'].includes(url.hostname) && url.port !== port) {
   console.warn(
     `warning: DATABASE_URL uses port ${url.port || 5432} but compose.yaml publishes Postgres on ${port} (POSTGRES_PORT).`,
   )
+}
 
 step(
   'docker compose up --detach --wait db mailpit',

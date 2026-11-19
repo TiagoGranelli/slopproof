@@ -4,6 +4,7 @@
 // of its own next to this one.
 import { Effect, Layer } from 'effect'
 import { afterAll, describe, expect, it } from 'vitest'
+import type { Json } from '#/contract/json.ts'
 import { auth } from '#/server/auth.ts'
 import { pool } from '#/server/db/client.ts'
 import { DatabaseHealth } from '#/server/db/health.ts'
@@ -26,17 +27,16 @@ describe('DatabaseHealth', () => {
 type Endpoint = `${'GET' | 'POST'} /${string}`
 
 /** A request to Better Auth's router as a signed-in browser of this app would send it. */
-const request = (endpoint: Endpoint, cookie: string, body: Record<string, unknown> = {}) => {
+const request = (endpoint: Endpoint, cookie: string, body: Json = {}) => {
   const [method, path] = endpoint.split(' ') as ['GET' | 'POST', string]
   return auth.handler(
     new Request(`${env.appUrl}/api/auth${path}`, {
+      body: method === 'POST' ? JSON.stringify(body) : null,
+      headers:
+        method === 'POST'
+          ? { 'content-type': 'application/json', cookie, origin: env.appUrl }
+          : { cookie, origin: env.appUrl },
       method,
-      headers: {
-        cookie,
-        origin: env.appUrl,
-        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
-      },
-      ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
     }),
   )
 }
@@ -46,9 +46,9 @@ const signedIn = async (others: number) => {
   const account = await createAccount(`sessions-${others}`)
   const response = await auth.handler(
     new Request(`${env.appUrl}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: env.appUrl },
       body: JSON.stringify({ email: account.email, password: account.password }),
+      headers: { 'content-type': 'application/json', origin: env.appUrl },
+      method: 'POST',
     }),
   )
   expect(response.status).toBe(200)
@@ -57,7 +57,9 @@ const signedIn = async (others: number) => {
     .map((c) => c.split(';')[0]!)
     .join('; ')
   const context = await auth.$context
-  for (let i = 0; i < others; i++) await context.internalAdapter.createSession(account.id)
+  for (let i = 0; i < others; i++) {
+    await context.internalAdapter.createSession(account.id)
+  }
   return { cookie, password: account.password }
 }
 
@@ -75,12 +77,12 @@ describe('session endpoints', () => {
    */
   const BUDGETS = {
     'GET /list-sessions': () => 3,
-    'POST /revoke-sessions': () => 4,
     'POST /revoke-other-sessions': (others: number) => 3 + 2 * others,
+    'POST /revoke-sessions': () => 4,
     // changePassword in src/lib/auth.functions.ts always signs the other sessions out with it.
     'POST /change-password': () => 7,
   }
-  const bodies: Partial<Record<keyof typeof BUDGETS, (password: string) => Record<string, unknown>>> = {
+  const bodies: Partial<Record<keyof typeof BUDGETS, (password: string) => Json>> = {
     'POST /change-password': (password) => ({
       currentPassword: password,
       newPassword: `new-${password}`,

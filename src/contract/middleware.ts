@@ -4,9 +4,9 @@ import { RateLimited, Unauthorized, ValidationError } from './errors.ts'
 import type { UserId } from './ids.ts'
 
 interface SessionUser {
+  readonly email: string
   readonly id: UserId
   readonly name: string
-  readonly email: string
 }
 
 export class CurrentUser extends Context.Service<CurrentUser, SessionUser>()('app/CurrentUser') {}

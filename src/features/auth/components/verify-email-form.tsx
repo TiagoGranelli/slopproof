@@ -13,24 +13,25 @@ export function VerifyEmailForm(props: { token: string }) {
   const verify = useVerifyEmail()
   // No fields: the token comes from the link.
   const form = useAppForm({ defaultValues: {}, onSubmit: () => verify.mutate({ token: props.token }) })
-  if (verify.isSuccess)
+  if (verify.isSuccess) {
     return (
       <AuthStatus title="Email confirmed">
         Your email address is confirmed.{' '}
-        <Link to="/login" className="underline underline-offset-4">
+        <Link className="underline underline-offset-4" to="/login">
           Sign in
         </Link>{' '}
         to continue.
       </AuthStatus>
     )
+  }
   return (
     <>
       <AuthForm
-        id="verify-email"
-        submitLabel="Confirm email"
-        form={form}
-        pending={verify.isPending}
         error={verify.error}
+        form={form}
+        id="verify-email"
+        pending={verify.isPending}
+        submitLabel="Confirm email"
       >
         <p>Confirm that this address is yours to finish setting up your account.</p>
       </AuthForm>

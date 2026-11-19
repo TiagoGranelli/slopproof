@@ -6,6 +6,6 @@ import { Schema } from 'effect'
  * the Schema runtime stays out of the chunks a page loads before the first interaction.
  */
 export const toFormSchema = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) => ({
-  validator: Schema.toStandardSchemaV1(schema),
   decode: Schema.decodeSync(schema),
+  validator: Schema.toStandardSchemaV1(schema),
 })

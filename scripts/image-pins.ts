@@ -16,16 +16,16 @@ const PINNED_COPIES = [
 /** Each pinned reference with a pattern for `<name>:<tag>[@sha256:...]` of the same image. */
 const PATTERNS = Object.values(IMAGES).map((ref) => {
   const name = ref.slice(0, ref.lastIndexOf(':', ref.indexOf('@')))
-  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\/]/g, '\\$&')
-  return { ref, pattern: new RegExp(`(?<![\\w./-])${escaped}:[\\w.-]+(@sha256:[0-9a-f]{64})?`, 'g') }
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`)
+  return { pattern: new RegExp(`(?<![\\w./-])${escaped}:[\\w.-]+(@sha256:[0-9a-f]{64})?`, 'g'), ref }
 })
 
-export const pinProblems = (): string[] =>
+export const pinProblems = (): Array<string> =>
   PINNED_COPIES.flatMap((file) => {
     const text = readFileSync(file, 'utf8')
-    return PATTERNS.flatMap(({ ref, pattern }) =>
-      [...text.matchAll(pattern)]
-        .filter((match) => match[0] !== ref)
-        .map((match) => `${file}: ${match[0]} (scripts/images.ts has ${ref})`),
+    return PATTERNS.flatMap(({ pattern, ref }) =>
+      [...text.matchAll(pattern)].flatMap((match) =>
+        match[0] === ref ? [] : [`${file}: ${match[0]} (scripts/images.ts has ${ref})`],
+      ),
     )
   })

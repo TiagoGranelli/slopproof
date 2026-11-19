@@ -25,7 +25,7 @@ describe('a form whose schema has not loaded yet', () => {
 
     await page.getByRole('button', { name: 'Sign in' }).click()
     await expect.poll(() => chunk.requests).toBe(1)
-    const email = page.getByRole('textbox', { name: 'Email', exact: true })
+    const email = page.getByRole('textbox', { exact: true, name: 'Email' })
     await expect.element(email).not.toHaveAttribute('aria-invalid')
 
     chunk.resolve(undefined)

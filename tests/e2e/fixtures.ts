@@ -1,11 +1,11 @@
 import { expect, test as base } from '@playwright/test'
 
 export type CspViolation = {
-  page: string
-  directive: string
   blocked: string
-  sample: string
+  directive: string
   disposition: string
+  page: string
+  sample: string
 }
 
 type ReportViolation = (violation: Omit<CspViolation, 'page'>) => void
@@ -15,21 +15,21 @@ type ReportViolation = (violation: Omit<CspViolation, 'page'>) => void
  * event in any page of the test's browser context is reported to the test, which fails if any arrived.
  * A test that provokes violations on purpose reads and empties `cspViolations` itself.
  */
-export const test = base.extend<{ cspViolations: CspViolation[] }>({
+export const test = base.extend<{ cspViolations: Array<CspViolation> }>({
   cspViolations: [
     async ({ context }, use) => {
-      const violations: CspViolation[] = []
+      const violations: Array<CspViolation> = []
       await context.exposeBinding('reportCspViolation', ({ page }, violation: Omit<CspViolation, 'page'>) => {
         violations.push({ page: page.url(), ...violation })
       })
       await context.addInitScript(() => {
         document.addEventListener('securitypolicyviolation', (event) => {
-          const report = (window as unknown as { reportCspViolation: ReportViolation }).reportCspViolation
-          report({
-            directive: event.effectiveDirective,
+          const report = (window as Window & { reportCspViolation?: ReportViolation }).reportCspViolation
+          report?.({
             blocked: event.blockedURI,
-            sample: event.sample,
+            directive: event.effectiveDirective,
             disposition: event.disposition,
+            sample: event.sample,
           })
         })
       })

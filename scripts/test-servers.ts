@@ -12,17 +12,17 @@ export type TestServers = {
   appUrl: string
   /** The shipped defaults on the same database: closed sign-up, and the test process not a trusted proxy. */
   closedAppUrl: string
-  mailpitUrl: string
   databaseUrl: string
   /** The open server's SERVER_SETTINGS. */
   env: Record<string, string>
-  user: User
+  mailpitUrl: string
   otherUser: User
+  user: User
 }
 
 type StartedTestServers = { servers: TestServers; stop: () => Promise<void> }
 
-type Mail = { api: string; settings: { SMTP_URL: string; MAIL_FROM: string } }
+type Mail = { api: string; settings: { MAIL_FROM: string; SMTP_URL: string } }
 
 /** Mailpit (`pnpm mail:up`): the open server sends account mail there, and the E2E tests read it back. */
 const mailpit = async (): Promise<Mail> => {
@@ -30,13 +30,14 @@ const mailpit = async (): Promise<Mail> => {
   const host = process.env.MAILPIT_HOST || '127.0.0.1'
   const api = `http://${host}:${process.env.MAILPIT_HTTP_PORT || '54380'}`
   const ready = await fetch(`${api}/readyz`).catch(() => undefined)
-  if (!ready?.ok)
+  if (!ready?.ok) {
     throw new Error(
       `Mailpit is not reachable at ${api}/readyz (${ready ? `status ${ready.status}` : 'no answer'}; expected 200). ` +
         'Start it with `pnpm mail:up`.',
     )
+  }
   const smtp = `smtp://${host}:${process.env.MAILPIT_SMTP_PORT || '54325'}`
-  return { api, settings: { SMTP_URL: smtp, MAIL_FROM: 'App <no-reply@example.test>' } }
+  return { api, settings: { MAIL_FROM: 'App <no-reply@example.test>', SMTP_URL: smtp } }
 }
 
 /** What scripts/create-user.ts and in-process server modules need to act on the app's database. */
@@ -50,31 +51,40 @@ const startOpenServer = (runner: string, databaseUrl: string, mail: Mail) =>
     trustedProxies: LOOPBACK,
     // Behind the edge the test process is a proxy in front of Caddy instead: Caddy believes its
     // X-Forwarded-For (it connects from loopback) and hands the resolved client IP to the app.
-    ...(process.env.TEST_EDGE === '1'
-      ? { edge: { trustedProxies: 'private_ranges', logFile: `test-results/edge-${runner}.log` } }
-      : {}),
+    edge:
+      process.env.TEST_EDGE === '1'
+        ? { logFile: `test-results/edge-${runner}.log`, trustedProxies: 'private_ranges' }
+        : undefined,
     settings: { AUTH_SIGN_UP: 'open', ...mail.settings },
   })
 
 /** The shipped defaults next to `open`, on its database and accounts: closed sign-up, the tests not a proxy. */
 const startClosedServer = (runner: string, open: RunningApp, mail: Mail) =>
   startApp({
+    alongside: open,
     databaseUrl: open.databaseUrl,
     logFile: `test-results/app-server-${runner}-closed.log`,
-    trustedProxies: '10.0.0.0/8',
     settings: { AUTH_SIGN_UP: 'closed', ...mail.settings },
-    alongside: open,
+    trustedProxies: '10.0.0.0/8',
   })
 
 const handOver = (open: RunningApp, closed: RunningApp, mail: Mail): TestServers => ({
   appUrl: open.url,
   closedAppUrl: closed.url,
-  mailpitUrl: mail.api,
   databaseUrl: open.databaseUrl,
   env: Object.fromEntries(SERVER_SETTINGS.map((name) => [name, open.env[name] ?? ''])),
-  user: open.user,
+  mailpitUrl: mail.api,
   otherUser: open.otherUser,
+  user: open.user,
 })
+
+/** Stops the apps in `running` and drops their database, unless KEEP_TEST_DB=1. */
+const stopAll = (running: ReadonlyArray<RunningApp>, databaseUrl: string) => async () => {
+  await Promise.all(running.map((app) => app.stop()))
+  if (process.env.KEEP_TEST_DB !== '1') {
+    await dropTestDatabase(databaseUrl)
+  }
+}
 
 /**
  * The two servers a test runner tests, on a fresh `app_<runner>_<pid>_test` database with two verified authors.
@@ -84,11 +94,8 @@ const handOver = (open: RunningApp, closed: RunningApp, mail: Mail): TestServers
 export const startTestServers = async (runner: 'integration' | 'e2e'): Promise<StartedTestServers> => {
   const mail = await mailpit()
   const databaseUrl = testDatabaseUrl(runner)
-  const running: RunningApp[] = []
-  const stop = async () => {
-    await Promise.all(running.map((app) => app.stop()))
-    if (process.env.KEEP_TEST_DB !== '1') await dropTestDatabase(databaseUrl)
-  }
+  const running: Array<RunningApp> = []
+  const stop = stopAll(running, databaseUrl)
   try {
     const open = await startOpenServer(runner, databaseUrl, mail)
     running.push(open)

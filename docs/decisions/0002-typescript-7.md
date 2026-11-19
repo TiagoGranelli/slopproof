@@ -1,6 +1,6 @@
 # 0002: TypeScript 7 only, with the Hey API snapshot that no longer needs the TypeScript API
 
-Status: Accepted (2026-09-27)
+Status: Accepted (2026-09-27); `pnpm typecheck` runs tsrs since ADR 0016
 
 ## Context
 

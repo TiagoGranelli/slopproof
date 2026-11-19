@@ -35,7 +35,7 @@ const PATHS = [
 
 /** Like src/router.tsx (the same MutationCache), minus retries: a failed request shows its error state at once. */
 export const testQueryClient = () =>
-  createQueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: false }, mutations: { retry: false } } })
+  createQueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false, staleTime: 30_000 } } })
 
 /**
  * Renders `ui` on every route, starting at `url`. `route` puts a real file route of src/routes at `path`
@@ -44,7 +44,7 @@ export const testQueryClient = () =>
  */
 export async function renderInApp(
   ui: ReactNode,
-  options: { url?: string; queryClient?: QueryClient; route?: { path: string; route: AnyRoute } } = {},
+  options: { queryClient?: QueryClient; route?: { path: string; route: AnyRoute }; url?: string } = {},
 ) {
   const queryClient = options.queryClient ?? testQueryClient()
   const rootRoute = createRootRoute({
@@ -57,16 +57,16 @@ export async function renderInApp(
   })
   const mounted = options.route
   // Attached the way src/routeTree.gen.ts attaches it, under this test's root.
-  mounted?.route.update({ id: mounted.path, path: mounted.path, getParentRoute: () => rootRoute } as never)
+  mounted?.route.update({ getParentRoute: () => rootRoute, id: mounted.path, path: mounted.path } as never)
   const router = createRouter({
+    context: { queryClient },
+    history: createMemoryHistory({ initialEntries: [options.url ?? '/'] }),
     routeTree: rootRoute.addChildren([
-      ...PATHS.filter((path) => path !== mounted?.path).map((path) =>
-        createRoute({ getParentRoute: () => rootRoute, path, component: () => null }),
+      ...PATHS.flatMap((path) =>
+        path === mounted?.path ? [] : [createRoute({ component: () => null, getParentRoute: () => rootRoute, path })],
       ),
       ...(mounted ? [mounted.route] : []),
     ]),
-    history: createMemoryHistory({ initialEntries: [options.url ?? '/'] }),
-    context: { queryClient },
   })
   await router.load()
   const screen = await render(
@@ -74,7 +74,7 @@ export async function renderInApp(
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { ...screen, router, queryClient }
+  return { ...screen, queryClient, router }
 }
 
 /**
@@ -83,7 +83,7 @@ export async function renderInApp(
  * agree (a hydration mismatch is a recoverable error React reports to `onRecoverableError`).
  */
 export async function serverRendered(ui: ReactNode, options: { url?: string } = {}) {
-  const { router, queryClient, unmount } = await renderInApp(null, { url: options.url ?? '/login' })
+  const { queryClient, router, unmount } = await renderInApp(null, { url: options.url ?? '/login' })
   await unmount()
   const tree = (
     <RouterContextProvider router={router}>
@@ -94,17 +94,17 @@ export async function serverRendered(ui: ReactNode, options: { url?: string } = 
   container.innerHTML = renderToString(tree)
   document.body.append(container)
   onTestFinished(() => container.remove())
-  const mismatches: unknown[] = []
+  const mismatches: Array<unknown> = []
   const hydrate = () => {
     const root = hydrateRoot(container, tree, { onRecoverableError: (error) => mismatches.push(error) })
     onTestFinished(() => root.unmount())
   }
   return {
     container,
-    screen: page.elementLocator(container),
     form: () => container.querySelector('form')!,
     hydrate,
     mismatches,
+    screen: page.elementLocator(container),
   }
 }
 
@@ -123,7 +123,7 @@ export async function expectFieldIssue(
 ) {
   await expect.element(page.getByRole('alert')).toHaveTextContent(message)
   await expect.element(field).toHaveAttribute('aria-invalid', 'true')
-  await expect.element(field).toHaveAccessibleDescription(new RegExp(`${message.replaceAll('.', '\\.')}$`))
+  await expect.element(field).toHaveAccessibleDescription(new RegExp(`${message.replaceAll('.', String.raw`\.`)}$`))
   await expect.element(field).toHaveFocus()
   await expect.element(formOf(button)).not.toHaveAttribute('aria-describedby')
 }

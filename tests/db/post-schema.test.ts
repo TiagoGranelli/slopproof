@@ -1,3 +1,4 @@
+import { isDate } from 'node:util/types'
 // The post table on real Postgres: the plans behind the keyset lists, the body CHECK constraint (a backstop that
 // never rejects what the API accepts) and updated_at from the database clock. Seeded rows are dated in 2000, so
 // they sit below every post the other db files create "now" in the public feed.
@@ -16,11 +17,11 @@ import { createAccount } from './helpers.ts'
 
 afterAll(() => pool.end())
 
-const logged: Array<{ query: string; params: unknown[] }> = []
+const logged: Array<{ params: Array<unknown>; query: string }> = []
 const recordingDb = drizzle({
   client: pool,
+  logger: { logQuery: (query, params) => void logged.push({ params, query }) },
   schema,
-  logger: { logQuery: (query, params) => void logged.push({ query, params }) },
 })
 const repoLayer = PostsRepo.layer.pipe(Layer.provide(Layer.succeed(Database, recordingDb)))
 /** The statement one repository call sends. */
@@ -35,9 +36,9 @@ const statementOf = async <A>(call: (repo: typeof PostsRepo.Service) => Effect.E
   return { returned, ...logged[0]! }
 }
 
-type PlanNode = { 'Node Type': string; 'Index Name'?: string; 'Scan Direction'?: string; Plans?: PlanNode[] }
-const nodesOf = (node: PlanNode): PlanNode[] => [node, ...(node.Plans ?? []).flatMap((child) => nodesOf(child))]
-const planOf = async (statement: { query: string; params: unknown[] }) => {
+type PlanNode = { 'Index Name'?: string; 'Node Type': string; Plans?: Array<PlanNode>; 'Scan Direction'?: string }
+const nodesOf = (node: PlanNode): Array<PlanNode> => [node, ...(node.Plans ?? []).flatMap((child) => nodesOf(child))]
+const planOf = async (statement: { params: Array<unknown>; query: string }) => {
   const { rows } = await pool.query<{ 'QUERY PLAN': [{ Plan: PlanNode }] }>(
     `explain (format json) ${statement.query}`,
     statement.params,
@@ -69,10 +70,10 @@ describe('keyset list plans', () => {
   it('reads each list backward from its ascending index, without a Sort, on the first page and a deep one', async () => {
     const first = await statementOf((repo) => repo.listByAuthor(author, { limit: 20 }))
     const deep = await statementOf((repo) =>
-      repo.listByAuthor(author, { limit: 20, cursor: first.returned.nextCursor ?? undefined }),
+      repo.listByAuthor(author, { cursor: first.returned.nextCursor ?? undefined, limit: 20 }),
     )
     const publicDeep = await statementOf((repo) =>
-      repo.listPublic({ limit: 20, cursor: deep.returned.nextCursor ?? undefined }),
+      repo.listPublic({ cursor: deep.returned.nextCursor ?? undefined, limit: 20 }),
     )
     for (const [statement, index] of [
       [first, 'post_author_keyset_idx'],
@@ -102,10 +103,9 @@ const insert = (body: string) =>
     body,
   ])
 const sqlState = async (body: string) =>
-  insert(body).then(
-    () => 'ok',
-    (error: unknown) => (error as DatabaseError).code,
-  )
+  insert(body)
+    .then(() => 'ok')
+    .catch((error: unknown) => (error as DatabaseError).code)
 
 const acceptedByApi = (body: string) => Exit.isSuccess(Schema.decodeExit(PostInput)({ body }))
 
@@ -130,8 +130,8 @@ describe('post_body_check', () => {
     const bodies = fc
       .oneof(
         fc.string({ maxLength: POST_MAX_LENGTH + 2 }),
-        fc.string({ unit: 'grapheme', maxLength: 150 }),
-        fc.string({ unit: fc.constantFrom(' ', '\t', '\n', ' ', ' ', 'a', '😀'), maxLength: 290 }),
+        fc.string({ maxLength: 150, unit: 'grapheme' }),
+        fc.string({ maxLength: 290, unit: fc.constantFrom(' ', '\t', '\n', ' ', ' ', 'a', '😀') }),
       )
       // Postgres text cannot hold NUL (22021), whatever the constraint says.
       .map((body) => body.replaceAll('\u0000', ''))
@@ -150,7 +150,7 @@ describe('updated_at', () => {
     const created = await statementOf((repo) => repo.create(author, 'clock'))
     const edit = await statementOf((repo) => repo.update(author, created.returned.id, 'clock, edited'))
     expect(edit.query).toMatch(/"updated_at" = now\(\)/)
-    expect(edit.params.some((param) => param instanceof Date)).toBe(false)
+    expect(edit.params.some((param) => isDate(param))).toBe(false)
     const { rows } = await pool.query<{ ordered: boolean }>(
       'select updated_at >= created_at as ordered from post where id = $1',
       [created.returned.id],

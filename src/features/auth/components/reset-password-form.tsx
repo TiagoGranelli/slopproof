@@ -15,35 +15,35 @@ const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((modul
 export function ResetPasswordForm(props: { token: string }) {
   const navigate = useNavigate()
   const reset = useResetPassword({
-    mutationConfig: { onSuccess: () => navigate({ to: '/login', state: { flash: 'password-reset' } }) },
+    mutationConfig: { onSuccess: () => navigate({ state: { flash: 'password-reset' }, to: '/login' }) },
   })
   const form = useAppForm({
     defaultValues: { newPassword: '' },
+    onSubmit: ({ value }) => reset.mutate({ token: props.token, ...schema.decode(value) }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
-    onSubmit: ({ value }) => reset.mutate({ token: props.token, ...schema.decode(value) }),
   })
   return (
     <AuthForm
-      id="reset-password"
-      submitLabel="Set new password"
-      form={form}
-      schema={schema}
-      pending={reset.isPending}
       error={reset.error}
-      fieldCodes={{ PASSWORD_TOO_SHORT: 'newPassword', PASSWORD_TOO_LONG: 'newPassword' }}
+      fieldCodes={{ PASSWORD_TOO_LONG: 'newPassword', PASSWORD_TOO_SHORT: 'newPassword' }}
+      form={form}
+      id="reset-password"
+      pending={reset.isPending}
+      schema={schema}
+      submitLabel="Set new password"
     >
       <form.AppField name="newPassword">
         {(field) => (
           <field.TextField
+            autoComplete="new-password"
+            hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
             id="new-password"
             label="New password"
-            type="password"
-            autoComplete="new-password"
-            minLength={PASSWORD_MIN_LENGTH}
             maxLength={PASSWORD_MAX_LENGTH}
-            hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
+            minLength={PASSWORD_MIN_LENGTH}
             required
+            type="password"
           />
         )}
       </form.AppField>

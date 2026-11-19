@@ -61,26 +61,28 @@ export const SignInFormPost = Schema.instanceOf(FormData).pipe(
       }),
       encode: (fields) => {
         const form = new FormData()
-        for (const [name, value] of Object.entries(fields)) form.set(name, value)
+        for (const [name, value] of Object.entries(fields)) {
+          form.set(name, value)
+        }
         return form
       },
     }),
   ),
 )
-export const SignUpInput = Schema.Struct({ name: Name, email: Email, password: NewPassword })
+export const SignUpInput = Schema.Struct({ email: Email, name: Name, password: NewPassword })
 /** Resending a confirmation link, or asking for a reset link. */
 export const EmailInput = Schema.Struct({ email: Email })
 export const TokenInput = Schema.Struct({ token: Token })
 export const SessionInput = Schema.Struct({ id: Token })
 /** The reset form's field; the token comes from the link. */
 export const NewPasswordInput = Schema.Struct({ newPassword: NewPassword })
-export const ResetPasswordInput = Schema.Struct({ token: Token, newPassword: NewPassword })
+export const ResetPasswordInput = Schema.Struct({ newPassword: NewPassword, token: Token })
 export const ChangePasswordInput = Schema.Struct({ currentPassword: CurrentPassword, newPassword: NewPassword })
 export const DeleteAccountInput = Schema.Struct({ password: CurrentPassword })
 /** The delete form also needs its confirmation checkbox, which the server function never sees. */
 export const DeleteAccountFields = Schema.Struct({
-  password: CurrentPassword,
   confirm: Schema.Boolean.check(
     Schema.makeFilter((checked: boolean) => checked, { message: 'Confirm that you want to delete the account.' }),
   ),
+  password: CurrentPassword,
 })

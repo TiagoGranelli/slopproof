@@ -18,9 +18,9 @@ const signIn = async (label: string) => {
   const account = await createAccount(label)
   const response = await auth.handler(
     new Request(`${env.appUrl}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: env.appUrl },
       body: JSON.stringify({ email: account.email, password: account.password }),
+      headers: { 'content-type': 'application/json', origin: env.appUrl },
+      method: 'POST',
     }),
   )
   expect(response.status).toBe(200)
@@ -32,7 +32,7 @@ const signIn = async (label: string) => {
 
 /** Runs `work` as Start runs a request for `/dashboard` with `cookie`, and returns what `work` returned. */
 const serve = async <T>(cookie: string, work: () => Promise<T>): Promise<T> => {
-  const returned: T[] = []
+  const returned: Array<T> = []
   await createServerEntry({
     fetch: async () => {
       returned.push(await work())

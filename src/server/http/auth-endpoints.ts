@@ -59,7 +59,7 @@ export const isHttpEndpoint = (request: Request): boolean => has(HTTP_ENDPOINTS,
 
 /** The answer for every endpoint the app does not expose. */
 export const notFound = (): Response =>
-  new Response('Not Found', { status: 404, headers: { 'cache-control': 'no-store' } })
+  new Response('Not Found', { headers: { 'cache-control': 'no-store' }, status: 404 })
 
 /**
  * Keeps Better Auth's surface to the exposed endpoints (404 for the rest) and marks every auth response
@@ -71,11 +71,13 @@ export const endpointAllowlist = (): BetterAuthPlugin => ({
   id: 'endpoint-allowlist',
   onRequest: async (request) => (isExposedEndpoint(request) ? undefined : { response: notFound() }),
   onResponse: async (response) => {
-    if (response.headers.has('cache-control')) return undefined
+    if (response.headers.has('cache-control')) {
+      return undefined
+    }
     const headers = new Headers(response.headers)
     headers.set('cache-control', 'no-store')
     return {
-      response: new Response(response.body, { status: response.status, statusText: response.statusText, headers }),
+      response: new Response(response.body, { headers, status: response.status, statusText: response.statusText }),
     }
   },
 })

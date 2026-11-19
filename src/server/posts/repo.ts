@@ -8,22 +8,22 @@ import { keyset, toPage, type PageRequest } from '../db/keyset.ts'
 import { type DbError, isUuid, query } from '../db/query.ts'
 import { post, user } from '../db/schema/index.ts'
 
-const toPost = (row: { id: PostId; body: string; createdAt: Date; updatedAt: Date }, authorName: string): Post => ({
-  id: row.id,
-  body: row.body,
+const toPost = (row: { body: string; createdAt: Date; id: PostId; updatedAt: Date }, authorName: string): Post => ({
   authorName,
+  body: row.body,
   createdAt: row.createdAt.toISOString(),
+  id: row.id,
   updatedAt: row.updatedAt.toISOString(),
 })
 
 const posts = keyset(post)
 
 const pageColumns = {
-  id: post.id,
   body: post.body,
   createdAt: post.createdAt,
-  updatedAt: post.updatedAt,
   cursorAt: posts.cursorAt,
+  id: post.id,
+  updatedAt: post.updatedAt,
 }
 
 interface Author {
@@ -59,19 +59,23 @@ const listByAuthor = Effect.fn('PostsRepo.listByAuthor')(function* (own: Db, aut
 const create = Effect.fn('PostsRepo.create')(function* (own: Db, author: Author, body: string) {
   const [row] = yield* query(own, (db) => db.insert(post).values({ authorId: author.id, body }).returning())
   // INSERT … RETURNING yields the inserted row; none at all is a driver defect, not an outcome to handle.
-  if (!row) return yield* Effect.die(new Error(`INSERT … RETURNING returned no row for a post by author ${author.id}`))
+  if (!row) {
+    return yield* Effect.die(new Error(`INSERT … RETURNING returned no row for a post by author ${author.id}`))
+  }
   return toPost(row, author.name)
 })
 
 /** A new body for the post `id`. */
 interface Edit {
-  readonly id: PostId
   readonly body: string
+  readonly id: PostId
 }
 
 // Ownership is part of the WHERE clause, so another author's id behaves exactly like a missing id.
 const update = Effect.fn('PostsRepo.update')(function* (own: Db, author: Author, edit: Edit) {
-  if (!isUuid(edit.id)) return undefined
+  if (!isUuid(edit.id)) {
+    return undefined
+  }
   const [row] = yield* query(own, (db) =>
     db
       .update(post)
@@ -83,7 +87,9 @@ const update = Effect.fn('PostsRepo.update')(function* (own: Db, author: Author,
 })
 
 const remove = Effect.fn('PostsRepo.remove')(function* (own: Db, author: Author, id: PostId) {
-  if (!isUuid(id)) return false
+  if (!isUuid(id)) {
+    return false
+  }
   const rows = yield* query(own, (db) =>
     db
       .delete(post)
@@ -97,11 +103,11 @@ const remove = Effect.fn('PostsRepo.remove')(function* (own: Db, author: Author,
 export class PostsRepo extends Context.Service<
   PostsRepo,
   {
-    readonly listPublic: (page: PageRequest) => Effect.Effect<PostPage, DbError>
-    readonly listByAuthor: (author: Author, page: PageRequest) => Effect.Effect<PostPage, DbError>
     readonly create: (author: Author, body: string) => Effect.Effect<Post, DbError>
-    readonly update: (author: Author, id: PostId, body: string) => Effect.Effect<Post | undefined, DbError>
+    readonly listByAuthor: (author: Author, page: PageRequest) => Effect.Effect<PostPage, DbError>
+    readonly listPublic: (page: PageRequest) => Effect.Effect<PostPage, DbError>
     readonly remove: (author: Author, id: PostId) => Effect.Effect<boolean, DbError>
+    readonly update: (author: Author, id: PostId, body: string) => Effect.Effect<Post | undefined, DbError>
   }
 >()('app/PostsRepo') {
   static readonly layer = Layer.effect(
@@ -109,11 +115,11 @@ export class PostsRepo extends Context.Service<
     Effect.gen(function* () {
       const own = yield* Database
       return {
-        listPublic: (page) => listPublic(own, page),
-        listByAuthor: (author, page) => listByAuthor(own, author, page),
         create: (author, body) => create(own, author, body),
-        update: (author, id, body) => update(own, author, { id, body }),
+        listByAuthor: (author, page) => listByAuthor(own, author, page),
+        listPublic: (page) => listPublic(own, page),
         remove: (author, id) => remove(own, author, id),
+        update: (author, id, body) => update(own, author, { body, id }),
       }
     }),
   )

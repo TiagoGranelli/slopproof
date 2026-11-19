@@ -4,17 +4,17 @@ import { pageTitle } from '#/config/app.ts'
 import { ForgotPasswordForm } from '#/features/auth/components/forgot-password-form.tsx'
 
 export const Route = createFileRoute('/forgot-password')({
+  component: ForgotPassword,
   head: () => ({ meta: [{ title: pageTitle('Forgot password') }, { name: 'robots', content: 'noindex' }] }),
   headers: () => ({ 'cache-control': 'private, no-store' }),
-  component: ForgotPassword,
 })
 
 function ForgotPassword() {
   return (
-    <Page title="Forgot your password?" description="We will email you a link to choose a new one." narrow>
+    <Page description="We will email you a link to choose a new one." narrow title="Forgot your password?">
       <ForgotPasswordForm />
       <p className="text-sm text-muted-foreground">
-        <Link to="/login" className="underline underline-offset-4">
+        <Link className="underline underline-offset-4" to="/login">
           Back to sign in
         </Link>
       </p>

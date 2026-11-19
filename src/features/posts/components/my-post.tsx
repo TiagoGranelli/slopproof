@@ -20,7 +20,7 @@ const preloadEditor = () => {
  * One of the author's posts, with Edit and Delete. Edit swaps the body for a form; focus moves into the
  * textarea and returns to the Edit button on Save or Cancel. Delete asks first (ConfirmDeleteButton).
  */
-export function MyPost(props: { post: Post; onUpdated?: () => void; onDeleted?: () => void }) {
+export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; post: Post }) {
   const { post } = props
   const [editing, setEditing] = useState(false)
   const editButton = useRef<HTMLButtonElement>(null)
@@ -36,14 +36,14 @@ export function MyPost(props: { post: Post; onUpdated?: () => void; onDeleted?: 
 
   if (editing) {
     return (
-      <Suspense fallback={<PostCard post={post} busy />}>
+      <Suspense fallback={<PostCard busy post={post} />}>
         <EditPostForm
-          post={post}
           onClose={() => {
             returnFocus.current = true
             setEditing(false)
           }}
           onUpdated={props.onUpdated}
+          post={post}
         />
       </Suspense>
     )
@@ -51,40 +51,42 @@ export function MyPost(props: { post: Post; onUpdated?: () => void; onDeleted?: 
 
   return (
     <PostCard
-      post={post}
-      busy={remove.isPending}
       actions={
         <>
           <Button
+            aria-disabled={remove.isPending || undefined}
+            onClick={() => {
+              if (!remove.isPending) {
+                setEditing(true)
+              }
+            }}
+            onFocus={preloadEditor}
+            onPointerEnter={preloadEditor}
             ref={editButton}
+            size="sm"
             type="button"
             variant="ghost"
-            size="sm"
-            aria-disabled={remove.isPending || undefined}
-            onPointerEnter={preloadEditor}
-            onFocus={preloadEditor}
-            onClick={() => {
-              if (!remove.isPending) setEditing(true)
-            }}
           >
             Edit<span className="sr-only"> post: {post.body.slice(0, 40)}</span>
           </Button>
           <ConfirmDeleteButton
+            onConfirm={() => remove.mutate({ path: { id: post.id } })}
+            pending={remove.isPending}
             target={{
+              consequence: 'It will be gone for good, from your posts and from the public list.',
               noun: 'post',
               text: post.body,
-              consequence: 'It will be gone for good, from your posts and from the public list.',
             }}
-            pending={remove.isPending}
-            onConfirm={() => remove.mutate({ path: { id: post.id } })}
           />
         </>
       }
       alert={
         remove.isError && !isPostNotFound(remove.error) ? (
-          <ApiErrorAlert error={remove.error} action="delete the post" />
+          <ApiErrorAlert action="delete the post" error={remove.error} />
         ) : null
       }
+      busy={remove.isPending}
+      post={post}
     />
   )
 }

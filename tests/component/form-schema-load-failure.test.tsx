@@ -42,7 +42,7 @@ describe('a form whose schema cannot be loaded', () => {
     await expect.element(alert()).toBeVisible()
     await expect.element(signIn).toBeEnabled()
     await expect.element(signIn).not.toHaveAttribute('aria-disabled')
-    const email = page.getByRole('textbox', { name: 'Email', exact: true })
+    const email = page.getByRole('textbox', { exact: true, name: 'Email' })
     await email.fill('author@example.test')
     await expect.element(email).toHaveValue('author@example.test')
     await signIn.click()

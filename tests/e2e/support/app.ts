@@ -72,7 +72,7 @@ export const test = base.extend<object, { author: Author }>({
   request: async ({ playwright }, provide, testInfo) => {
     const request = await playwright.request.newContext({
       baseURL: appUrl,
-      extraHTTPHeaders: { 'x-forwarded-for': nextClientIp(testInfo.workerIndex), origin: appUrl },
+      extraHTTPHeaders: { origin: appUrl, 'x-forwarded-for': nextClientIp(testInfo.workerIndex) },
     })
     await provide(request)
     await request.dispose()
@@ -146,20 +146,20 @@ export const seedPost = async (request: APIRequestContext, author: Author, body 
 }
 
 export const fakePost = (body: string): Post => ({
-  id: crypto.randomUUID(),
-  body,
   authorName: 'Test Author',
+  body,
   createdAt: '2026-01-02T03:04:05.000Z',
+  id: crypto.randomUUID(),
   updatedAt: '2026-01-02T03:04:05.000Z',
 })
 
 /** A last page (no Load more) holding exactly `posts`, as GET /api/posts and GET /api/me/posts answer. */
-export const lastPage = (...posts: Post[]): PostPage => ({ items: posts, nextCursor: null })
+export const lastPage = (...posts: Array<Post>): PostPage => ({ items: posts, nextCursor: null })
 
 /** The main-navigation link whose client-side navigation makes the page's loader call each API path. */
 const PAGE_LINK = {
-  '/api/posts': APP_NAME,
   '/api/me/posts': 'Dashboard',
+  '/api/posts': APP_NAME,
 } as const
 
 /**
@@ -172,13 +172,13 @@ const PAGE_LINK = {
 export const navigateWithApiResponse = async (
   page: Page,
   api: keyof typeof PAGE_LINK,
-  response: { status?: number; json: unknown },
+  response: { json: unknown; status?: number },
 ) => {
   await visit(page, '/about')
   await page.route(`**${api}`, (route) =>
     route.request().method() === 'GET' ? route.fulfill(response) : route.fallback(),
   )
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: PAGE_LINK[api], exact: true }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name: PAGE_LINK[api] }).click()
 }
 
 /** The dashboard with one new post of the author's own, published through the UI. */
@@ -191,7 +191,7 @@ export const dashboardWithMyPost = async (page: Page, author: Author) => {
   // The list's own items: a feature may nest lists of its own inside a post.
   const post = page.getByTestId('my-posts').locator(':scope > li').filter({ hasText: body })
   await expect(post).toBeVisible()
-  return { body, post, edit: post.getByRole('button', { name: /^Edit/ }) }
+  return { body, edit: post.getByRole('button', { name: /^Edit/ }), post }
 }
 
 export const overTheLimit = 'x'.repeat(POST_MAX_LENGTH + 1)

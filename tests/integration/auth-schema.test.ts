@@ -24,7 +24,7 @@ describe('auth schema', () => {
   })
 
   it('stores every auth timestamp as timestamptz', async () => {
-    const { rows } = await pool.query<{ table_name: string; column_name: string; data_type: string }>(
+    const { rows } = await pool.query<{ column_name: string; data_type: string; table_name: string }>(
       `select table_name, column_name, data_type from information_schema.columns
         where table_schema = 'public' and table_name in ('user', 'session', 'account', 'verification')
           and data_type like 'timestamp%' order by 1, 2`,

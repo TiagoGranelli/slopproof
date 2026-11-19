@@ -24,7 +24,7 @@ const expectDashboard = async (page: Page) => {
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 }
 
-const exactly = (text: string) => new RegExp(`^${text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+const exactly = (text: string) => new RegExp(`^${text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`)
 /** One of my posts, by its exact body (the body paragraph is replaced by the form while editing). */
 const myPost = (page: Page, body: string) =>
   page
@@ -56,8 +56,11 @@ const expectEditDiscarded = async (page: Page, body: string, how: 'the Cancel bu
   await myPost(page, body).getByRole('button', { name: /^Edit/ }).click()
   await expect(page.getByLabel('Edit post')).toHaveValue(body)
   await page.getByLabel('Edit post').fill(`${body} (discarded)`)
-  if (how === 'Escape') await page.keyboard.press('Escape')
-  else await page.getByRole('button', { name: 'Cancel' }).click()
+  if (how === 'Escape') {
+    await page.keyboard.press('Escape')
+  } else {
+    await page.getByRole('button', { name: 'Cancel' }).click()
+  }
   await expect(page.getByLabel('Edit post')).toHaveCount(0)
   await expect(myPost(page, body)).toBeVisible()
 }
@@ -78,13 +81,13 @@ const deletePost = async (page: Page, body: string) => {
     .click()
   await page
     .getByRole('alertdialog', { name: 'Delete this post?' })
-    .getByRole('button', { name: 'Delete', exact: true })
+    .getByRole('button', { exact: true, name: 'Delete' })
     .click()
   await expect(myPost(page, body)).toHaveCount(0)
 }
 
 const navLink = (page: Page, name: string) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
+  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
 
 /**
  * Signs in through the form on /login, and checks what that must never do: put the password in the URL, or let
@@ -122,19 +125,21 @@ const openDashboardPreloadingHome = async (page: Page) => {
   await navLink(page, APP_NAME).hover()
 }
 
-type Frames = { publicListFrames?: string[] }
+type Frames = { publicListFrames?: Array<string> }
 /**
  * From now on, records the text of the public list every time the DOM changes, so a frame that briefly
  * showed the old list cannot go unnoticed (Playwright's retrying assertions only see the final state).
  */
 const recordPublicList = (page: Page) =>
   page.evaluate(() => {
-    const frames: string[] = []
+    const frames: Array<string> = []
     ;(window as Frames).publicListFrames = frames
     new MutationObserver(() => {
       const list = document.querySelector('[data-testid="public-posts"]')
-      if (list) frames.push(list.textContent)
-    }).observe(document.body, { childList: true, subtree: true, characterData: true })
+      if (list) {
+        frames.push(list.textContent)
+      }
+    }).observe(document.body, { characterData: true, childList: true, subtree: true })
   })
 const publicListFrames = (page: Page) => page.evaluate(() => (window as Frames).publicListFrames ?? [])
 
@@ -149,11 +154,11 @@ const expectHomeShowsOnly = async (page: Page, body: string) => {
   expect((await publicListFrames(page)).filter((text) => !text.includes(body))).toEqual([])
 }
 
-test('public page hydrates from SSR without refetching or console errors', async ({ page, request, author }) => {
+test('public page hydrates from SSR without refetching or console errors', async ({ author, page, request }) => {
   // A post of a few seconds ago: its time reads relative in the browser and as a UTC date in the SSR HTML.
   await seedPost(request, author)
-  const requests: string[] = []
-  const errors: string[] = []
+  const requests: Array<string> = []
+  const errors: Array<string> = []
   // Neither the list (/api) nor the header's session (a /_serverFn GET) is fetched again after SSR.
   page.on('request', (r) => /\/(api|_serverFn)\//.test(r.url()) && requests.push(r.url()))
   // React reports a hydration mismatch as a console error, so a date SSR and the browser render differently fails.
@@ -166,10 +171,10 @@ test('public page hydrates from SSR without refetching or console errors', async
   expect(errors).toEqual([])
 })
 
-test('dashboard hydrates from SSR without refetching its data', async ({ page, author }) => {
+test('dashboard hydrates from SSR without refetching its data', async ({ author, page }) => {
   await signIn(page, author)
-  const refetches: string[] = []
-  const errors: string[] = []
+  const refetches: Array<string> = []
+  const errors: Array<string> = []
   page.on('request', (r) => new URL(r.url()).pathname.startsWith('/api/') && refetches.push(r.url()))
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   await visit(page, '/dashboard')
@@ -193,7 +198,7 @@ test('before hydration, a form never posts credentials to the page itself', asyn
   await expect(page.getByRole('button', { name: 'Send reset link' })).toBeDisabled()
 })
 
-test('private routes redirect anonymous visitors to login and back after sign-in', async ({ page, author }) => {
+test('private routes redirect anonymous visitors to login and back after sign-in', async ({ author, page }) => {
   await page.goto('/dashboard')
   await expect(page).toHaveURL(/\/login\?redirect=%2Fdashboard$/)
   await expectHydrated(page)
@@ -201,7 +206,7 @@ test('private routes redirect anonymous visitors to login and back after sign-in
   await expectDashboard(page)
 })
 
-test('sign-in follows a same-origin redirect and ignores a foreign one', async ({ page, author }) => {
+test('sign-in follows a same-origin redirect and ignores a foreign one', async ({ author, page }) => {
   await visit(page, '/login?redirect=%2Fabout')
   await signInWithForm(page, author)
   await expect(page).toHaveURL(/\/about$/)
@@ -221,8 +226,8 @@ test('sign-in follows a same-origin redirect and ignores a foreign one', async (
 })
 
 test('author signs in, publishes, edits, sees the post publicly, deletes it and signs out', async ({
-  page,
   author,
+  page,
 }) => {
   await signInThroughForm(page, author)
 
@@ -248,7 +253,7 @@ test('author signs in, publishes, edits, sees the post publicly, deletes it and 
   await signOutFromDashboard(page)
 })
 
-test('a rejected save shows the error in the post and keeps the draft', async ({ page, author }) => {
+test('a rejected save shows the error in the post and keeps the draft', async ({ author, page }) => {
   await signIn(page, author)
   await visit(page, '/dashboard')
   const body = `e2e rejected edit ${Date.now()}`
@@ -265,8 +270,8 @@ test('a rejected save shows the error in the post and keeps the draft', async ({
 })
 
 test('client-side navigation shows a post published or edited moments ago, never the old list', async ({
-  page,
   author,
+  page,
 }) => {
   await signIn(page, author)
   // The public list is cached in this tab, and hovering the link preloads it again before each write.
@@ -287,12 +292,12 @@ test('client-side navigation shows a post published or edited moments ago, never
   await deletePost(page, edited)
 })
 
-test('signs in through the form and out again', async ({ page, author }) => {
+test('signs in through the form and out again', async ({ author, page }) => {
   await signInThroughForm(page, author)
   await signOutFromDashboard(page)
 })
 
-test('a failed sign-out says so and can be retried', async ({ page, author }) => {
+test('a failed sign-out says so and can be retried', async ({ author, page }) => {
   await signIn(page, author)
   await visit(page, '/dashboard')
   // Sign-out is a server function (POST /_serverFn/...).

@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { focusFirstInvalid } from './field-messages.ts'
 
 type FormSchema<Fields, Output> = {
-  validator: StandardSchemaV1<Fields, Output>
   decode: (fields: Fields) => Output
+  validator: StandardSchemaV1<Fields, Output>
 }
 
 /**
@@ -15,12 +15,12 @@ type FormSchema<Fields, Output> = {
  * when TanStack Form asks.
  */
 export type LazyFormSchema<Fields, Output> = {
-  /** For `validators.onDynamic`. Throws if it runs before `load` resolved: submit through `submitForm`. */
-  readonly validator: StandardSchemaV1<Fields, Output>
   /** The valid fields as the action takes them (for example, trimmed). Same rule as `validator`. */
   readonly decode: (fields: Fields) => Output
   /** Starts loading the schema, once; resolves when it is ready. A failed load is retried on the next call. */
   readonly load: () => Promise<void>
+  /** For `validators.onDynamic`. Throws if it runs before `load` resolved: submit through `submitForm`. */
+  readonly validator: StandardSchemaV1<Fields, Output>
 }
 
 /** `loadOnce` started at most once: callers share the pending load, and a failed one is retried on the next call. */
@@ -49,9 +49,9 @@ const deferredValidator = <Fields, Output>(
   ready: () => FormSchema<Fields, Output>,
 ): StandardSchemaV1<Fields, Output> => ({
   '~standard': {
-    version: 1,
-    vendor: 'effect',
     validate: (value) => ready().validator['~standard'].validate(value),
+    vendor: 'effect',
+    version: 1,
   },
 })
 
@@ -64,13 +64,15 @@ export const lazyFormSchema = <S extends Schema.ConstraintDecoder<unknown>>(
 ): LazyFormSchema<S['Encoded'], S['Type']> => {
   let loaded: FormSchema<S['Encoded'], S['Type']> | undefined
   const ready = () => {
-    if (loaded) return loaded
+    if (loaded) {
+      return loaded
+    }
     throw new Error('a form schema was used before it loaded: submit through submitForm, which awaits it')
   }
   const load = sharedRetryingLoad(async () => {
     loaded = await loadFormSchema(loadSchema)
   })
-  return { validator: deferredValidator(ready), decode: (fields) => ready().decode(fields), load }
+  return { decode: (fields) => ready().decode(fields), load, validator: deferredValidator(ready) }
 }
 
 type LoadableSchema = { load: () => Promise<void> }
@@ -94,11 +96,10 @@ type SubmittableForm = { handleSubmit: () => Promise<void> }
  * not be loaded.
  */
 const submitForm = async (element: HTMLFormElement, form: SubmittableForm, schema?: LoadableSchema) => {
-  const loaded = await (schema?.load() ?? Promise.resolve()).then(
-    () => true,
-    () => false,
-  )
-  if (!loaded) return false
+  const loaded = await (schema?.load() ?? Promise.resolve()).then(() => true).catch(() => false)
+  if (!loaded) {
+    return false
+  }
   await form.handleSubmit()
   focusFirstInvalid(element)
   return true
@@ -117,5 +118,5 @@ export const useSchemaSubmit = (form: SubmittableForm, schema?: LoadableSchema) 
   const submit = (element: HTMLFormElement) => {
     void submitForm(element, form, schema).then((loaded) => setLoadFailed(!loaded))
   }
-  return { submit, schemaError: loadFailed ? SCHEMA_LOAD_FAILED : undefined }
+  return { schemaError: loadFailed ? SCHEMA_LOAD_FAILED : undefined, submit }
 }

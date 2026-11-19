@@ -12,10 +12,10 @@ const baseURL = process.env.APP_URL ?? 'http://localhost:3000'
 const setup = [{ name: 'seed', testMatch: /seed\.setup\.ts$/ }]
 const dependencies = setup.map((project) => project.name)
 const PROJECTS = [
-  { name: 'chromium', dependencies, use: { ...devices['Desktop Chrome'] } },
+  { dependencies, name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   {
-    name: 'firefox',
     dependencies,
+    name: 'firefox',
     use: {
       ...devices['Desktop Firefox'],
       // Playwright 1.63's Firefox driver sometimes never resolves the first `goto` of a page to a document with
@@ -32,19 +32,20 @@ const PROJECTS = [
   // (microsoft/playwright#42957, open; about 1 in 500 such navigations under CPU contention, none without COOP).
   // No launch option turns COOP off here as the Firefox pref does: MiniBrowser's --features never reaches the
   // pages Playwright creates.
-  { name: 'webkit', dependencies, use: { ...devices['Desktop Safari'] } },
-  { name: 'Pixel 7', dependencies, use: { ...devices['Pixel 7'] } },
-  { name: 'iPhone 15', dependencies, use: { ...devices['iPhone 15'] } },
+  { dependencies, name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  { dependencies, name: 'Pixel 7', use: { ...devices['Pixel 7'] } },
+  { dependencies, name: 'iPhone 15', use: { ...devices['iPhone 15'] } },
 ]
 const LOCAL_DEFAULT = ['chromium', 'firefox']
 
 const requested = process.env.PW_PROJECTS?.trim() || (process.env.CI ? 'all' : LOCAL_DEFAULT.join(','))
 const names = requested === 'all' ? PROJECTS.map((p) => p.name) : requested.split(',').map((n) => n.trim())
 const unknown = names.filter((name) => !PROJECTS.some((p) => p.name === name))
-if (unknown.length)
+if (unknown.length) {
   throw new Error(
     `PW_PROJECTS: unknown project(s) ${unknown.join(', ')}; expected all or ${PROJECTS.map((p) => p.name).join(', ')}`,
   )
+}
 
 // Locally a passing run is a count and a failing one its failures, each with its error, code and trace path. `line`
 // redraws one line at a terminal; into a pipe or an agent's log it would print every test, so there `dot` prints a
@@ -52,8 +53,16 @@ if (unknown.length)
 const LOCAL_REPORTER = process.stdout.isTTY ? 'line' : 'dot'
 
 export default defineConfig({
-  testDir: 'tests/e2e',
+  forbidOnly: !!process.env.CI,
   globalSetup: './tests/e2e/global-setup.ts',
+  projects: [...setup, ...PROJECTS.filter((p) => names.includes(p.name))],
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : LOCAL_REPORTER,
+  testDir: 'tests/e2e',
+  timeout: 30_000,
+  use: {
+    baseURL,
+    trace: 'retain-on-failure',
+  },
   // Playwright empties its output directory on start; the app servers' logs (test-results/app-server-e2e*.log) live
   // next to it.
   outputDir: 'test-results/playwright',
@@ -64,16 +73,8 @@ export default defineConfig({
   // At most 4: on a 32-thread laptop, 4 workers ran the suite in 65 s at 3.4 GB at the peak, against 54 s at 5.7 GB
   // with 8 and 54 s at 7.7 GB with 16. `--workers=<n>` overrides it.
   workers: Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2))),
-  forbidOnly: !!process.env.CI,
   // A retry keeps one bad run from hiding the report of the others, but a test that only passes on retry is a
   // failure in CI: flakiness is fixed, not absorbed (the report names the flaky test).
-  retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
-  timeout: 30_000,
-  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : LOCAL_REPORTER,
-  use: {
-    baseURL,
-    trace: 'retain-on-failure',
-  },
-  projects: [...setup, ...PROJECTS.filter((p) => names.includes(p.name))],
+  retries: process.env.CI ? 1 : 0,
 })

@@ -5,10 +5,10 @@
  * drops it from the history entry, and `RouteAnnouncer` reads it out with the page title.
  */
 export const FLASH_MESSAGES = {
-  'signed-out': 'You are signed out.',
-  'signed-out-everywhere': 'You are signed out on every device.',
   'account-deleted': 'Your account and everything in it are deleted.',
   'password-reset': 'Your password is changed, and every session was signed out. Sign in with the new password.',
+  'signed-out': 'You are signed out.',
+  'signed-out-everywhere': 'You are signed out on every device.',
 } as const
 
 type Flash = keyof typeof FLASH_MESSAGES

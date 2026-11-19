@@ -6,8 +6,8 @@ import { dashboardWithMyPost, expect, failServerFunctionPosts, signIn, test, vis
 test.skip(({ isMobile }) => isMobile, 'keyboard navigation is a desktop concern')
 
 test.describe('editing from the keyboard', () => {
-  test('Enter on Edit focuses the draft; Escape cancels and puts focus back on Edit', async ({ page, author }) => {
-    const { body, post, edit } = await dashboardWithMyPost(page, author)
+  test('Enter on Edit focuses the draft; Escape cancels and puts focus back on Edit', async ({ author, page }) => {
+    const { body, edit, post } = await dashboardWithMyPost(page, author)
     await edit.focus()
     await page.keyboard.press('Enter')
     const field = page.getByLabel('Edit post')
@@ -20,7 +20,7 @@ test.describe('editing from the keyboard', () => {
     await expect(post.locator('p').first()).toHaveText(body)
   })
 
-  test('Save from the keyboard announces it and returns focus to Edit', async ({ page, author }) => {
+  test('Save from the keyboard announces it and returns focus to Edit', async ({ author, page }) => {
     const { body, edit } = await dashboardWithMyPost(page, author)
     await edit.focus()
     await page.keyboard.press('Enter')
@@ -39,7 +39,7 @@ test.describe('editing from the keyboard', () => {
     await expect(saved.getByRole('button', { name: /^Edit/ })).toBeFocused()
   })
 
-  test('a rejected save is an alert inside the form that also describes the draft', async ({ page, author }) => {
+  test('a rejected save is an alert inside the form that also describes the draft', async ({ author, page }) => {
     const { edit } = await dashboardWithMyPost(page, author)
     await edit.click()
     const field = page.getByLabel('Edit post')
@@ -55,21 +55,21 @@ test.describe('editing from the keyboard', () => {
 })
 
 test.describe('announcements', () => {
-  test('publishing is announced and puts focus back in the empty composer', async ({ page, author }) => {
+  test('publishing is announced and puts focus back in the empty composer', async ({ author, page }) => {
     await dashboardWithMyPost(page, author)
     await expect(page.getByRole('status')).toHaveText('Post published.')
     await expect(page.getByLabel('New post')).toBeFocused()
     await expect(page.getByLabel('New post')).toHaveValue('')
   })
 
-  test('deleting asks first, is announced, and then moves focus to the list heading', async ({ page, author }) => {
+  test('deleting asks first, is announced, and then moves focus to the list heading', async ({ author, page }) => {
     const { post } = await dashboardWithMyPost(page, author)
     await post.getByRole('button', { name: /^Delete post/ }).focus()
     await page.keyboard.press('Enter')
     const dialog = page.getByRole('alertdialog', { name: 'Delete this post?' })
     await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused()
     await page.keyboard.press('Tab')
-    await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toBeFocused()
+    await expect(dialog.getByRole('button', { exact: true, name: 'Delete' })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(post).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Published' })).toBeFocused()
@@ -78,7 +78,7 @@ test.describe('announcements', () => {
 
   test('a failed sign-in is an alert that describes the form, and focus stays in the form', async ({ page }) => {
     await visit(page, '/login')
-    await page.getByRole('textbox', { name: 'Email', exact: true }).fill('nobody@example.test')
+    await page.getByRole('textbox', { exact: true, name: 'Email' }).fill('nobody@example.test')
     await page.getByLabel('Password').fill('not the password at all')
     await page.keyboard.press('Enter')
     const alert = page.getByRole('alert')
@@ -88,8 +88,8 @@ test.describe('announcements', () => {
   })
 
   test('a failed sign-out is an alert, and the button can be used again from the keyboard', async ({
-    page,
     author,
+    page,
   }) => {
     await signIn(page, author)
     await visit(page, '/dashboard')

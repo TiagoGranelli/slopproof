@@ -10,5 +10,5 @@ import { Schema } from 'effect'
 export const isFreeOfNul = Schema.makeFilter<string>((value) => !value.includes('\u0000'), {
   expected: 'a string without U+0000',
   message: 'Remove the invisible NUL character (U+0000) from the text.',
-  toJsonSchema: () => ({ pattern: '^[^\\u0000]*$' }),
+  toJsonSchema: () => ({ pattern: String.raw`^[^\u0000]*$` }),
 })

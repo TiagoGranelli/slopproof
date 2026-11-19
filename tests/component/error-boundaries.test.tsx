@@ -16,7 +16,7 @@ const tryAgain = () => page.getByRole('button', { name: 'Try again' })
 describe('route errorComponent', () => {
   it('names what failed when the dashboard cannot load the posts', async () => {
     worker.use(apiFailure('myPostsList', { network: true }))
-    await renderInApp(null, { url: '/dashboard', route: { path: '/dashboard', route: DashboardRoute } })
+    await renderInApp(null, { route: { path: '/dashboard', route: DashboardRoute }, url: '/dashboard' })
     await expect.element(page.getByRole('heading', { level: 1 })).toHaveTextContent('Your posts could not be loaded')
     await expect
       .element(page.getByRole('alert'))
@@ -27,7 +27,7 @@ describe('route errorComponent', () => {
 
   it('offers to sign in when the dashboard hit an ended session', async () => {
     worker.use(apiError('myPostsList', 401, { _tag: 'Unauthorized', message: 'Authentication required' }))
-    await renderInApp(null, { url: '/dashboard', route: { path: '/dashboard', route: DashboardRoute } })
+    await renderInApp(null, { route: { path: '/dashboard', route: DashboardRoute }, url: '/dashboard' })
     await expect
       .element(page.getByRole('alert').getByRole('link', { name: 'Sign in' }))
       .toHaveAttribute('href', '/login?redirect=%2Fdashboard')
@@ -35,7 +35,7 @@ describe('route errorComponent', () => {
 
   it('names what failed when the account page cannot load the sessions', async () => {
     worker.use(authFunction('listSessions', 'thrown'))
-    await renderInApp(null, { url: '/account', route: { path: '/account', route: AccountRoute } })
+    await renderInApp(null, { route: { path: '/account', route: AccountRoute }, url: '/account' })
     await expect.element(page.getByRole('heading', { level: 1 })).toHaveTextContent('Your account could not be loaded')
     await expect.element(page.getByRole('alert')).toHaveTextContent('Could not load your account. Try again.')
     expect(document.body.textContent).not.toContain('Internal Server Error')
@@ -44,7 +44,9 @@ describe('route errorComponent', () => {
 
 let renderFails = true
 function Flaky() {
-  if (renderFails) throw new Error('raw failure details')
+  if (renderFails) {
+    throw new Error('raw failure details')
+  }
   return <p>Rendered after all</p>
 }
 

@@ -86,20 +86,20 @@ describe('MyPost', () => {
 
   it('saves the trimmed draft, busy meanwhile, then leaves the editor with focus on Edit', async () => {
     const response = held()
-    const sent: unknown[] = []
+    const sent: Array<unknown> = []
     worker.use(
-      api.myPostsUpdate(async ({ request, params }) => {
+      api.myPostsUpdate(async ({ params, request }) => {
         sent.push({ id: params.id, ...(await request.json()) })
         await response.wait()
         return HttpResponse.json({ ...original, body: 'The new body', updatedAt: '2026-01-03T00:00:00.000Z' })
       }),
     )
     const onUpdated = vi.fn<() => void>()
-    const { queryClient } = await renderInApp(<MyPost post={original} onUpdated={onUpdated} />)
+    const { queryClient } = await renderInApp(<MyPost onUpdated={onUpdated} post={original} />)
     queryClient.setQueryData(getMyPostsQueryOptions().queryKey, listPages(listPage([original])))
     await saveEdit('  The new body \n')
     await expect.element(save()).toBeDisabled()
-    await expect.poll(() => sent).toEqual([{ id: original.id, body: 'The new body' }])
+    await expect.poll(() => sent).toEqual([{ body: 'The new body', id: original.id }])
 
     response.release()
     await expect.element(field()).not.toBeInTheDocument()
@@ -112,41 +112,41 @@ describe('MyPost', () => {
 
   const saveFailures = [
     {
-      name: 'a ValidationError',
+      fieldLevel: true,
       handler: () =>
         apiError('myPostsUpdate', 400, {
           _tag: 'ValidationError',
+          issues: [{ message: 'Too long.', path: ['body'] }],
           message: 'Invalid request payload',
-          issues: [{ path: ['body'], message: 'Too long.' }],
         }),
       message: 'Too long.',
-      fieldLevel: true,
+      name: 'a ValidationError',
     },
     {
-      name: 'a PostNotFound',
+      fieldLevel: false,
       handler: () => apiError('myPostsUpdate', 404, { _tag: 'PostNotFound', id: original.id }),
       message: 'This post no longer exists. It may have been deleted elsewhere.',
-      fieldLevel: false,
+      name: 'a PostNotFound',
     },
     {
-      name: 'an ended session',
+      fieldLevel: false,
       handler: () => apiError('myPostsUpdate', 401, { _tag: 'Unauthorized', message: 'Authentication required' }),
       message: 'Your session has ended. Sign in again to continue. Sign in',
-      fieldLevel: false,
+      name: 'an ended session',
     },
     {
-      name: 'a network failure',
+      fieldLevel: false,
       handler: () => apiFailure('myPostsUpdate', { network: true }),
       message: 'Could not save the post. Check your connection and try again.',
-      fieldLevel: false,
+      name: 'a network failure',
     },
   ]
   it.each(saveFailures)(
     'keeps the draft on $name, then Cancel clears the error',
-    async ({ handler, message, fieldLevel }) => {
+    async ({ fieldLevel, handler, message }) => {
       worker.use(handler())
       const onUpdated = vi.fn<() => void>()
-      await renderInApp(<MyPost post={original} onUpdated={onUpdated} />)
+      await renderInApp(<MyPost onUpdated={onUpdated} post={original} />)
       await saveEdit('my draft')
 
       await expect.element(page.getByRole('alert')).toHaveTextContent(message)

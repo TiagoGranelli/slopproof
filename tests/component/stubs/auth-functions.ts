@@ -1,3 +1,4 @@
+import type { Json } from '#/contract/json.ts'
 // Stands in for #/lib/auth.functions.ts in the `component` Vitest project (resolve.alias in vitest.config.ts).
 // The real module is a set of server functions: Start's compiler turns each into a POST to /_serverFn/<id>
 // in client bundles, and Vitest does not run that compiler (the handlers would pull Better Auth and the
@@ -14,14 +15,16 @@ export const authFunctionPath = (name: AuthFunctionName) => `/_serverFn/auth/${n
 /** Like the compiled client: a function that posts, with the `url` a form can post to. */
 const serverFunction = (name: AuthFunctionName) =>
   Object.assign(
-    async (options?: { data?: unknown }): Promise<unknown> => {
+    async (options?: { data?: Json }): Promise<Json> => {
       const res = await fetch(authFunctionPath(name), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(options?.data ?? null),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
       })
-      if (!res.ok) throw new Error(`server function ${name} failed with ${res.status}`)
-      return res.json()
+      if (!res.ok) {
+        throw new Error(`server function ${name} failed with ${res.status}`)
+      }
+      return (await res.json()) as Json
     },
     { url: authFunctionPath(name) },
   )

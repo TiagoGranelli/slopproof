@@ -18,8 +18,7 @@ import { SessionLookup } from './session-lookup.ts'
 const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1()
 
 /** A response that fails its own schema is logged by kind and field paths, never by value. */
-const describeDefect = (defect: unknown): unknown => {
-  if (!HttpApiError.HttpApiSchemaError.is(defect)) return defect
+const describeSchemaDefect = (defect: HttpApiError.HttpApiSchemaError): Error => {
   const paths = formatIssues(defect.cause.issue).issues.map((issue) => issuePath(issue).join('.'))
   return Object.assign(
     new Error(`Response ${defect.kind.toLowerCase()} does not match its schema at: ${paths.join(', ')}`),
@@ -27,6 +26,15 @@ const describeDefect = (defect: unknown): unknown => {
       name: 'ResponseSchemaError',
     },
   )
+}
+
+const logDefect = (request: HttpServerRequest.HttpServerRequest, cause: Cause.Cause<unknown>) => {
+  const defect = Cause.squash(cause)
+  log('error', 'api defect', {
+    error: HttpApiError.HttpApiSchemaError.is(defect) ? describeSchemaDefect(defect) : defect,
+    method: request.method,
+    path: request.url.split('?')[0],
+  })
 }
 
 // Defects (bugs, unreachable database, a response that does not match its schema) become an empty
@@ -39,12 +47,10 @@ const ServerMiddleware = HttpRouter.middleware(
       const request = yield* HttpServerRequest.HttpServerRequest
       return yield* httpEffect.pipe(
         Effect.catchCause((cause) => {
-          if (!Cause.hasDies(cause)) return Effect.failCause(cause)
-          log('error', 'api defect', {
-            method: request.method,
-            path: request.url.split('?')[0],
-            error: describeDefect(Cause.squash(cause)),
-          })
+          if (!Cause.hasDies(cause)) {
+            return Effect.failCause(cause)
+          }
+          logDefect(request, cause)
           return Effect.succeed(HttpServerResponse.empty({ status: 500 }))
         }),
         Effect.map((response) =>
@@ -64,7 +70,7 @@ const SessionLookupLive = Layer.succeed(SessionLookup, {
     Effect.tryPromise(() => requestSession(headers)).pipe(
       Effect.orDie,
       Effect.map((session) =>
-        session ? { id: UserId.make(session.user.id), name: session.user.name, email: session.user.email } : null,
+        session ? { email: session.user.email, id: UserId.make(session.user.id), name: session.user.name } : null,
       ),
     ),
 })
@@ -84,7 +90,7 @@ const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: '/api/openapi.json' }).
 // Logging goes through ../log.ts only (sanitized JSON lines). Effect's logger stays at its default and
 // is not used: the router's request logger is disabled because the Nitro plugin
 // src/server/nitro/http.ts logs every request once, and defects are logged by ServerMiddleware above.
-const { handler, dispose } = HttpRouter.toWebHandler(ApiLive.pipe(Layer.provide(HttpServer.layerServices)), {
+const { dispose, handler } = HttpRouter.toWebHandler(ApiLive.pipe(Layer.provide(HttpServer.layerServices)), {
   disableLogger: true,
 })
 onShutdown('effect-api', dispose)

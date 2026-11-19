@@ -15,14 +15,14 @@ type Pages<Item> = Pick<
  * reading where the new items start instead of staying on a button below them.
  */
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
-  pages: Pages<Item>
+  empty: string
   /** Names the items in the button and its error: `posts` gives "Load more posts". */
   noun: string
-  empty: string
-  testId: string
+  pages: Pages<Item>
   renderItem: (entry: Item) => ReactNode
+  testId: string
 }) {
-  const { pages, noun } = props
+  const { noun, pages } = props
   const items = pages.data.pages.flatMap((page) => page.items)
   const list = useRef<HTMLUListElement>(null)
   // Index of the first item the pending "Load more" adds; focused once it renders.
@@ -30,48 +30,54 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
 
   useEffect(() => {
     const index = focusOnLoad.current
-    if (index === null || items.length <= index) return
+    if (index === null || items.length <= index) {
+      return
+    }
     focusOnLoad.current = null
     list.current?.querySelectorAll<HTMLElement>(':scope > li')[index]?.focus()
   }, [items.length])
 
   const loadMore = async () => {
     // aria-disabled rather than disabled while loading: a disabled button would drop keyboard focus.
-    if (pages.isFetchingNextPage) return
+    if (pages.isFetchingNextPage) {
+      return
+    }
     focusOnLoad.current = items.length
     const fetched = await pages.fetchNextPage()
     // Nothing new rendered (an error, or the next page emptied meanwhile): focus stays on the button.
-    if (fetched.isError || (fetched.data?.pages.at(-1)?.items.length ?? 0) === 0) focusOnLoad.current = null
+    if (fetched.isError || (fetched.data?.pages.at(-1)?.items.length ?? 0) === 0) {
+      focusOnLoad.current = null
+    }
   }
 
   if (items.length === 0) {
     return (
-      <p data-testid={props.testId} className="text-muted-foreground">
+      <p className="text-muted-foreground" data-testid={props.testId}>
         {props.empty}
       </p>
     )
   }
   return (
     <div className="grid gap-3">
-      <ul ref={list} data-testid={props.testId} className="grid gap-3">
+      <ul className="grid gap-3" data-testid={props.testId} ref={list}>
         {items.map((entry) => (
-          <li key={entry.id} tabIndex={-1} className="rounded-xl">
+          <li className="rounded-xl" key={entry.id} tabIndex={-1}>
             {props.renderItem(entry)}
           </li>
         ))}
       </ul>
       {pages.hasNextPage ? (
         <Button
+          aria-disabled={pages.isFetchingNextPage || undefined}
+          className="justify-self-center"
+          onClick={() => void loadMore()}
           type="button"
           variant="outline"
-          className="justify-self-center"
-          aria-disabled={pages.isFetchingNextPage || undefined}
-          onClick={() => void loadMore()}
         >
           {pages.isFetchingNextPage ? `Loading more ${noun}…` : `Load more ${noun}`}
         </Button>
       ) : null}
-      {pages.isFetchNextPageError ? <ApiErrorAlert error={pages.error} action={`load more ${noun}`} /> : null}
+      {pages.isFetchNextPageError ? <ApiErrorAlert action={`load more ${noun}`} error={pages.error} /> : null}
     </div>
   )
 }

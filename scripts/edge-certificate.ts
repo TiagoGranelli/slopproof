@@ -16,19 +16,24 @@ const ROOT_CERTIFICATE = 'caddy/pki/authorities/local/root.crt'
 export const readRootCertificate = (container: string, dataHome: string | undefined): string => {
   if (dataHome) {
     const path = join(dataHome, 'data', ROOT_CERTIFICATE)
-    if (!existsSync(path)) throw new Error(`no root certificate at ${path} yet`)
+    if (!existsSync(path)) {
+      throw new Error(`no root certificate at ${path} yet`)
+    }
     return readFileSync(path, 'utf8')
   }
   const cat = spawnSync('docker', ['exec', container, 'cat', `/data/${ROOT_CERTIFICATE}`], { encoding: 'utf8' })
-  if (cat.status !== 0 || !cat.stdout.includes('BEGIN CERTIFICATE'))
+  if (cat.status !== 0 || !cat.stdout.includes('BEGIN CERTIFICATE')) {
     throw new Error(`no PEM root certificate at ${container}:/data/${ROOT_CERTIFICATE} yet (exit ${cat.status})`)
+  }
   return cat.stdout
 }
 
 /** Adds the edge's CA to the ones this process trusts (fetch included), keeping the system's. */
 export const trustCertificateAuthority = (pem: string): void => {
   const current = getCACertificates('default')
-  if (!current.includes(pem)) setDefaultCACertificates([...current, pem])
+  if (!current.includes(pem)) {
+    setDefaultCACertificates([...current, pem])
+  }
 }
 
 /** Base64 SHA-256 of the DER public key of the certificate the edge serves for localhost. */
@@ -43,7 +48,7 @@ export const servedCertificateSpki = (port: string): Promise<string> =>
       }
       resolveSpki(
         createHash('sha256')
-          .update(certificate.publicKey.export({ type: 'spki', format: 'der' }))
+          .update(certificate.publicKey.export({ format: 'der', type: 'spki' }))
           .digest('base64'),
       )
     }).once('error', reject)

@@ -5,7 +5,7 @@ import { getSession, isPrerendering, type SignedInSession } from '#/lib/session.
 // Kept for the tab's life: sign-in, sign-out and account deletion clear the whole cache (`clearsCache`), and the
 // guard of a signed-in page reads it afresh (fetchFreshSession).
 const sessionQueryOptions = () =>
-  queryOptions({ queryKey: ['auth', 'session'], queryFn: () => getSession(), staleTime: Number.POSITIVE_INFINITY })
+  queryOptions({ queryFn: () => getSession(), queryKey: ['auth', 'session'], staleTime: Number.POSITIVE_INFINITY })
 
 /**
  * The session as the server has it now, for the `_authed` guard on every navigation to a signed-in page. The
@@ -24,7 +24,9 @@ export function fetchFreshSession(queryClient: QueryClient): Promise<SignedInSes
  * no visitor and reads nothing. A failed read leaves the session unknown instead of failing the page.
  */
 export async function loadSession(queryClient: QueryClient): Promise<void> {
-  if (isPrerendering()) return
+  if (isPrerendering()) {
+    return
+  }
   await queryClient.query(sessionQueryOptions()).catch(() => undefined)
 }
 
@@ -43,6 +45,8 @@ export function useSessionUser() {
   const { queryKey } = sessionQueryOptions()
   const read = () => queryClient.getQueryData(queryKey)
   const session = useSyncExternalStore((onChange) => queryClient.getQueryCache().subscribe(onChange), read, read)
-  if (session === undefined) return undefined
+  if (session === undefined) {
+    return undefined
+  }
   return session === null ? null : session.user
 }

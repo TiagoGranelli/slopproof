@@ -10,7 +10,7 @@ For AI reviewers of pull requests (Claude Code Review reads this file; other too
   (`src/contract`, `src/routes`, `src/server/db/schema`, `package.json`). A hand edit of a generated file is
   Important.
 - What CI already enforces: formatting, lint, types, Effect diagnostics, dead code, complexity, duplication,
-  licenses, route accessibility coverage, the syntax rules in `.oxlintrc.json` and the repository rules in
+  licenses, route accessibility coverage, the syntax rules in `.config/oxlint/` and the repository rules in
   `tests/unit/repo-policy.test.ts`.
 - The hidden eval checks in `.agents/evals/tasks/*/tests/`, whose imports resolve only after
   `.agents/evals/grade.sh` copies them.

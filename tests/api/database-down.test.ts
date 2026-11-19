@@ -12,32 +12,32 @@ import { operations, requestFor } from './operations.ts'
  */
 const expectedFor = (errorStatuses: ReadonlySet<number>) =>
   errorStatuses.has(503)
-    ? { status: 503, body: { _tag: 'ServiceUnavailable', message: 'Database unavailable' } }
-    : { status: 500, body: '' }
+    ? { body: { _tag: 'ServiceUnavailable', message: 'Database unavailable' }, status: 503 }
+    : { body: '', status: 500 }
 
 /**
  * Operations that answer without the database. Liveness never touches it, and neither does `me.get` here, where the
  * session check is faked (the real one reads the session from Postgres: tests/integration/db-failure.test.ts).
  */
-const NO_DATABASE: Record<string, { status: number; body: unknown }> = {
-  'system.health': { status: 200, body: { status: 'ok' } },
-  'me.get': { status: 200, body: authors.alice },
-}
+const NO_DATABASE = new Map([
+  ['me.get', { body: authors.alice, status: 200 }],
+  ['system.health', { body: { status: 'ok' }, status: 200 }],
+])
 
 describe('with the database down', () => {
   it('lists in NO_DATABASE only operations the contract has', () => {
     const names = new Set(operations.map((op) => op.name))
-    expect(Object.keys(NO_DATABASE).filter((name) => !names.has(name))).toEqual([])
+    expect([...NO_DATABASE.keys()].filter((name) => !names.has(name))).toEqual([])
   })
 
   it.each(operations)('$name fails with its documented error', async (operation) => {
-    const { handler, dispose } = webHandler({ databaseDown: true })
+    const { dispose, handler } = webHandler({ databaseDown: true })
     onTestFinished(dispose)
     // A valid request from a signed-in author, so only the database can make it fail.
     const response = await handler(requestFor(operation, { cookie: 'better-auth.session_token=alice' }))
     const text = await response.text()
-    expect({ status: response.status, body: text ? (JSON.parse(text) as unknown) : '' }).toEqual(
-      NO_DATABASE[operation.name] ?? expectedFor(operation.errorStatuses),
+    expect({ body: text ? (JSON.parse(text) as unknown) : '', status: response.status }).toEqual(
+      NO_DATABASE.get(operation.name) ?? expectedFor(operation.errorStatuses),
     )
   })
 })

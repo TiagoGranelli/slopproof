@@ -7,12 +7,12 @@ import { dirname } from 'node:path'
 /** Starts `command` with stdout and stderr in `logFile` (truncated first). */
 export const spawnToLog = (
   command: string,
-  args: string[],
+  args: Array<string>,
   options: { env: NodeJS.ProcessEnv; logFile: string },
 ): ChildProcess => {
   mkdirSync(dirname(options.logFile), { recursive: true })
   const log = openSync(options.logFile, 'w')
-  const child = spawn(command, args, { stdio: ['ignore', log, log], env: options.env })
+  const child = spawn(command, args, { env: options.env, stdio: ['ignore', log, log] })
   closeSync(log)
   return child
 }

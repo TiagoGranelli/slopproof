@@ -12,28 +12,29 @@ export function ResendVerificationForm() {
   const resend = useResendVerification()
   const form = useAppForm({
     defaultValues: { email: '' },
+    onSubmit: ({ value }) => resend.mutate(schema.decode(value)),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
-    onSubmit: ({ value }) => resend.mutate(schema.decode(value)),
   })
-  if (resend.isSuccess)
+  if (resend.isSuccess) {
     return (
       <AuthStatus title="Check your inbox">
         If <strong>{resend.variables.email}</strong> has an account waiting for confirmation, we sent it a new link.
       </AuthStatus>
     )
+  }
   return (
     <AuthForm
-      id="resend-verification"
-      submitLabel="Send a new link"
-      form={form}
-      schema={schema}
-      pending={resend.isPending}
       error={resend.error}
       fieldCodes={{ INVALID_EMAIL: 'email' }}
+      form={form}
+      id="resend-verification"
+      pending={resend.isPending}
+      schema={schema}
+      submitLabel="Send a new link"
     >
       <form.AppField name="email">
-        {(field) => <field.TextField id="email" label="Email" type="email" autoComplete="email" required />}
+        {(field) => <field.TextField autoComplete="email" id="email" label="Email" required type="email" />}
       </form.AppField>
     </AuthForm>
   )

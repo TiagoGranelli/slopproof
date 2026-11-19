@@ -16,33 +16,81 @@ import { Client } from 'pg'
 import { xSync } from 'tinyexec'
 import { dropTestDatabase, resetTestDatabase, testDatabaseUrl } from './test-db.ts'
 
-if (existsSync('.env')) process.loadEnvFile('.env')
+if (existsSync('.env')) {
+  process.loadEnvFile('.env')
+}
 
 const SCHEMA = './src/server/db/schema/index.ts'
 const MIGRATIONS = 'drizzle'
 
 /** `pnpm <args>` with its output captured; throws with the output when it fails. */
-const pnpm = (args: string[]) => {
+const pnpm = (args: Array<string>) => {
   // A drizzle-kit rename prompt cannot be answered without a TTY; it ends here as a failure or a timeout
   // (tinyexec throws ETIMEDOUT).
-  const run = xSync('pnpm', args, { timeout: 120_000, nodeOptions: { stdio: ['ignore', 'pipe', 'pipe'] } })
+  const run = xSync('pnpm', args, { nodeOptions: { stdio: ['ignore', 'pipe', 'pipe'] }, timeout: 120_000 })
   const output = `${run.stdout}${run.stderr}`
-  if (run.exitCode !== 0)
+  if (run.exitCode !== 0) {
     throw new Error(`pnpm ${args.join(' ')} failed (exit ${run.exitCode ?? run.signalCode}, expected 0)\n${output}`)
+  }
   return output
 }
 
-const git = (args: string[]) => spawnSync('git', args, { encoding: 'utf8' })
+const git = (args: Array<string>) => spawnSync('git', args, { encoding: 'utf8' })
 
 const checks = {
+  async auth() {
+    // Better Auth's own check: every table, column, nullability and default the configuration writes exists in
+    // the Drizzle schema (src/server/db/schema/auth.ts is application code, not generated). It only loads the
+    // config, so placeholders let it run without a local .env.
+    const authCheck = xSync('pnpm', ['exec', 'auth', 'check', 'schema', '--config', 'src/server/auth.ts'], {
+      nodeOptions: {
+        env: {
+          APP_URL: process.env.APP_URL || 'http://localhost:3000',
+          BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || 'check-drift-placeholder-secret-0123456789',
+          DATABASE_URL: process.env.DATABASE_URL || 'postgres://unused@127.0.0.1:1/unused',
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+      timeout: 120_000,
+    })
+    if (authCheck.exitCode === 0) {
+      return []
+    }
+    const report = `${authCheck.stdout}${authCheck.stderr}`.trim()
+    return [`src/server/db/schema/auth.ts does not hold what src/server/auth.ts writes:\n${report}`]
+  },
+
   async contract() {
     // The baseline is the working tree as it is, so a `pnpm codegen` output not staged yet is not drift.
     // `git stash create` stores it as a commit without touching the tree or the stash list (nothing when clean).
     const before = git(['stash', 'create']).stdout.trim() || 'HEAD'
     pnpm(['codegen'])
     const diff = git(['diff', '--exit-code', '--stat', before, '--', 'openapi.json', 'src/sdk'])
-    if (diff.status === 0) return []
+    if (diff.status === 0) {
+      return []
+    }
     return [`\`pnpm codegen\` changed these files; review and commit them:\n${diff.stdout.trimEnd()}${diff.stderr}`]
+  },
+
+  async database() {
+    const url = testDatabaseUrl('drift', process.env.DRIFT_DATABASE_URL)
+    await resetTestDatabase(url)
+    try {
+      const before = await fingerprint(url)
+      // Without --strict, push applies whatever the schema needs; on a fresh migrated database that must be nothing.
+      const push = ['exec', 'drizzle-kit', 'push', '--dialect=postgresql', `--schema=${SCHEMA}`]
+      const output = pnpm([...push, `--url=${url}`, '--force'])
+      if (before === (await fingerprint(url))) {
+        return []
+      }
+      return [
+        `migrations in ${MIGRATIONS}/ do not produce the Drizzle schema; drizzle-kit push had to change:\n${output.trim()}`,
+      ]
+    } finally {
+      if (!process.env.DRIFT_DATABASE_URL) {
+        await dropTestDatabase(url)
+      }
+    }
   },
 
   async migrations() {
@@ -58,44 +106,7 @@ const checks = {
       const added = readdirSync(dir).filter((file) => !existsSync(join(MIGRATIONS, file)))
       return added.map((file) => `the schema needs ${file}: run \`pnpm db:generate --name <slug>\``)
     } finally {
-      rmSync(join(dir, '..'), { recursive: true, force: true })
-    }
-  },
-
-  async auth() {
-    // Better Auth's own check: every table, column, nullability and default the configuration writes exists in
-    // the Drizzle schema (src/server/db/schema/auth.ts is application code, not generated). It only loads the
-    // config, so placeholders let it run without a local .env.
-    const authCheck = xSync('pnpm', ['exec', 'auth', 'check', 'schema', '--config', 'src/server/auth.ts'], {
-      timeout: 120_000,
-      nodeOptions: {
-        env: {
-          DATABASE_URL: process.env.DATABASE_URL || 'postgres://unused@127.0.0.1:1/unused',
-          APP_URL: process.env.APP_URL || 'http://localhost:3000',
-          BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || 'check-drift-placeholder-secret-0123456789',
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    })
-    if (authCheck.exitCode === 0) return []
-    const report = `${authCheck.stdout}${authCheck.stderr}`.trim()
-    return [`src/server/db/schema/auth.ts does not hold what src/server/auth.ts writes:\n${report}`]
-  },
-
-  async database() {
-    const url = testDatabaseUrl('drift', process.env.DRIFT_DATABASE_URL)
-    await resetTestDatabase(url)
-    try {
-      const before = await fingerprint(url)
-      // Without --strict, push applies whatever the schema needs; on a fresh migrated database that must be nothing.
-      const push = ['exec', 'drizzle-kit', 'push', '--dialect=postgresql', `--schema=${SCHEMA}`]
-      const output = pnpm([...push, `--url=${url}`, '--force'])
-      if (before === (await fingerprint(url))) return []
-      return [
-        `migrations in ${MIGRATIONS}/ do not produce the Drizzle schema; drizzle-kit push had to change:\n${output.trim()}`,
-      ]
-    } finally {
-      if (!process.env.DRIFT_DATABASE_URL) await dropTestDatabase(url)
+      rmSync(join(dir, '..'), { force: true, recursive: true })
     }
   },
 }
@@ -119,8 +130,9 @@ const fingerprint = async (url: string) => {
   await client.connect()
   try {
     const rowsPerQuery = []
-    for (const query of FINGERPRINT_QUERIES)
-      rowsPerQuery.push((await client.query({ text: query, rowMode: 'array' })).rows)
+    for (const query of FINGERPRINT_QUERIES) {
+      rowsPerQuery.push((await client.query({ rowMode: 'array', text: query })).rows)
+    }
     return JSON.stringify(rowsPerQuery)
   } finally {
     await client.end()
@@ -128,17 +140,21 @@ const fingerprint = async (url: string) => {
 }
 
 type CheckName = keyof typeof checks
-const requested = process.argv.slice(2) as CheckName[]
+const requested = process.argv.slice(2) as Array<CheckName>
 const unknown = requested.filter((name) => !(name in checks))
-if (unknown.length)
+if (unknown.length) {
   throw new Error(`unknown check(s): ${unknown.join(', ')}; expected any of ${Object.keys(checks).join(', ')}`)
+}
 
 /** Runs one check and prints its outcome; false when it found drift or could not run. */
 const passes = async (name: CheckName): Promise<boolean> => {
   try {
     const problems = await checks[name]()
-    if (problems.length === 0) console.log(`ok    ${name}`)
-    else console.error(`DRIFT ${name}\n${problems.map((p) => `  - ${p}`).join('\n')}`)
+    if (problems.length === 0) {
+      console.log(`ok    ${name}`)
+    } else {
+      console.error(`DRIFT ${name}\n${problems.map((p) => `  - ${p}`).join('\n')}`)
+    }
     return problems.length === 0
   } catch (error) {
     console.error(`ERROR ${name}: ${error instanceof Error ? error.message : String(error)}`)
@@ -147,7 +163,9 @@ const passes = async (name: CheckName): Promise<boolean> => {
 }
 
 let failed = false
-for (const name of requested.length ? requested : (Object.keys(checks) as CheckName[])) {
-  if (!(await passes(name))) failed = true
+for (const name of requested.length ? requested : (Object.keys(checks) as Array<CheckName>)) {
+  if (!(await passes(name))) {
+    failed = true
+  }
 }
 process.exitCode = failed ? 1 : 0

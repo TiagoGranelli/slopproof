@@ -19,7 +19,7 @@ const preloadDialog = () => {
  * then; the button stays (aria-disabled, like every pending button) while the request runs, and the caller moves
  * focus on once the item is gone (as MyPost's `onDeleted` does).
  */
-export function ConfirmDeleteButton(props: { target: DeletedItem; pending: boolean; onConfirm: () => void }) {
+export function ConfirmDeleteButton(props: { onConfirm: () => void; pending: boolean; target: DeletedItem }) {
   const button = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   // Mounted from the first opening on, so closing runs Radix's close (and its focus return) instead of unmounting.
@@ -27,30 +27,32 @@ export function ConfirmDeleteButton(props: { target: DeletedItem; pending: boole
   return (
     <>
       <Button
-        ref={button}
-        type="button"
-        variant="ghost"
-        size="sm"
         aria-disabled={props.pending || undefined}
         aria-haspopup="dialog"
-        onPointerEnter={preloadDialog}
-        onFocus={preloadDialog}
         onClick={() => {
-          if (props.pending) return
+          if (props.pending) {
+            return
+          }
           setAsked(true)
           setOpen(true)
         }}
+        onFocus={preloadDialog}
+        onPointerEnter={preloadDialog}
+        ref={button}
+        size="sm"
+        type="button"
+        variant="ghost"
       >
         Delete<span className="sr-only"> {`${props.target.noun}: ${props.target.text.slice(0, 40)}`}</span>
       </Button>
       {asked ? (
         <Suspense fallback={null}>
           <ConfirmDeleteDialog
-            target={props.target}
-            open={open}
-            onOpenChange={setOpen}
             onConfirm={props.onConfirm}
+            onOpenChange={setOpen}
+            open={open}
             returnFocus={button}
+            target={props.target}
           />
         </Suspense>
       ) : null}

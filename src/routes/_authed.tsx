@@ -7,9 +7,11 @@ export const Route = createFileRoute('/_authed')({
     // Asks the server on every navigation here; the site header then shows the same answer (readSession).
     const session = await fetchFreshSession(context.queryClient)
     // /login validates `redirect` (same-origin paths only) before navigating to it after sign-in.
-    if (!session) throw redirect({ to: '/login', search: { redirect: location.href } })
+    if (!session) {
+      throw redirect({ to: '/login', search: { redirect: location.href } })
+    }
     return { user: session.user }
   },
-  headers: () => ({ 'cache-control': 'private, no-store' }),
   component: Outlet,
+  headers: () => ({ 'cache-control': 'private, no-store' }),
 })

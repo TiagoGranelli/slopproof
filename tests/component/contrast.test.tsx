@@ -13,7 +13,7 @@ type Rgb = readonly [number, number, number]
 
 /** `color` as the browser paints it over `under` (so alpha and color-mix resolve): sRGB bytes of a canvas pixel. */
 const painted = (color: string, under = 'white'): Rgb => {
-  const canvas = Object.assign(document.createElement('canvas'), { width: 1, height: 1 })
+  const canvas = Object.assign(document.createElement('canvas'), { height: 1, width: 1 })
   const context = canvas.getContext('2d', { willReadFrequently: true })!
   context.fillStyle = under
   context.fillRect(0, 0, 1, 1)
@@ -27,7 +27,7 @@ const painted = (color: string, under = 'white'): Rgb => {
 const luminance = (rgb: Rgb) => {
   const [red, green, blue] = rgb.map((byte) => {
     const channel = byte / 255
-    return channel <= 0.040_45 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
   }) as [number, number, number]
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
@@ -42,7 +42,9 @@ const contrast = (first: Rgb, second: Rgb) => {
 const surfaceOf = (element: Element): Rgb => {
   for (let node: Element | null = element; node; node = node.parentElement) {
     const background = getComputedStyle(node).backgroundColor
-    if (painted(background, 'red').join() === painted(background, 'blue').join()) return painted(background)
+    if (painted(background, 'red').join() === painted(background, 'blue').join()) {
+      return painted(background)
+    }
   }
   return painted('white')
 }
@@ -53,7 +55,7 @@ const Controls = () => (
     <Textarea aria-label="Post" />
     <Button>Publish</Button>
     <Button variant="outline">Cancel</Button>
-    <div data-testid="card" className="bg-card p-4">
+    <div className="bg-card p-4" data-testid="card">
       <Button variant="ghost">Edit</Button>
     </div>
   </div>

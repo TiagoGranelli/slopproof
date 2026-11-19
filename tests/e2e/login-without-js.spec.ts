@@ -5,9 +5,9 @@ import { expect, test } from './support/app.ts'
 
 test.use({ javaScriptEnabled: false })
 
-const email = (page: Page) => page.getByRole('textbox', { name: 'Email', exact: true })
+const email = (page: Page) => page.getByRole('textbox', { exact: true, name: 'Email' })
 
-test('signs in without JavaScript and lands where the guard sent the visitor', async ({ page, author }) => {
+test('signs in without JavaScript and lands where the guard sent the visitor', async ({ author, page }) => {
   await page.goto('/dashboard')
   await expect(page).toHaveURL(/\/login\?redirect=%2Fdashboard$/)
   await email(page).fill(author.email)
@@ -18,7 +18,7 @@ test('signs in without JavaScript and lands where the guard sent the visitor', a
   await expect(page.getByRole('navigation', { name: 'Main' })).toContainText(author.name)
 })
 
-test('without JavaScript, a wrong password comes back as the same alert on the form', async ({ page, author }) => {
+test('without JavaScript, a wrong password comes back as the same alert on the form', async ({ author, page }) => {
   await page.goto('/login')
   await email(page).fill(author.email)
   await page.getByLabel('Password').fill('not the password at all')

@@ -1,10 +1,10 @@
 import { useState, useSyncExternalStore } from 'react'
 import { readThemeChoice, saveThemeChoice, type ThemeChoice } from '#/lib/theme.ts'
 
-const CHOICES: ReadonlyArray<{ value: ThemeChoice; label: string }> = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
+const CHOICES: ReadonlyArray<{ label: string; value: ThemeChoice }> = [
+  { label: 'System', value: 'system' },
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
 ]
 
 // A radio drawn as a segment: the invisible input covers it, so its focus outline is the segment's. The checked
@@ -29,18 +29,18 @@ export function ThemeToggle() {
     <fieldset className="flex items-center gap-2">
       <legend className="float-left">Theme</legend>
       <div className="flex rounded-lg bg-muted p-0.5">
-        {CHOICES.map(({ value, label }) => (
-          <label key={value} className={segment}>
+        {CHOICES.map(({ label, value }) => (
+          <label className={segment} key={value}>
             <input
-              type="radio"
-              name="theme"
-              value={value}
               checked={choice === value}
+              className="absolute inset-0 cursor-pointer appearance-none rounded-md"
+              name="theme"
               onChange={() => {
                 saveThemeChoice(value)
                 setPicked(value)
               }}
-              className="absolute inset-0 cursor-pointer appearance-none rounded-md"
+              type="radio"
+              value={value}
             />
             {label}
           </label>

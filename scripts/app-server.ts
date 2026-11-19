@@ -11,24 +11,26 @@ import { edgePeers, type RunningEdge, startEdge } from './edge.ts'
 import { type ServerProcess, spawnServer, waitForServer } from './server-process.ts'
 import { resetTestDatabase } from './test-db.ts'
 
-if (existsSync('.env')) process.loadEnvFile('.env')
+if (existsSync('.env')) {
+  process.loadEnvFile('.env')
+}
 
 type User = { email: string; name: string; password: string }
 
 export type RunningApp = {
-  /** The public origin (APP_URL): the edge's when there is one, otherwise the Node server's. */
-  url: string
+  databaseUrl: string
   /** The Node server itself, bypassing the edge. */
   directUrl: string
   /** With `edge.tls`: the SPKI hash of the edge's certificate, for Chrome (see scripts/edge.ts). */
   edgeCertificateSpki?: string
   env: NodeJS.ProcessEnv
-  databaseUrl: string
-  user: User
-  otherUser: User
   logFile: string
+  otherUser: User
   /** Stops the edge, then the server (ServerProcess.stop), and says how the server exited. */
   stop: ServerProcess['stop']
+  /** The public origin (APP_URL): the edge's when there is one, otherwise the Node server's. */
+  url: string
+  user: User
 }
 
 /** Where the test runners connect from when no edge sits in front. */
@@ -46,7 +48,7 @@ const freePort = () =>
   })
 
 /** Runs a command with its output captured; the output is printed only if it fails. */
-const runQuiet = (command: string, args: string[], env: NodeJS.ProcessEnv) =>
+const runQuiet = (command: string, args: Array<string>, env: NodeJS.ProcessEnv) =>
   new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
@@ -61,40 +63,40 @@ const runQuiet = (command: string, args: string[], env: NodeJS.ProcessEnv) =>
   })
 
 type EdgeOptions = {
-  trustedProxies?: string
   logFile: string
   /** HTTPS with HTTP/2 and HTTP/3, as in production (Caddy's internal CA; see scripts/edge.ts). */
   tls?: boolean
+  trustedProxies?: string
 }
 
 type StartAppOptions = {
-  databaseUrl: string
-  logFile: string
-  /**
-   * TRUSTED_PROXIES for the server: trusting loopback lets each test suite pick its client IP (X-Forwarded-For).
-   * Ignored with `edge`: the server then trusts only the edge (`edgePeers`, scripts/edge.ts).
-   */
-  trustedProxies?: string
-  /** More server settings, such as AUTH_SIGN_UP, SMTP_URL and MAIL_FROM. */
-  settings?: NodeJS.ProcessEnv
   /** Share this running app's database, accounts and secret instead of resetting the database. */
   alongside?: RunningApp
+  databaseUrl: string
   /**
    * Put the reference edge in front. `trustedProxies` becomes the edge's EDGE_TRUSTED_PROXIES: the test
    * runners send their own X-Forwarded-For per suite, so they pass `private_ranges`. The edge replaces
    * X-Forwarded-For with the client IP it resolved, and the server trusts only the edge (`edgePeers`).
    */
   edge?: EdgeOptions
+  logFile: string
+  /** More server settings, such as AUTH_SIGN_UP, SMTP_URL and MAIL_FROM. */
+  settings?: NodeJS.ProcessEnv
+  /**
+   * TRUSTED_PROXIES for the server: trusting loopback lets each test suite pick its client IP (X-Forwarded-For).
+   * Ignored with `edge`: the server then trusts only the edge (`edgePeers`, scripts/edge.ts).
+   */
+  trustedProxies?: string
 }
 
 /** The two authors, new ones with random passwords unless the app shares another one's accounts. */
 const accounts = (alongside: RunningApp | undefined) => ({
-  user: alongside?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
   otherUser: alongside?.otherUser ?? { email: 'other@example.test', name: 'Other Author', password: password() },
+  user: alongside?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
 })
 
 /** Resets the test database (migrations included) and creates the accounts, verified. */
-const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: User[]) => {
+const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: Array<User>) => {
   await resetTestDatabase(databaseUrl)
   await Promise.all(
     users.map((u) =>
@@ -104,25 +106,27 @@ const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: 
 }
 
 /** Where the app listens, and where its users reach it: the edge's port when there is one. */
-type Ports = { app: string; edge?: string; url: string; directUrl: string }
+type Ports = { app: string; directUrl: string; edge?: string; url: string }
 
 const choosePorts = async (edge: EdgeOptions | undefined): Promise<Ports> => {
   const app = await freePort()
   const directUrl = `http://localhost:${app}`
-  if (!edge) return { app, url: directUrl, directUrl }
+  if (!edge) {
+    return { app, directUrl, url: directUrl }
+  }
   const port = await freePort()
-  return { app, edge: port, url: `${edge.tls ? 'https' : 'http'}://localhost:${port}`, directUrl }
+  return { app, directUrl, edge: port, url: `${edge.tls ? 'https' : 'http'}://localhost:${port}` }
 }
 
 /** The server's environment: this process's, the app's origin and database, and `settings` last. */
 const serverEnv = (options: StartAppOptions, ports: Ports): NodeJS.ProcessEnv => ({
   ...process.env,
-  DATABASE_URL: options.databaseUrl,
   APP_URL: ports.url,
-  PORT: ports.app,
-  NODE_ENV: 'production',
   BETTER_AUTH_SECRET:
     options.alongside?.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || crypto.randomUUID().repeat(2),
+  DATABASE_URL: options.databaseUrl,
+  NODE_ENV: 'production',
+  PORT: ports.app,
   TRUSTED_PROXIES: options.edge ? edgePeers() : (options.trustedProxies ?? ''),
   ...options.settings,
 })
@@ -130,11 +134,11 @@ const serverEnv = (options: StartAppOptions, ports: Ports): NodeJS.ProcessEnv =>
 /** Starts the edge on `ports.edge` in front of the app, once the app is ready. */
 const startEdgeInFront = async (edge: EdgeOptions, ports: Ports & { edge: string }): Promise<RunningEdge> =>
   startEdge({
-    port: ports.edge,
-    upstreamPort: ports.app,
-    trustedProxies: edge.trustedProxies,
-    ...(edge.tls ? { tls: { httpPort: await freePort() } } : {}),
     logFile: edge.logFile,
+    port: ports.edge,
+    tls: edge.tls ? { httpPort: await freePort() } : undefined,
+    trustedProxies: edge.trustedProxies,
+    upstreamPort: ports.app,
   })
 
 /** Waits for the server, then starts the edge if asked; stops whatever started if either fails. */
@@ -146,7 +150,9 @@ const startServing = async (options: StartAppOptions, ports: Ports, server: Serv
   }
   try {
     await waitForServer(server.child, ports.directUrl, options.logFile)
-    if (options.edge && ports.edge) edge = await startEdgeInFront(options.edge, { ...ports, edge: ports.edge })
+    if (options.edge && ports.edge) {
+      edge = await startEdgeInFront(options.edge, { ...ports, edge: ports.edge })
+    }
   } catch (error) {
     await stop()
     throw error
@@ -163,11 +169,13 @@ const startServing = async (options: StartAppOptions, ports: Ports, server: Serv
 export const startApp = async (options: StartAppOptions): Promise<RunningApp> => {
   assertFreshBuild()
   const ports = await choosePorts(options.edge)
-  const { user, otherUser } = accounts(options.alongside)
+  const { otherUser, user } = accounts(options.alongside)
   const env = serverEnv(options, ports)
-  if (!options.alongside) await seedDatabase(options.databaseUrl, env, [user, otherUser])
+  if (!options.alongside) {
+    await seedDatabase(options.databaseUrl, env, [user, otherUser])
+  }
   const { edgeCertificateSpki, stop } = await startServing(options, ports, spawnServer(env, options.logFile))
-  const { url, directUrl } = ports
+  const { directUrl, url } = ports
   const { databaseUrl, logFile } = options
-  return { url, directUrl, edgeCertificateSpki, env, databaseUrl, user, otherUser, logFile, stop }
+  return { databaseUrl, directUrl, edgeCertificateSpki, env, logFile, otherUser, stop, url, user }
 }

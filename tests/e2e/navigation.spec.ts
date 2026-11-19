@@ -5,7 +5,7 @@ import { APP_NAME, pageTitle } from '#/config/app.ts'
 import { expect, signIn, test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
+  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
 
 /** The route announcer: a polite live region inside `main` (RouteAnnouncer). */
 const announcer = (page: Page) => page.getByRole('main').locator('[aria-live="polite"]')
@@ -36,11 +36,11 @@ test('an address no route matches is a 404 with its own title and heading', asyn
 })
 
 test('the header shows who is signed in from the session SSR read, with no request of its own', async ({
-  page,
   author,
+  page,
 }) => {
   await signIn(page, author)
-  const serverFunctions: string[] = []
+  const serverFunctions: Array<string> = []
   page.on('request', (r) => r.url().includes('/_serverFn/') && serverFunctions.push(r.url()))
   await visit(page, '/')
   const nav = page.getByRole('navigation', { name: 'Main' })
@@ -63,8 +63,8 @@ test('a signed-out visitor is offered Sign in', async ({ page }) => {
 })
 
 test('the first Tab stop is a visible "Skip to content" that moves focus to the main region', async ({
-  page,
   isMobile,
+  page,
 }) => {
   test.skip(isMobile, 'keyboard navigation is a desktop concern')
   await visit(page, '/')

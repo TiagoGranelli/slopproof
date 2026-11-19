@@ -1,12 +1,13 @@
 # The quality gates decide what "done" means for every change, agent-written ones included. A pull request that
 # loosens them (a rule turned off, a threshold raised, a module dropped from COVERAGE_GATE, a selector dropped from
-# .oxlintrc.json, an entry in PUBLIC_OPERATIONS) needs a review from the owners below. A repository
+# oxlint.config.ts or .config/oxlint/, an entry in PUBLIC_OPERATIONS) needs a review from the owners below. A repository
 # created from the template replaces @TiagoGranelli with its own team or user (docs/adopting.md), and requires
 # code-owner review in the branch protection of main; until then this file only suggests reviewers. The last
 # matching pattern wins, so later lines narrow earlier ones.
 
 # Lint, types, dead code, complexity, duplication, formatting.
-/.oxlintrc.json      @TiagoGranelli
+/oxlint.config.ts    @TiagoGranelli
+/.config/oxlint/     @TiagoGranelli
 /.oxfmtrc.json       @TiagoGranelli
 /.fallowrc.json      @TiagoGranelli
 /tsconfig.json       @TiagoGranelli

@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { authMessages } from '#/server/mail/auth-messages.ts'
 
 const messages = authMessages('https://app.example.com')
-const to = { name: 'Ada', email: 'ada@example.com' }
+const to = { email: 'ada@example.com', name: 'Ada' }
 const links = (text: string) => text.match(/https:\/\/\S+/g) ?? []
 
 describe('authMessages', () => {
   it('links the verification mail to /verify-email with the token', () => {
     const mail = messages.verifyEmail(to, 'a.b+c/d=')
-    expect(mail).toMatchObject({ to: 'ada@example.com', subject: 'Confirm your email address' })
+    expect(mail).toMatchObject({ subject: 'Confirm your email address', to: 'ada@example.com' })
     expect(links(mail.text)).toEqual(['https://app.example.com/verify-email?token=a.b%2Bc%2Fd%3D'])
     expect(new URL(links(mail.text)[0]!).searchParams.get('token')).toBe('a.b+c/d=')
   })

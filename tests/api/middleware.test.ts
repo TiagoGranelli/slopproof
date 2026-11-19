@@ -46,16 +46,15 @@ const probe = () => {
   return async (session: string | undefined, body: string) => {
     const response = await web.handler(
       new Request('http://localhost:3000/probe', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(session ? { cookie: `better-auth.session_token=${session}` } : {}),
-        },
         body,
+        headers: session
+          ? { 'content-type': 'application/json', cookie: `better-auth.session_token=${session}` }
+          : { 'content-type': 'application/json' },
+        method: 'POST',
       }),
     )
     const text = await response.text()
-    return { status: response.status, json: text ? (JSON.parse(text) as unknown) : undefined }
+    return { json: text ? (JSON.parse(text) as unknown) : undefined, status: response.status }
   }
 }
 
@@ -65,35 +64,38 @@ describe('RequestValidation on an endpoint', () => {
   it('answers an invalid payload with the rule it broke, never the value', async () => {
     const send = probe()
     expect(await send('alice', JSON.stringify({ value: '' }))).toEqual({
-      status: 400,
       json: {
         _tag: 'ValidationError',
+        issues: [{ message: 'Expected a value with a length of at least 1', path: ['value'] }],
         message: 'Invalid request payload',
-        issues: [{ path: ['value'], message: 'Expected a value with a length of at least 1' }],
       },
+      status: 400,
     })
     const malformed = await send('alice', '{"value": "secret-value')
     expect(malformed).toMatchObject({
-      status: 400,
       json: { _tag: 'ValidationError', message: 'Invalid request payload' },
+      status: 400,
     })
     expect(JSON.stringify(malformed.json)).not.toContain('secret-value')
   })
 
   it('runs after Authentication: without a session the answer is 401 whatever the body', async () => {
     const send = probe()
-    for (const body of [valid, '{'])
+    for (const body of [valid, '{']) {
       expect(await send(undefined, body)).toEqual({
-        status: 401,
         json: { _tag: 'Unauthorized', message: 'Authentication required' },
+        status: 401,
       })
+    }
   })
 })
 
 describe('WriteRateLimit on an endpoint', () => {
   it('admits the limit per user, then answers 429 with the computed wait, before reading the body', async () => {
     const send = probe()
-    for (let i = 0; i < WRITES_PER_WINDOW; i++) expect((await send('alice', valid)).status).toBe(204)
+    for (let i = 0; i < WRITES_PER_WINDOW; i++) {
+      expect((await send('alice', valid)).status).toBe(204)
+    }
     // Counted before the body is decoded, so an invalid body is refused the same way.
     for (const [index, body] of [valid, '{', JSON.stringify({ value: '' })].entries()) {
       expect(await send('alice', body)).toEqual({
@@ -116,8 +118,11 @@ describe('RequestValidation middleware', () => {
   const schemaError = Schema.decodeUnknownEffect(Schema.Struct({ id: Schema.String }))({ id: 1 }).pipe(Effect.flip)
   const run = (kind: HttpApiError.HttpApiSchemaError['kind']) =>
     Effect.gen(function* () {
+      // The router hands the middleware failures typed `unhandled` and provides HttpRouter.Provided; called directly,
+      // its declared types admit neither, so they are erased.
+      // oxlint-disable-next-line quality/no-chained-type-assertions
       const middleware = (yield* RequestValidation) as unknown as Middleware
-      const failure = new HttpApiError.HttpApiSchemaError({ kind, cause: yield* schemaError })
+      const failure = new HttpApiError.HttpApiSchemaError({ cause: yield* schemaError, kind })
       // The options (endpoint, group) are not read by this middleware.
       return yield* middleware(Effect.fail(failure), undefined as never).pipe(Effect.flip)
     }).pipe(Effect.provide(RequestValidationLive))
@@ -127,8 +132,8 @@ describe('RequestValidation middleware', () => {
       const error = yield* run(kind)
       assert.instanceOf(error, ValidationError)
       assert.deepStrictEqual(
-        { message: error.message, issues: error.issues },
-        { message: `Invalid request ${kind.toLowerCase()}`, issues: [{ path: ['id'], message: 'Expected string' }] },
+        { issues: error.issues, message: error.message },
+        { issues: [{ message: 'Expected string', path: ['id'] }], message: `Invalid request ${kind.toLowerCase()}` },
       )
     }),
   )

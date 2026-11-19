@@ -10,7 +10,7 @@ import { dropTestDatabase, openConnections, testDatabaseUrl } from '../../script
 
 const LOG_FILE = 'test-results/app-server-shutdown.log'
 /** srvx drains requests, then the close hook from src/server/lifecycle.ts ends the pool; both are quick here. */
-const MAX_SHUTDOWN_MS = 3_000
+const MAX_SHUTDOWN_MS = 3000
 
 /**
  * Time for the server to read what the test sent. Without that read it treats the first connection as idle and
@@ -31,7 +31,7 @@ const rawConnection = async (directUrl: string) => {
   socket.on('data', (chunk: Buffer) => (received += chunk.toString()))
   const closed = new Promise<string>((resolve) => socket.once('close', () => resolve(received)))
   socket.on('error', () => {})
-  return { socket, closed }
+  return { closed, socket }
 }
 
 /** A sign-in whose client hangs up right after sending it: the server still runs its handler. */
@@ -109,6 +109,6 @@ describe('shutdown', () => {
     expect(stopped).toMatchObject({ code: 0, signal: null })
     expect(stopped.ms).toBeLessThanOrEqual(MAX_SHUTDOWN_MS)
     // The process is gone, so are its sockets; Postgres may take a moment to reap the backends.
-    await expect.poll(() => openConnections(databaseUrl), { timeout: 1_000 }).toEqual([])
+    await expect.poll(() => openConnections(databaseUrl), { timeout: 1000 }).toEqual([])
   })
 })

@@ -117,7 +117,9 @@ describe('myPosts', () => {
   it.effect('answers 429 past the write limit, per user, and keeps reading', () =>
     Effect.gen(function* () {
       const [alice, bob] = [yield* clientAs('alice'), yield* clientAs('bob')]
-      for (let i = 3; i < WRITES_PER_WINDOW; i++) yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      for (let i = 3; i < WRITES_PER_WINDOW; i++) {
+        yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      }
       const post = yield* alice.myPosts.create({ payload: { body: 'kept' } })
       yield* alice.myPosts.update({ params: { id: post.id }, payload: { body: 'edited' } })
       // A write that finds nothing still counts.
@@ -171,7 +173,9 @@ describe('publicPosts', () => {
   it.effect(`returns the newest ${POSTS_PAGE_DEFAULT} by default and at most ${POSTS_PAGE_MAX} on request`, () =>
     Effect.gen(function* () {
       const [alice, anonymous] = [yield* clientAs('alice'), yield* clientAs('none')]
-      for (let i = 0; i < POSTS_PAGE_MAX + 1; i++) yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      for (let i = 0; i < POSTS_PAGE_MAX + 1; i++) {
+        yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      }
 
       const byDefault = yield* anonymous.publicPosts.list(firstPage)
       assert.strictEqual(byDefault.items.length, POSTS_PAGE_DEFAULT)
@@ -199,7 +203,7 @@ const allPages = (
   limit: number,
 ) =>
   Effect.gen(function* () {
-    const pages: string[][] = []
+    const pages: Array<Array<string>> = []
     let cursor: PageCursor | undefined
     do {
       const page = yield* list({ query: cursor ? { cursor, limit } : { limit } })
@@ -221,7 +225,9 @@ describe('pagination', () => {
   ] as const)('pages through posts %s apart without skipping or repeating one', ([, clockStepMicros]) =>
     Effect.gen(function* () {
       const [alice, anonymous] = [yield* clientAs('alice'), yield* clientAs('none')]
-      for (let i = 0; i < 7; i++) yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      for (let i = 0; i < 7; i++) {
+        yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      }
 
       const pages = yield* allPages(anonymous.publicPosts.list, 3)
       assert.deepStrictEqual(
@@ -231,14 +237,18 @@ describe('pagination', () => {
       const seen = pages.flat()
       assert.sameMembers(seen, bodies(7))
       assert.strictEqual(new Set(seen).size, 7)
-      if (clockStepMicros > 0) assert.deepStrictEqual(seen, bodies(7))
+      if (clockStepMicros > 0) {
+        assert.deepStrictEqual(seen, bodies(7))
+      }
     }).pipe(Effect.provide(apiLayer({ clockStepMicros }))),
   )
 
   it.effect('ends with nextCursor null when the last page is exactly full', () =>
     Effect.gen(function* () {
       const [alice, anonymous] = [yield* clientAs('alice'), yield* clientAs('none')]
-      for (let i = 0; i < 4; i++) yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      for (let i = 0; i < 4; i++) {
+        yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      }
       assert.deepStrictEqual(yield* allPages(anonymous.publicPosts.list, 2), [
         ['post 3', 'post 2'],
         ['post 1', 'post 0'],
@@ -249,7 +259,9 @@ describe('pagination', () => {
   it.effect('keeps later pages stable while new posts are published', () =>
     Effect.gen(function* () {
       const [alice, anonymous] = [yield* clientAs('alice'), yield* clientAs('none')]
-      for (let i = 0; i < 4; i++) yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      for (let i = 0; i < 4; i++) {
+        yield* alice.myPosts.create({ payload: { body: `post ${i}` } })
+      }
       const first = yield* anonymous.publicPosts.list({ query: { limit: 2 } })
       yield* alice.myPosts.create({ payload: { body: 'newer' } })
       const second = yield* anonymous.publicPosts.list({ query: { cursor: first.nextCursor!, limit: 2 } })

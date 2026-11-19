@@ -47,7 +47,7 @@ describe('PostsRepo', () => {
     expect(full.items).toHaveLength(50)
     const first = await withBudget('listByAuthor (page 1 of 50)', 1, (repo) => repo.listByAuthor(many, { limit: 20 }))
     const next = await withBudget('listByAuthor (page 2 of 50)', 1, (repo) =>
-      repo.listByAuthor(many, { limit: 20, cursor: lastKey(first) }),
+      repo.listByAuthor(many, { cursor: lastKey(first), limit: 20 }),
     )
     expect(next.items).toHaveLength(20)
 
@@ -57,7 +57,7 @@ describe('PostsRepo', () => {
     // From below the author with 50 posts' second page: their last 10, then older posts, the other author's
     // among them. Not from the top of the list, where other files' newer posts may fill a whole page by one author.
     const large = await withBudget('listPublic (limit 50)', 1, (repo) =>
-      repo.listPublic({ limit: 50, cursor: lastKey(next) }),
+      repo.listPublic({ cursor: lastKey(next), limit: 50 }),
     )
     expect(new Set(large.items.map((post) => post.authorName)).size).toBeGreaterThan(1)
   })

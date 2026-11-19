@@ -1,5 +1,5 @@
 // Repository rules that no linter checks: each test lists every violation with what to do about it.
-// Rules about code shape are `no-restricted-syntax` selectors in .oxlintrc.json instead.
+// Rules about code shape are `no-restricted-syntax` selectors in .config/oxlint/ instead.
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, sep } from 'node:path'
@@ -7,13 +7,13 @@ import { describe, expect, it } from 'vitest'
 import { APP_NAME } from '#/config/app.ts'
 
 const read = (file: string) => readFileSync(file, 'utf8')
-const git = (...args: string[]) => spawnSync('git', args, { encoding: 'utf8' })
+const git = (...args: Array<string>) => spawnSync('git', args, { encoding: 'utf8' })
 
 const GENERATED = [join('src', 'sdk', ''), join('src', 'routeTree.gen.ts')]
 const codeFiles = () =>
   [
     ...['src', 'tests', 'scripts'].flatMap((dir) =>
-      readdirSync(dir, { recursive: true, encoding: 'utf8' }).map((path) => join(dir, path)),
+      readdirSync(dir, { encoding: 'utf8', recursive: true }).map((path) => join(dir, path)),
     ),
     ...readdirSync('.').filter((file) => file.endsWith('.config.ts')),
   ]
@@ -95,7 +95,7 @@ describe('applied migrations', () => {
   })
 
   it.runIf(hasBase)('keep their journal entries', () => {
-    type Journal = { entries: unknown[] }
+    type Journal = { entries: Array<unknown> }
     const before = git('show', `${base}:${JOURNAL}`)
     const applied = before.status === 0 ? (JSON.parse(before.stdout) as Journal).entries : []
     const current = (JSON.parse(read(JOURNAL)) as Journal).entries
@@ -110,7 +110,7 @@ const NAME_ALLOWED = [/^package\.json$/, /^src\/config\/app\.ts$/, /^openapi\.js
 // neutral, so renaming the app is the short edit in docs/adopting.md. Docs may name the template.
 it('names the app only in package.json, src/config/app.ts and docs', () => {
   const slug = (JSON.parse(read('package.json')) as { name: string }).name
-  const name = new RegExp(`${slug}|${APP_NAME.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i')
+  const name = new RegExp(`${slug}|${APP_NAME.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}`, 'i')
   // Tracked and new files; a tracked link to a directory (a skill link) is not a file.
   const offenders = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
     .stdout.split('\0')
@@ -153,16 +153,18 @@ const chainBytes = (file: string) =>
 // working directory and silently drops what passes 32 KiB (docs/agents/skills.md).
 it('keeps the AGENTS.md files within their size budget', () => {
   const nested = ['src', 'tests', 'scripts', 'docs'].flatMap((dir) =>
-    readdirSync(dir, { recursive: true, encoding: 'utf8' })
-      .filter((path) => path.split(sep).at(-1) === 'AGENTS.md')
-      .map((path) => join(dir, path)),
+    readdirSync(dir, { encoding: 'utf8', recursive: true }).flatMap((path) =>
+      path.split(sep).at(-1) === 'AGENTS.md' ? [join(dir, path)] : [],
+    ),
   )
-  const over = [['AGENTS.md', 14 * 1024] as const, ...nested.map((file) => [file, 28 * 1024] as const)]
-    .filter(([file, budget]) => chainBytes(file) > budget)
-    .map(
-      ([file, budget]) =>
-        `${file}: ${chainBytes(file)} bytes with the AGENTS.md files above it, over ${budget}. Move reference ` +
-        'material behind a pointer (a nested AGENTS.md, a skill or a doc)',
-    )
+  const over = [['AGENTS.md', 14 * 1024] as const, ...nested.map((file) => [file, 28 * 1024] as const)].flatMap(
+    ([file, budget]) =>
+      chainBytes(file) > budget
+        ? [
+            `${file}: ${chainBytes(file)} bytes with the AGENTS.md files above it, over ${budget}. Move reference ` +
+              'material behind a pointer (a nested AGENTS.md, a skill or a doc)',
+          ]
+        : [],
+  )
   expect(over).toEqual([])
 })

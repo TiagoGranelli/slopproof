@@ -18,9 +18,9 @@ import { pinProblems } from './image-pins.ts'
 import { IMAGES } from './images.ts'
 
 /** Exit code of `command` with `env` on top of this process's; 1 when it cannot start (for example, no Docker). */
-const run = (command: string, args: string[] = [], env: NodeJS.ProcessEnv = {}) => {
+const run = (command: string, args: Array<string> = [], env: NodeJS.ProcessEnv = {}) => {
   try {
-    return xSync(command, args, { nodeOptions: { stdio: 'inherit', env } }).exitCode ?? 1
+    return xSync(command, args, { nodeOptions: { env, stdio: 'inherit' } }).exitCode ?? 1
   } catch (error) {
     console.error(`${command} did not start: ${error instanceof Error ? error.message : String(error)}`)
     return 1
@@ -32,7 +32,7 @@ const run = (command: string, args: string[] = [], env: NodeJS.ProcessEnv = {}) 
 const downloadedBuild = process.env.GITHUB_ACTIONS === 'true' ? { ALLOW_STALE_BUILD: '1' } : {}
 
 /** Runs every step even after a failure, so one run shows every problem. */
-const sequence = (steps: [string, () => number][]) => {
+const sequence = (steps: Array<[string, () => number]>) => {
   const failed = steps.filter(([name, step]) => {
     console.log(`\n▶ ${name}`)
     const status = step()
@@ -83,8 +83,8 @@ const BETTERLEAKS_CONFIG = ['--config', '.config/betterleaks.toml']
  * findings in history, all in .config/betterleaks.toml. Findings are printed (Betterleaks 2 does by default; its
  * `-v` validates a secret against the provider, which needs the network) with the secret redacted.
  */
-const git = (...gitArgs: string[]) => spawnSync('git', gitArgs, { encoding: 'utf8' }).stdout.trim()
-const secrets = (args: string[]) => {
+const git = (...gitArgs: Array<string>) => spawnSync('git', gitArgs, { encoding: 'utf8' }).stdout.trim()
+const secrets = (args: Array<string>) => {
   if (git('rev-parse', '--is-shallow-repository') !== 'false') {
     console.error('secrets: needs the full history (a clone that is not shallow; actions/checkout `fetch-depth: 0`)')
     return 1
@@ -110,12 +110,18 @@ const secrets = (args: string[]) => {
 /** Every reference to an image from scripts/images.ts in compose.yaml, ci.yml and the Dockerfile is the same pin. */
 const imagePins = () => {
   const problems = pinProblems()
-  for (const problem of problems) console.error(problem)
-  if (problems.length) console.error('Copy the pin from scripts/images.ts into each file listed.')
+  for (const problem of problems) {
+    console.error(problem)
+  }
+  if (problems.length) {
+    console.error('Copy the pin from scripts/images.ts into each file listed.')
+  }
   return problems.length ? 1 : 0
 }
 
-const JOBS: Record<string, (args: string[]) => number> = {
+const JOBS = {
+  drift: (args) => run('node', ['scripts/check-drift.ts', ...args]),
+  secrets,
   workflows,
   // The commit under test against its parent (the checkout fetches two commits). The drift job runs every drift check.
   static: (args) =>
@@ -129,21 +135,15 @@ const JOBS: Record<string, (args: string[]) => number> = {
       ['registry signatures', () => run('pnpm', ['audit', 'signatures'])],
       ['vulnerabilities', () => run('pnpm', ['audit:check'])],
     ]),
-  secrets,
-  drift: (args) => run('node', ['scripts/check-drift.ts', ...args]),
   // Nitro prerenders /about during the build, which loads the server configuration. The placeholders only
   // satisfy its validation (the same ones as the Dockerfile); nothing connects, nothing lands in .output.
   build: (args) =>
     run('pnpm', ['build', ...args], {
-      DATABASE_URL: 'postgres://build:build@127.0.0.1:1/build',
       APP_URL: 'http://localhost:3000',
       BETTER_AUTH_SECRET: 'ci-build-placeholder-secret-not-used-at-runtime',
+      DATABASE_URL: 'postgres://build:build@127.0.0.1:1/build',
     }),
-  verify: (args) =>
-    run('node', ['scripts/verify-app.ts', ...args], {
-      PW_PROJECTS: process.env.PW_PROJECTS || 'all',
-      ...downloadedBuild,
-    }),
+  docker: (args) => run('node', ['scripts/docker-smoke.ts', ...args]),
   lighthouse: (args) =>
     run(
       'node',
@@ -157,11 +157,17 @@ const JOBS: Record<string, (args: string[]) => number> = {
         ...downloadedBuild,
       },
     ),
-  docker: (args) => run('node', ['scripts/docker-smoke.ts', ...args]),
-}
+  verify: (args) =>
+    run('node', ['scripts/verify-app.ts', ...args], {
+      PW_PROJECTS: process.env.PW_PROJECTS || 'all',
+      ...downloadedBuild,
+    }),
+} satisfies Record<string, (args: Array<string>) => number>
+
+const isJob = (name: string): name is keyof typeof JOBS => Object.hasOwn(JOBS, name)
 
 const [job, ...args] = process.argv.slice(2)
-const selected = job ? JOBS[job] : undefined
+const selected = job && isJob(job) ? JOBS[job] : undefined
 if (!selected) {
   console.error(`usage: node scripts/ci-jobs.ts <${Object.keys(JOBS).join('|')}> [args]`)
   process.exit(2)

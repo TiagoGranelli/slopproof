@@ -18,10 +18,14 @@ const first = (list: ReadonlyArray<[RegExp, string]>, text: string) => list.find
 
 /** "Firefox on Linux" from a User-Agent header, or a generic label when it is missing or unknown. */
 export function describeDevice(userAgent: string | null): string {
-  if (!userAgent) return 'Unknown device'
+  if (!userAgent) {
+    return 'Unknown device'
+  }
   const browser = first(BROWSERS, userAgent)
   const system = first(SYSTEMS, userAgent)
-  if (browser && system) return `${browser} on ${system}`
+  if (browser && system) {
+    return `${browser} on ${system}`
+  }
   return browser ?? system ?? 'Unknown device'
 }
 
@@ -36,6 +40,8 @@ export function describeAddress(address: string): string {
  */
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return iso
+  if (Number.isNaN(date.getTime())) {
+    return iso
+  }
   return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }

@@ -5,25 +5,25 @@ import { HttpApi } from 'effect/http-api'
 import { Api } from '#/contract/api.ts'
 
 interface Operation {
-  /** `<group>.<endpoint>`, as the typed client names it: `myPosts.update`. */
-  readonly name: string
-  readonly method: string
-  /** The contract's path, with `:param` placeholders: `/api/me/posts/:id`. */
-  readonly path: string
   /** The error statuses the operation declares, its middleware's included. */
   readonly errorStatuses: ReadonlySet<number>
+  readonly method: string
+  /** `<group>.<endpoint>`, as the typed client names it: `myPosts.update`. */
+  readonly name: string
+  /** The contract's path, with `:param` placeholders: `/api/me/posts/:id`. */
+  readonly path: string
 }
 
-const collected: Operation[] = []
+const collected: Array<Operation> = []
 HttpApi.reflect(Api, {
-  onGroup: () => {},
-  onEndpoint: ({ group, endpoint, errors }) =>
+  onEndpoint: ({ endpoint, errors, group }) =>
     collected.push({
-      name: `${group.identifier}.${endpoint.identifier}`,
-      method: endpoint.method,
-      path: endpoint.path,
       errorStatuses: new Set(errors.keys()),
+      method: endpoint.method,
+      name: `${group.identifier}.${endpoint.identifier}`,
+      path: endpoint.path,
     }),
+  onGroup: () => {},
 })
 export const operations: ReadonlyArray<Operation> = collected
 
@@ -39,7 +39,7 @@ const VALID_PAYLOAD = { body: 'hello' }
 /** A valid request for `operation`, with `headers` (a session cookie, say) on top of the JSON content type. */
 export const requestFor = (operation: Operation, headers: Record<string, string> = {}): Request =>
   new Request(`http://localhost:3000${operation.path.replaceAll(/:\w+/g, MISSING_ID)}`, {
-    method: operation.method,
+    body: operation.method === 'POST' || operation.method === 'PATCH' ? JSON.stringify(VALID_PAYLOAD) : null,
     headers: { 'content-type': 'application/json', ...headers },
-    ...(operation.method === 'POST' || operation.method === 'PATCH' ? { body: JSON.stringify(VALID_PAYLOAD) } : {}),
+    method: operation.method,
   })

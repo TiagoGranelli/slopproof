@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { RelativeTime } from '#/components/time/relative-time.tsx'
 import { renderInApp, serverRendered } from './test-utils.tsx'
 
-const fiveMinutesAgo = () => new Date(Date.now() - 5 * 60_000 - 5_000).toISOString()
+const fiveMinutesAgo = () => new Date(Date.now() - 5 * 60_000 - 5000).toISOString()
 
 describe('RelativeTime', () => {
   it('renders the UTC date on the server, hydrates without a mismatch, then reads relative', async () => {

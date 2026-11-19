@@ -18,21 +18,23 @@ const focusNewPage = () => {
 export function RouteAnnouncer() {
   const router = useRouter()
   // `id` changes on every navigation: two pages with the same title are still two announcements.
-  const [announcement, setAnnouncement] = useState({ text: '', id: 0 })
+  const [announcement, setAnnouncement] = useState({ id: 0, text: '' })
   useEffect(
     () =>
       router.subscribe('onRendered', (event) => {
-        if (!event.pathChanged) return
+        if (!event.pathChanged) {
+          return
+        }
         focusNewPage()
         // The flash message on screen (FlashMessage), read from the page: by now it may be gone from the location.
         const flash = document.querySelector('main [data-flash]')?.textContent
         const text = [document.title, flash].filter(Boolean).join('. ')
-        setAnnouncement((previous) => ({ text, id: previous.id + 1 }))
+        setAnnouncement((previous) => ({ id: previous.id + 1, text }))
       }),
     [router],
   )
   return (
-    <div aria-live="polite" aria-atomic="true" className="sr-only">
+    <div aria-atomic="true" aria-live="polite" className="sr-only">
       <span key={announcement.id}>{announcement.text}</span>
     </div>
   )

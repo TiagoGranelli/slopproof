@@ -28,7 +28,7 @@ pre-commit:
       fail_text: run `pnpm format`
 
     - name: lint
-      glob: ['**/*.{ts,tsx,js,mjs,cjs}', '.oxlintrc.json', 'package.json']
+      glob: ['**/*.{ts,tsx,js,mjs,cjs}', '.config/oxlint/*.ts', 'package.json']
       run: pnpm run --silent lint
       fail_text: >-
         run `pnpm lint:fix`, then fix what remains as the message says (one file: `pnpm lint src/x.ts`). A rule that is

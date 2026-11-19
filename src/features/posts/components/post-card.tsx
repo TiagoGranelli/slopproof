@@ -8,11 +8,11 @@ import type { Post } from '#/sdk/types.gen.ts'
  * and `alert` goes last.
  */
 export function PostCard(props: {
-  post: Post
   actions?: ReactElement
   alert?: ReactNode
-  children?: ReactNode
   busy?: boolean
+  children?: ReactNode
+  post: Post
 }) {
   const { post } = props
   return (

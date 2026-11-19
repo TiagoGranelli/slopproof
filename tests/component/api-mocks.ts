@@ -36,13 +36,13 @@ export const api = createMswHandlers().pick
  * operation to its `<Operation>Errors` type: the SDK functions return the errors as one union, without the statuses.
  */
 type ErrorsByOperation = {
-  systemReady: SystemReadyErrors
   meGet: MeGetErrors
-  publicPostsList: PublicPostsListErrors
-  myPostsList: MyPostsListErrors
   myPostsCreate: MyPostsCreateErrors
-  myPostsUpdate: MyPostsUpdateErrors
+  myPostsList: MyPostsListErrors
   myPostsRemove: MyPostsRemoveErrors
+  myPostsUpdate: MyPostsUpdateErrors
+  publicPostsList: PublicPostsListErrors
+  systemReady: SystemReadyErrors
 }
 
 /** A documented error response, e.g. `apiError('meGet', 401, { _tag: 'Unauthorized', message })`. */
@@ -60,7 +60,7 @@ export const apiFailure = (
   api[operation](() =>
     'network' in failure
       ? HttpResponse.error()
-      : new HttpResponse(failure.text, { status: failure.status, headers: { 'content-type': 'text/plain' } }),
+      : new HttpResponse(failure.text, { headers: { 'content-type': 'text/plain' }, status: failure.status }),
   )
 
 const pendingReleases = new Set<() => void>()
@@ -78,29 +78,31 @@ export const held = () => {
  * since MSW 3, `worker.stop()` waits for in-flight requests and would otherwise never return.
  */
 export const releaseHeld = (): void => {
-  for (const release of pendingReleases) release()
+  for (const release of pendingReleases) {
+    release()
+  }
   pendingReleases.clear()
 }
 
 export const post = (overrides: Partial<Post> = {}): Post => ({
-  id: crypto.randomUUID(),
-  body: 'A post',
   authorName: 'Test Author',
+  body: 'A post',
   createdAt: '2026-01-02T03:04:05.000Z',
+  id: crypto.randomUUID(),
   updatedAt: '2026-01-02T03:04:05.000Z',
   ...overrides,
 })
 
 /** One page of a list (a `PostPage`, or any `{ items, nextCursor }` page); `nextCursor` defaults to null (the last page). */
-export const listPage = <Item>(items: Item[], nextCursor: string | null = null) => ({ items, nextCursor })
+export const listPage = <Item>(items: Array<Item>, nextCursor: string | null = null) => ({ items, nextCursor })
 
 /**
  * A list as the infinite query caches it, e.g. to seed `getMyPostsQueryOptions().queryKey`. Each page was
  * requested with the previous page's `nextCursor` (the first with `{}`, `firstPage` in src/lib/infinite-pages.ts).
  */
-export const listPages = <Page extends { nextCursor: string | null }>(...pages: Page[]): InfiniteData<Page> => ({
-  pages,
+export const listPages = <Page extends { nextCursor: string | null }>(...pages: Array<Page>): InfiniteData<Page> => ({
   pageParams: pages.map((_, index) => (index === 0 ? {} : pages[index - 1]!.nextCursor)),
+  pages,
 })
 
 type ImmediateAuthAnswer<T> = AuthOutcome<T> | 'network' | 'thrown'
@@ -109,11 +111,15 @@ type ImmediateAuthAnswer<T> = AuthOutcome<T> | 'network' | 'thrown'
  * code), `'network'` (the request fails), `'thrown'` (the handler threw: Start answers 500), or `held()` to
  * answer only once released: `{ ok: true, value: null }`, or `{ ...held(), answer }` for another answer.
  */
-type AuthAnswer<T> = ImmediateAuthAnswer<T> | { wait: () => Promise<void>; answer?: ImmediateAuthAnswer<T> }
+type AuthAnswer<T> = ImmediateAuthAnswer<T> | { answer?: ImmediateAuthAnswer<T>; wait: () => Promise<void> }
 
 const respond = (answer: ImmediateAuthAnswer<unknown>) => {
-  if (answer === 'network') return HttpResponse.error()
-  if (answer === 'thrown') return HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+  if (answer === 'network') {
+    return HttpResponse.error()
+  }
+  if (answer === 'thrown') {
+    return HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })
+  }
   return HttpResponse.json(answer as JsonBodyType)
 }
 
@@ -132,25 +138,33 @@ export const authFunction = <T = null>(name: AuthFunctionName, answer: AuthAnswe
  * handler that answers it: `worker.use(calls.handler, authFunction(name, answer))`, recorder first.
  */
 export const authCalls = (name: AuthFunctionName) => {
-  const data: unknown[] = []
+  const data: Array<unknown> = []
   const handler = http.post(`*${authFunctionPath(name)}`, async ({ request }) => {
     data.push(await request.clone().json())
   })
-  return { handler, data }
+  return { data, handler }
 }
 
 /** A held answer, or `'network'`: what `auth.signIn` and `auth.signOut` pass through to `authFunction` as it is. */
 type PassedThrough = 'network' | { wait: () => Promise<void> }
 
 const signInAnswer = (outcome: 'ok' | 'invalid' | PassedThrough): AuthAnswer<null> => {
-  if (outcome === 'ok') return { ok: true, value: null }
-  if (outcome === 'invalid') return { ok: false, failure: { code: 'INVALID_EMAIL_OR_PASSWORD' } }
+  if (outcome === 'ok') {
+    return { ok: true, value: null }
+  }
+  if (outcome === 'invalid') {
+    return { failure: { code: 'INVALID_EMAIL_OR_PASSWORD' }, ok: false }
+  }
   return outcome
 }
 
 const signOutAnswer = (outcome: 'ok' | 'failed' | PassedThrough): AuthAnswer<null> => {
-  if (outcome === 'ok') return { ok: true, value: null }
-  if (outcome === 'failed') return 'thrown'
+  if (outcome === 'ok') {
+    return { ok: true, value: null }
+  }
+  if (outcome === 'failed') {
+    return 'thrown'
+  }
   return outcome
 }
 

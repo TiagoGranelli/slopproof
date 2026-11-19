@@ -20,10 +20,10 @@ import { createAccount } from './helpers.ts'
 const note = pgTable(
   'keyset_test_note',
   {
-    id: uuidv7Id(),
     authorId: authorId(),
     body: text('body').notNull(),
     createdAt: createdAt(),
+    id: uuidv7Id(),
     updatedAt: updatedAt(),
   },
   (t) => [trimmedTextCheck('keyset_test_note_body_check', t.body, 10)],
@@ -58,7 +58,7 @@ const pageAfter = (cursor: PageCursor | undefined, limit: number) =>
   Effect.runPromise(
     query(db, (client) =>
       client
-        .select({ id: note.id, body: note.body, cursorAt: notes.cursorAt })
+        .select({ body: note.body, cursorAt: notes.cursorAt, id: note.id })
         .from(note)
         .where(notes.after(cursor))
         .orderBy(...notes.newestFirst)
@@ -68,7 +68,7 @@ const pageAfter = (cursor: PageCursor | undefined, limit: number) =>
 
 /** Every note, read page by page until the last. */
 const readAll = async (limit: number) => {
-  const seen: Array<{ id: string; body: string; cursorAt: string }> = []
+  const seen: Array<{ body: string; cursorAt: string; id: string }> = []
   let cursor: PageCursor | undefined
   do {
     const page = await pageAfter(cursor, limit)
@@ -89,7 +89,9 @@ describe('keyset pages', () => {
     )
     const all = await readAll(100)
     expect(all).toHaveLength(6)
-    for (const limit of [1, 2, 4]) expect(await readAll(limit)).toEqual(all)
+    for (const limit of [1, 2, 4]) {
+      expect(await readAll(limit)).toEqual(all)
+    }
     expect(memoryPage(all.toReversed(), { limit: 100 }, (row) => row).items).toEqual(all)
     expect(all.slice(0, 3).map((row) => row.body)).toEqual(['note 6', 'note 5', 'note 4'])
   })
@@ -97,10 +99,10 @@ describe('keyset pages', () => {
 
 /** Inserts a note with `body`: 'ok', or the SQLSTATE Postgres refuses it with. */
 const sqlState = (body: string) =>
-  pool.query(`insert into keyset_test_note (author_id, body) values ($1, $2)`, [author.id, body]).then(
-    () => 'ok',
-    (error: unknown) => (error as DatabaseError).code,
-  )
+  pool
+    .query(`insert into keyset_test_note (author_id, body) values ($1, $2)`, [author.id, body])
+    .then(() => 'ok')
+    .catch((error: unknown) => (error as DatabaseError).code)
 
 describe('the fake clock (tests/api/memory-keyset.ts)', () => {
   it('writes sort keys as Postgres renders them, down to the microsecond', async () => {

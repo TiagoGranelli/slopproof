@@ -6,19 +6,19 @@ import type { Post, PostPage } from '#/sdk/types.gen.ts'
 
 /** A list of posts, a page at a time with "Load more posts" (LoadMoreList). */
 export function PostList(props: {
-  pages: UseSuspenseInfiniteQueryResult<InfiniteData<PostPage>, unknown>
   empty: string
-  testId: string
+  pages: UseSuspenseInfiniteQueryResult<InfiniteData<PostPage>, unknown>
   /** Renders one post. Defaults to a read-only card. */
   renderPost?: (post: Post) => ReactNode
+  testId: string
 }) {
   return (
     <LoadMoreList
-      pages={props.pages}
-      noun="posts"
       empty={props.empty}
-      testId={props.testId}
+      noun="posts"
+      pages={props.pages}
       renderItem={props.renderPost ?? ((post) => <PostCard post={post} />)}
+      testId={props.testId}
     />
   )
 }

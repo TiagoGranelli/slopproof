@@ -23,17 +23,17 @@ function MarkHydrated() {
  * action may have left, then `children`. `narrow` suits a single form.
  */
 export function Page(props: {
-  title: ReactNode
-  description?: ReactNode
   actions?: ReactNode
-  narrow?: boolean
   children?: ReactNode
+  description?: ReactNode
+  narrow?: boolean
+  title: ReactNode
 }) {
   return (
     <div className={cn('mx-auto grid w-full gap-8 px-4 py-10 sm:py-14', props.narrow ? 'max-w-sm' : 'max-w-2xl')}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="grid gap-2">
-          <h1 tabIndex={-1} className="text-3xl font-semibold tracking-tight text-balance outline-none">
+          <h1 className="text-3xl font-semibold tracking-tight text-balance outline-none" tabIndex={-1}>
             {props.title}
           </h1>
           {props.description === undefined ? null : (

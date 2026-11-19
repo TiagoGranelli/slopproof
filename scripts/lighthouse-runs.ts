@@ -3,42 +3,47 @@
 import { copyFileSync, existsSync, readFileSync, statfsSync } from 'node:fs'
 import { computeMedianRun } from 'lighthouse/core/lib/median-run.js'
 import { xSync } from 'tinyexec'
+import type { Json } from '#/contract/json.ts'
 import { type Category, type FormFactor, type Measured, type Metric, median, REPORTED } from './lighthouse-policy.ts'
+
+/** One row of an audit's details table. */
+export type AuditItem = Readonly<Record<string, Json>>
 
 /** The parts of a Lighthouse report (LHR) the gate reads. */
 export type Lhr = {
-  finalDisplayedUrl: string
-  runtimeError?: { message: string }
-  runWarnings: string[]
-  environment: { benchmarkIndex: number }
-  categories: Record<string, { score: number | null; auditRefs: { id: string; weight: number }[] }>
   audits: Record<
     string,
     {
-      score: number | null
+      details?: { items?: Array<AuditItem> }
       numericValue?: number
+      score: number | null
       scoreDisplayMode: string
       title: string
-      details?: { items?: Record<string, unknown>[] }
     }
   >
+  categories: Record<string, { auditRefs: Array<{ id: string; weight: number }>; score: number | null }>
+  environment: { benchmarkIndex: number }
+  finalDisplayedUrl: string
+  runtimeError?: { message: string }
+  runWarnings: Array<string>
 }
 
 const METRIC_AUDITS: Record<Metric, string> = {
+  bytes: 'total-byte-weight',
+  cls: 'cumulative-layout-shift',
   fcp: 'first-contentful-paint',
   lcp: 'largest-contentful-paint',
-  tbt: 'total-blocking-time',
-  cls: 'cumulative-layout-shift',
   si: 'speed-index',
-  bytes: 'total-byte-weight',
+  tbt: 'total-blocking-time',
 }
 
 /** Playwright's Chromium (or CHROME_PATH), or a clear instruction to install it. */
 export const findChromium = async (): Promise<string> => {
   const { chromium } = await import('@playwright/test')
   const path = process.env.CHROME_PATH ?? chromium.executablePath()
-  if (!existsSync(path))
+  if (!existsSync(path)) {
     throw new Error(`Chromium for Playwright is not installed (${path}). Run: pnpm exec playwright install chromium`)
+  }
   return path
 }
 
@@ -60,7 +65,7 @@ export const SMALL_SHM = SHM_BYTES < 1024 ** 3
  * certificate error), so the page is a secure https origin as in production, and best-practices audits see what
  * users would see. `http1`: HTTP/1.1 only, to compare with HTTP/2.
  */
-export const chromeFlags = (options: { edgeCertificateSpki?: string; http1: boolean }): string[] => [
+export const chromeFlags = (options: { edgeCertificateSpki?: string; http1: boolean }): Array<string> => [
   '--headless=new',
   '--no-sandbox',
   // Lighthouse opens about:blank, then the page. Chrome 156 loads the page in a new renderer process, and that
@@ -74,15 +79,15 @@ export const chromeFlags = (options: { edgeCertificateSpki?: string; http1: bool
   ...(options.http1 ? ['--disable-http2', '--disable-quic'] : []),
 ]
 
-export type Chrome = { path: string; flags: string[] }
+export type Chrome = { flags: Array<string>; path: string }
 
 type LighthouseRun = {
-  url: string
+  chrome: Chrome
+  cookie: string | undefined
   formFactor: FormFactor
   /** Where the reports go: `<outputBase>.report.{json,html}`. */
   outputBase: string
-  cookie: string | undefined
-  chrome: Chrome
+  url: string
 }
 
 /** One Lighthouse run of every REPORTED category; returns its report. */
@@ -92,14 +97,15 @@ export const runLighthouse = (run: LighthouseRun): Lhr => {
     .concat(run.formFactor === 'desktop' ? ['--preset=desktop'] : [])
     .concat(run.cookie ? [`--extra-headers=${JSON.stringify({ cookie: run.cookie })}`] : [])
   const lighthouse = xSync('pnpm', args, {
+    nodeOptions: { env: { CHROME_PATH: run.chrome.path }, stdio: 'inherit' },
     timeout: 180_000,
-    nodeOptions: { stdio: 'inherit', env: { CHROME_PATH: run.chrome.path } },
   })
-  if (lighthouse.exitCode !== 0)
+  if (lighthouse.exitCode !== 0) {
     throw new Error(
       `lighthouse failed for ${run.url} (${run.formFactor}): exit ${lighthouse.exitCode ?? lighthouse.signalCode}, ` +
         'expected 0 (its output is above)',
     )
+  }
   return JSON.parse(readFileSync(`${run.outputBase}.report.json`, 'utf8')) as Lhr
 }
 
@@ -108,17 +114,17 @@ export const score = (lhr: Lhr, category: Category): number | null => {
   return value == null ? null : Math.round(value * 100)
 }
 
-export type ScoreRange = { median: number; min: number; max: number }
+export type ScoreRange = { max: number; median: number; min: number }
 
-const scoreRange = (lhrs: Lhr[], category: Category): ScoreRange | null => {
-  const values = lhrs.map((lhr) => score(lhr, category)).filter((value): value is number => value !== null)
-  return values.length ? { median: median(values), min: Math.min(...values), max: Math.max(...values) } : null
+const scoreRange = (lhrs: Array<Lhr>, category: Category): ScoreRange | null => {
+  const values = lhrs.flatMap((lhr) => score(lhr, category) ?? [])
+  return values.length ? { max: Math.max(...values), median: median(values), min: Math.min(...values) } : null
 }
 
 const byCategory = <T>(value: (category: Category) => T): Record<Category, T> =>
   Object.fromEntries(REPORTED.map((category) => [category, value(category)])) as Record<Category, T>
 
-const metricMedians = (lhrs: Lhr[]): Record<Metric, number> =>
+const metricMedians = (lhrs: Array<Lhr>): Record<Metric, number> =>
   Object.fromEntries(
     Object.entries(METRIC_AUDITS).map(([metric, audit]) => [
       metric,
@@ -132,7 +138,7 @@ const metricMedians = (lhrs: Lhr[]): Record<Metric, number> =>
  */
 export const LANTERN_TASK_THRESHOLD_MS = 10
 
-const numberIn = (entry: Record<string, unknown>, key: string): number | undefined => {
+const numberIn = (entry: AuditItem, key: string): number | undefined => {
   const value = entry[key]
   return typeof value === 'number' ? value : undefined
 }
@@ -147,7 +153,9 @@ export const preloadTaskMs = (lhr: Lhr): number | null => {
   const requests = lhr.audits['network-requests']?.details?.items ?? []
   const first = requests.find((request) => request.resourceType === 'Stylesheet' || request.resourceType === 'Script')
   const sentAt = first && numberIn(first, 'rendererStartTime')
-  if (sentAt === undefined) return null
+  if (sentAt === undefined) {
+    return null
+  }
   const tasks = lhr.audits['main-thread-tasks']?.details?.items ?? []
   const sender = tasks.find((task) => {
     const start = numberIn(task, 'startTime') ?? Number.NaN
@@ -160,16 +168,16 @@ export const preloadTaskMs = (lhr: Lhr): number | null => {
 export type RunsSummary = Measured & { scores: Record<Category, ScoreRange | null> }
 
 /** What the runs of one page and form factor measured: each category's range, each metric's median, each run. */
-export const summarizeRuns = (lhrs: Lhr[]): RunsSummary => ({
-  scores: byCategory((category) => scoreRange(lhrs, category)),
+export const summarizeRuns = (lhrs: Array<Lhr>): RunsSummary => ({
   metrics: metricMedians(lhrs),
   perRun: lhrs.map((lhr, index) => ({
-    run: index + 1,
     benchmarkIndex: Math.round(lhr.environment.benchmarkIndex),
-    runWarnings: lhr.runWarnings,
     preloadTaskMs: preloadTaskMs(lhr),
+    run: index + 1,
+    runWarnings: lhr.runWarnings,
     scores: byCategory((category) => score(lhr, category)),
   })),
+  scores: byCategory((category) => scoreRange(lhrs, category)),
 })
 
 const counts = (audit: Lhr['audits'][string]) =>
@@ -179,7 +187,7 @@ const counts = (audit: Lhr['audits'][string]) =>
   audit.score < 1
 
 /** Weighted audits of `categories` that did not pass, as `category: title (score)`, without repeats. */
-export const failingAudits = (lhr: Lhr, categories: Category[]): string[] => [
+export const failingAudits = (lhr: Lhr, categories: Array<Category>): Array<string> => [
   ...new Set(
     categories.flatMap((category) =>
       (lhr.categories[category]?.auditRefs ?? [])
@@ -191,12 +199,14 @@ export const failingAudits = (lhr: Lhr, categories: Category[]): string[] => [
   ),
 ]
 
+type MedianReport = { medianLhr: Lhr; medianRun: number }
+
 /**
  * Lighthouse's own median-run selection (closest to the median FCP and TTI) picks the report to read; its HTML
  * report is copied to `<prefix>-median.report.html`. Returns that run and its number (from 1).
  */
-export const keepMedianReport = (lhrs: Lhr[], prefix: string): { medianLhr: Lhr; medianRun: number } => {
-  const medianLhr = computeMedianRun(lhrs as never) as unknown as Lhr
+export const keepMedianReport = (lhrs: Array<Lhr>, prefix: string): MedianReport => {
+  const medianLhr = computeMedianRun(lhrs as never) as Lhr
   const medianRun = lhrs.indexOf(medianLhr) + 1
   copyFileSync(`${prefix}-${medianRun}.report.html`, `${prefix}-median.report.html`)
   return { medianLhr, medianRun }

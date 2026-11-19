@@ -4,20 +4,20 @@ import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 
-function SectionError({ error, reset, action }: ErrorComponentProps & { action: string }) {
+function SectionError({ action, error, reset }: ErrorComponentProps & { action: string }) {
   const queryErrorResetBoundary = useQueryErrorResetBoundary()
   return (
     <div className="grid justify-items-start gap-2">
-      <ApiErrorAlert error={error} action={action} />
+      <ApiErrorAlert action={action} error={error} />
       <Button
-        type="button"
-        variant="outline"
-        size="sm"
         onClick={() => {
           // A suspense query inside fetches again instead of rethrowing its cached error.
           queryErrorResetBoundary.reset()
           reset()
         }}
+        size="sm"
+        type="button"
+        variant="outline"
       >
         Try again
       </Button>
@@ -34,8 +34,8 @@ function SectionError({ error, reset, action }: ErrorComponentProps & { action: 
 export function SectionErrorBoundary(props: { action: string; children: ReactNode }) {
   return (
     <CatchBoundary
-      getResetKey={() => props.action}
       errorComponent={(error: ErrorComponentProps) => <SectionError {...error} action={props.action} />}
+      getResetKey={() => props.action}
     >
       {props.children}
     </CatchBoundary>

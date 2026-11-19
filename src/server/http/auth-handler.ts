@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { appendResponseHeader, getRequestHeaders, getRequestIP } from '@tanstack/react-start/server'
 import type { BASE_ERROR_CODES } from 'better-auth'
+import type { Json } from '#/contract/json.ts'
 import { auth } from '../auth.ts'
 import { finishBeforeShutdown } from '../background-tasks.ts'
 import { env } from '../env.ts'
@@ -15,8 +16,11 @@ import { forwardedFor } from './forwarded-for.ts'
 const withPeerAddress = (source: Headers): Headers => {
   const headers = new Headers(source)
   const chain = forwardedFor(headers.get('x-forwarded-for'), getRequestIP(), env.trustedProxies.length > 0)
-  if (chain) headers.set('x-forwarded-for', chain)
-  else headers.delete('x-forwarded-for')
+  if (chain) {
+    headers.set('x-forwarded-for', chain)
+  } else {
+    headers.delete('x-forwarded-for')
+  }
   return headers
 }
 
@@ -30,8 +34,8 @@ const dispatch = async (request: Request): Promise<Response> => {
   try {
     return await finishBeforeShutdown(auth.handler(request))
   } catch (error) {
-    log('error', 'auth request failed', { path: new URL(request.url).pathname, error })
-    return new Response(null, { status: 500, headers: { 'cache-control': 'no-store' } })
+    log('error', 'auth request failed', { error, path: new URL(request.url).pathname })
+    return new Response(null, { headers: { 'cache-control': 'no-store' }, status: 500 })
   }
 }
 
@@ -82,55 +86,67 @@ const isKnownCode = (code: string): code is AuthErrorCode => KNOWN_CODES.has(cod
 
 /** What a Better Auth endpoint answered to callAuthEndpoint. */
 export type AuthEndpointResult =
-  | { readonly ok: true; readonly body: unknown }
+  | { readonly body: Json | undefined; readonly ok: true }
   | {
-      readonly ok: false
-      readonly status: number
       /** Better Auth's error code (`INVALID_EMAIL_OR_PASSWORD`, ...), when the body carries a known one. */
       readonly code: AuthErrorCode | undefined
+      readonly ok: false
       /** Seconds until a rate-limited client may retry. */
       readonly retryAfter: number | undefined
+      readonly status: number
     }
 
-const codeOf = (body: unknown, path: string): AuthErrorCode | undefined => {
+const codeOf = (body: Json | undefined, path: string): AuthErrorCode | undefined => {
   const code =
     typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string' ? body.code : undefined
-  if (code === undefined || isKnownCode(code)) return code
-  log('warn', 'unknown Better Auth error code', { path, code })
+  if (code === undefined || isKnownCode(code)) {
+    return code
+  }
+  log('warn', 'unknown Better Auth error code', { code, path })
   return undefined
 }
 
-const parseJson = (text: string): unknown => {
+const parseJson = (text: string): Json | undefined => {
   try {
-    return JSON.parse(text)
+    return JSON.parse(text) as Json
   } catch {
     return undefined
   }
 }
 
-type EndpointInput = { readonly body?: Record<string, unknown>; readonly query?: Record<string, string> }
+type EndpointInput = { readonly body?: JsonObject; readonly query?: Record<string, string> }
 
 /** The request to Better Auth's router, sent as the client of the incoming request (its cookie and address). */
 const endpointRequest = (method: 'GET' | 'POST', path: `/${string}`, input: EndpointInput): Request => {
   const url = new URL(`${AUTH_BASE_PATH}${path}`, env.appUrl)
-  for (const [name, value] of Object.entries(input.query ?? {})) url.searchParams.set(name, value)
+  for (const [name, value] of Object.entries(input.query ?? {})) {
+    url.searchParams.set(name, value)
+  }
   const headers = withPeerAddress(new Headers(getRequestHeaders()))
   // The incoming request's body headers describe the server function call, not this one.
-  for (const name of ['content-length', 'content-type', 'transfer-encoding']) headers.delete(name)
-  if (input.body) headers.set('content-type', 'application/json')
-  return new Request(url, { method, headers, ...(input.body ? { body: JSON.stringify(input.body) } : {}) })
+  for (const name of ['content-length', 'content-type', 'transfer-encoding']) {
+    headers.delete(name)
+  }
+  const init: RequestInit = { headers, method }
+  if (input.body) {
+    headers.set('content-type', 'application/json')
+    init.body = JSON.stringify(input.body)
+  }
+  return new Request(url, init)
 }
 
 /** Better Auth's answer, read into success or its status, error code and retry delay. */
 const readOutcome = async (response: Response, path: string): Promise<AuthEndpointResult> => {
   const body = parseJson(await response.text())
-  if (response.ok) return { ok: true, body }
+  if (response.ok) {
+    return { body, ok: true }
+  }
   const retryAfter = Number(response.headers.get('x-retry-after'))
   return {
-    ok: false,
-    status: response.status,
     code: codeOf(body, path),
+    ok: false,
     retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+    status: response.status,
   }
 }
 
@@ -148,8 +164,25 @@ export const callAuthEndpoint = async (
 ): Promise<AuthEndpointResult> => {
   const response = await dispatch(endpointRequest(method, path, input))
   const cookies = response.headers.getSetCookie()
-  if (cookies.length > 0) appendResponseHeader('set-cookie', cookies)
+  if (cookies.length > 0) {
+    appendResponseHeader('set-cookie', cookies)
+  }
   return readOutcome(response, path)
+}
+
+type JsonObject = { readonly [key: string]: Json }
+
+const isJsonObject = (value: Json | undefined): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** `value` without its `token` field, and without the `token` field of its `session` object. */
+const withoutToken = (value: Json | undefined): Json | undefined => {
+  if (!isJsonObject(value)) {
+    return value
+  }
+  const rest = Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'token'))
+  const { session } = value
+  return isJsonObject(session) && 'token' in session ? { ...rest, session: withoutToken(session) ?? null } : rest
 }
 
 /**
@@ -157,16 +190,13 @@ export const callAuthEndpoint = async (
  * and get-session (`session.token`), where page scripts could read it. Removed from those bodies.
  */
 const withoutSessionTokens = async (response: Response): Promise<Response> => {
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return response
-  const body: unknown = parseJson(await response.text())
-  if (typeof body === 'object' && body !== null) {
-    if ('token' in body) delete body.token
-    if ('session' in body && typeof body.session === 'object' && body.session !== null && 'token' in body.session)
-      delete body.session.token
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+    return response
   }
+  const body = withoutToken(parseJson(await response.text()))
   const headers = new Headers(response.headers)
   headers.delete('content-length')
-  return new Response(JSON.stringify(body), { status: response.status, statusText: response.statusText, headers })
+  return new Response(JSON.stringify(body), { headers, status: response.status, statusText: response.statusText })
 }
 
 /**
@@ -175,16 +205,19 @@ const withoutSessionTokens = async (response: Response): Promise<Response> => {
  * they are neither counted by the rate limit nor stored.
  */
 export const handleAuthRequest = async (request: Request): Promise<Response> => {
-  if (!isHttpEndpoint(request)) return notFound()
+  if (!isHttpEndpoint(request)) {
+    return notFound()
+  }
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
+  // `duplex` is required with a streamed body and missing from the DOM types, so the init is a variable.
+  const init = {
+    body: hasBody ? request.body : null,
+    duplex: 'half',
+    headers: withPeerAddress(request.headers),
+    method: request.method,
+    signal: request.signal,
+  }
   // A fresh Request: the incoming one is srvx's Node request wrapper, whose headers cannot be replaced.
-  const response = await dispatch(
-    new Request(request.url, {
-      method: request.method,
-      headers: withPeerAddress(request.headers),
-      signal: request.signal,
-      ...(hasBody ? { body: request.body, duplex: 'half' } : {}),
-    }),
-  )
+  const response = await dispatch(new Request(request.url, init))
   return withoutSessionTokens(response)
 }

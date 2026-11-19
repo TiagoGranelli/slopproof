@@ -10,44 +10,53 @@ import { getSession } from '#/lib/session.functions.ts'
 const link = 'underline underline-offset-4'
 
 interface LoginSearch {
-  /** Set by the _authed guard. Anything that is not a same-origin path becomes /dashboard. */
-  redirect?: string
   /** A failed post without JavaScript (signInFromForm): a known failure code, and the wait it may carry. */
   error?: AuthFailureCode
+  /** Set by the _authed guard. Anything that is not a same-origin path becomes /dashboard. */
+  redirect?: string
   retryAfter?: number
 }
 
 export const Route = createFileRoute('/login')({
-  validateSearch: (search: Record<string, unknown>): LoginSearch => ({
-    ...(typeof search.redirect === 'string' ? { redirect: safeRedirect(search.redirect) } : {}),
-    ...failureFromSearch(search),
-  }),
+  validateSearch: (search: {
+    readonly error?: unknown
+    readonly redirect?: unknown
+    readonly retryAfter?: unknown
+  }): LoginSearch => {
+    const login: LoginSearch = failureFromSearch(search)
+    if (typeof search.redirect === 'string') {
+      login.redirect = safeRedirect(search.redirect)
+    }
+    return login
+  },
   // Asks the server, not client state: a signed-in visitor goes straight to where they were headed.
   beforeLoad: async ({ search }) => {
-    if (await getSession()) throw redirect({ href: safeRedirect(search.redirect) })
+    if (await getSession()) {
+      throw redirect({ href: safeRedirect(search.redirect) })
+    }
   },
+  component: Login,
   loader: () => getSignUpPolicy(),
   head: () => ({ meta: [{ title: pageTitle('Sign in') }, { name: 'robots', content: 'noindex' }] }),
   headers: () => ({ 'cache-control': 'private, no-store' }),
-  component: Login,
 })
 
 function Login() {
-  const { redirect: target, error, retryAfter } = Route.useSearch()
+  const { error, redirect: target, retryAfter } = Route.useSearch()
   const signUp = Route.useLoaderData()
   return (
-    <Page title="Sign in" narrow>
-      <LoginForm redirectTo={target} failure={error ? { code: error, retryAfter } : undefined} />
+    <Page narrow title="Sign in">
+      <LoginForm failure={error ? { code: error, retryAfter } : undefined} redirectTo={target} />
       <div className="grid gap-2 text-sm text-muted-foreground">
         <p>
-          <Link to="/forgot-password" className={link}>
+          <Link className={link} to="/forgot-password">
             Forgot your password?
           </Link>
         </p>
         {signUp.open ? (
           <p>
             No account yet?{' '}
-            <Link to="/sign-up" className={link}>
+            <Link className={link} to="/sign-up">
               Create one
             </Link>
             .

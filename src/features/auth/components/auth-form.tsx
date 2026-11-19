@@ -21,9 +21,11 @@ function useFailure(error: Error | null, fieldCodes: AuthFieldCodes = {}) {
   const onField = Object.keys(issues).length > 0
   // Again for every failed attempt (a new `error`), even when it is the same field as the last time.
   useEffect(() => {
-    if (error !== null && onField && form.current) focusFirstInvalid(form.current)
+    if (error !== null && onField && form.current) {
+      focusFirstInvalid(form.current)
+    }
   }, [error, onField])
-  return { form, issues, formError: onField ? null : error }
+  return { form, formError: onField ? null : error, issues }
 }
 
 /**
@@ -37,61 +39,63 @@ function useFailure(error: Error | null, fieldCodes: AuthFieldCodes = {}) {
  * the button, unless `fieldCodes` pins it on a field.
  */
 export function AuthForm(props: {
-  /** Prefix for the ids this form gives its alert. */
-  id: string
-  submitLabel: string
-  submitVariant?: 'default' | 'destructive'
-  /** The form from useAppForm; its onSubmit starts the action. */
-  form: { handleSubmit: () => Promise<void> }
-  /** The fields' schema (lazyFormSchema): loaded on the first focus or input, and awaited by a submit. */
-  schema?: { load: () => Promise<void> }
   /**
    * Where the browser posts the form itself before hydration (a server function's `url` that takes FormData).
    * With it the button works from the first paint; without it, it waits for hydration.
    */
   action?: string
-  pending: boolean
+  children?: ReactNode
   /** The action's error, if the last attempt failed. */
   error: Error | null
   /** The failure codes this form shows next to a field, and which (a wrong password: `{ INVALID_PASSWORD: 'password' }`). */
   fieldCodes?: AuthFieldCodes
-  children?: ReactNode
+  /** The form from useAppForm; its onSubmit starts the action. */
+  form: { handleSubmit: () => Promise<void> }
+  /** Prefix for the ids this form gives its alert. */
+  id: string
+  pending: boolean
+  /** The fields' schema (lazyFormSchema): loaded on the first focus or input, and awaited by a submit. */
+  schema?: { load: () => Promise<void> }
+  submitLabel: string
+  submitVariant?: 'default' | 'destructive'
 }) {
   const hydrated = useHydrated()
-  const { submit, schemaError } = useSchemaSubmit(props.form, props.schema)
-  const { form, issues, formError } = useFailure(props.error, props.fieldCodes)
+  const { schemaError, submit } = useSchemaSubmit(props.form, props.schema)
+  const { form, formError, issues } = useFailure(props.error, props.fieldCodes)
   const errorId = `${props.id}-error`
   const schemaErrorId = `${props.id}-schema-error`
   return (
     <form
-      ref={form}
-      method="post"
       action={props.action}
-      // Once hydrated the fields show the schema's messages; before that, only the browser's own checks run.
-      noValidate={hydrated}
-      className="grid gap-3"
       aria-busy={props.pending}
       aria-describedby={describedBy(formError && errorId, schemaError && schemaErrorId)}
+      className="grid gap-3"
+      method="post"
+      // Once hydrated the fields show the schema's messages; before that, only the browser's own checks run.
+      noValidate={hydrated}
       onSubmit={(event) => {
         event.preventDefault()
-        if (props.pending) return
+        if (props.pending) {
+          return
+        }
         submit(event.currentTarget)
       }}
+      ref={form}
       {...(props.schema ? loadOnInteraction(props.schema) : {})}
     >
       <ServerIssues value={issues}>{props.children}</ServerIssues>
       <div>
         <Button
+          aria-disabled={props.pending || undefined}
+          disabled={!hydrated && props.action === undefined}
           type="submit"
           variant={props.submitVariant}
-          disabled={!hydrated && props.action === undefined}
-          aria-disabled={props.pending || undefined}
         >
           {props.submitLabel}
         </Button>
       </div>
       {formError ? (
-        <p id={errorId} role="alert" className="text-sm text-destructive">
+        <p className="text-sm text-destructive" id={errorId} role="alert">
           {describeAuthFailure(formError)}
         </p>
       ) : null}

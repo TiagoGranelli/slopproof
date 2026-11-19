@@ -97,7 +97,7 @@ ${SITE_FOOTER}`)
   - button "Confirm email"`)
   })
 
-  test('account', async ({ page, author }) => {
+  test('account', async ({ author, page }) => {
     await signIn(page, author)
     await visit(page, '/account')
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}
@@ -112,7 +112,7 @@ ${SITE_FOOTER}`)
     - heading "Delete account" [level=2]`)
   })
 
-  test('dashboard', async ({ page, author }) => {
+  test('dashboard', async ({ author, page }) => {
     await signIn(page, author)
     await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('One of mine')) })
     await expect(page.getByText('One of mine', { exact: true })).toBeVisible()
@@ -137,9 +137,9 @@ ${SITE_FOOTER}`)
   - link "Go to the home page"`)
   })
 
-  test('error page', async ({ page, author }) => {
+  test('error page', async ({ author, page }) => {
     await signIn(page, author)
-    await navigateWithApiResponse(page, '/api/posts', { status: 503, json: {} })
+    await navigateWithApiResponse(page, '/api/posts', { json: {}, status: 503 })
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}
 - main:
   - heading [level=1]
@@ -151,7 +151,7 @@ ${SITE_FOOTER}`)
 
 // The UI states beyond a page's first render: a flash message, the dark theme, an open dialog.
 test.describe('landmarks of UI states', () => {
-  test('home, flash message after signing out', async ({ page, author }) => {
+  test('home, flash message after signing out', async ({ author, page }) => {
     await signIn(page, author)
     await visit(page, '/dashboard')
     await page.getByRole('button', { name: 'Sign out' }).click()
@@ -172,7 +172,7 @@ test.describe('landmarks of UI states', () => {
     - radio "System" [checked]`)
   })
 
-  test('dashboard, delete dialog open', async ({ page, author }) => {
+  test('dashboard, delete dialog open', async ({ author, page }) => {
     const { post } = await dashboardWithMyPost(page, author)
     await post.getByRole('button', { name: /^Delete post/ }).click()
     await expect(page.locator('body')).toMatchAriaSnapshot(`
@@ -184,7 +184,7 @@ test.describe('landmarks of UI states', () => {
   - button "Delete"`)
   })
 
-  test('dashboard, dark theme chosen', async ({ page, author }) => {
+  test('dashboard, dark theme chosen', async ({ author, page }) => {
     await signIn(page, author)
     await visit(page, '/dashboard')
     await page.getByRole('radio', { name: 'Dark' }).check()

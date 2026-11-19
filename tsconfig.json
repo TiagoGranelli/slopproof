@@ -92,6 +92,6 @@
       }
     ]
   },
-  "include": ["src", "scripts", "tests", "*.config.ts"],
+  "include": ["src", "scripts", "tests", "*.config.ts", ".config/**/*.ts"],
   "exclude": ["node_modules", ".output", ".repos"]
 }

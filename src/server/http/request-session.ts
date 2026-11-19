@@ -25,7 +25,9 @@ const incomingRequest = (): Request | undefined => {
  */
 export const requestSession = (headers: Headers): Promise<Session> => {
   const request = incomingRequest()
-  if (!request) return auth.api.getSession({ headers })
+  if (!request) {
+    return auth.api.getSession({ headers })
+  }
   const cookie = headers.get('cookie') ?? ''
   let byCookie = lookups.get(request)
   if (!byCookie) {

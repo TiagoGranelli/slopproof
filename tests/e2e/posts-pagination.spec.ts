@@ -20,7 +20,7 @@ const postBodies = (page: Page, testId: string) =>
 
 /** From now on, the URL of every request the page makes to `pathname`, in order. */
 const recordRequests = (page: Page, pathname: string) => {
-  const urls: string[] = []
+  const urls: Array<string> = []
   page.on('request', (r) => new URL(r.url()).pathname === pathname && urls.push(r.url()))
   return urls
 }

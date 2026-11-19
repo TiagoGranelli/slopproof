@@ -4,8 +4,8 @@ import { defineConfig } from '@hey-api/openapi-ts'
 export default defineConfig({
   input: './openapi.json',
   output: {
-    path: './src/sdk',
     clean: true,
+    path: './src/sdk',
     // A codegen run is not a change we review: `fallow security` (the pre-commit `security` job) skips these files.
     header: ({ defaultValue }) => [...defaultValue, '// fallow-ignore-file security-sink'],
   },
@@ -17,7 +17,7 @@ export default defineConfig({
     '@hey-api/client-fetch',
     '@hey-api/typescript',
     '@hey-api/sdk',
-    { name: '@tanstack/react-query', infiniteQueryOptions: true, infiniteQueryKeys: true },
+    { infiniteQueryKeys: true, infiniteQueryOptions: true, name: '@tanstack/react-query' },
     // Typed MSW handlers for component tests, regenerated with the contract so mocks cannot drift.
     'msw',
   ],

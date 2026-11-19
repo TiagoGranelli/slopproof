@@ -9,8 +9,8 @@ const appUrl = process.env.APP_URL ?? 'http://localhost:3000'
 const mailpitUrl = process.env.MAILPIT_URL ?? 'http://127.0.0.1:54380'
 
 export const newAccount = (): Author => ({
-  name: 'E2E Account',
   email: `e2e-${crypto.randomUUID()}@example.test`,
+  name: 'E2E Account',
   password: `pw-${crypto.randomUUID()}`,
 })
 
@@ -34,7 +34,7 @@ export const mailLink = async (to: string, subject: string, path: '/verify-email
       async () => {
         const query = encodeURIComponent(`to:"${to}" subject:"${subject}"`)
         const res = await fetch(`${mailpitUrl}/api/v1/search?query=${query}`)
-        const { messages } = (await res.json()) as { messages: MailSummary[] }
+        const { messages } = (await res.json()) as { messages: Array<MailSummary> }
         id = messages.find((message) => message.Subject === subject)?.ID
         return id
       },
@@ -55,7 +55,7 @@ export const mailLink = async (to: string, subject: string, path: '/verify-email
 export const createAccount = (): Promise<Author> => createAuthor('E2E Account')
 
 export const signInWithForm = async (page: Page, account: Pick<Author, 'email' | 'password'>) => {
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(account.email)
+  await page.getByRole('textbox', { exact: true, name: 'Email' }).fill(account.email)
   await page.getByLabel('Password', { exact: true }).fill(account.password)
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
@@ -74,7 +74,7 @@ export const expectFormSignInRefused = async (
 /** Fills the sign-up form (on /sign-up) with `account` and submits it. */
 export const signUpWithForm = async (page: Page, account: Author) => {
   await page.getByLabel('Name').fill(account.name)
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(account.email)
+  await page.getByRole('textbox', { exact: true, name: 'Email' }).fill(account.email)
   await page.getByLabel('Password').fill(account.password)
   await page.getByRole('button', { name: 'Create account' }).click()
 }
@@ -83,7 +83,7 @@ export const signUpWithForm = async (page: Page, account: Author) => {
 export const requestPasswordReset = async (page: Page, email: string) => {
   await visit(page, '/login')
   await followLink(page, 'Forgot your password?', /\/forgot-password$/)
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email)
+  await page.getByRole('textbox', { exact: true, name: 'Email' }).fill(email)
   await page.getByRole('button', { name: 'Send reset link' }).click()
 }
 

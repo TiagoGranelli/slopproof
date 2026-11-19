@@ -21,13 +21,13 @@ export const pageRequest = (query: {
 
 /** The pieces of a newest-first keyset query over a table's `created_at` and uuid `id`. */
 export interface Keyset {
+  /** The WHERE condition of the rows after `cursor`, or none for the first page. */
+  readonly after: (cursor: PageCursor | undefined) => SQL | undefined
   /**
    * The sort key at full (microsecond) precision, selected as `cursorAt`. `createdAt` as a JS Date is rounded to
    * milliseconds, and a cursor built from it would skip or repeat rows created within the same millisecond.
    */
   readonly cursorAt: SQL<string>
-  /** The WHERE condition of the rows after `cursor`, or none for the first page. */
-  readonly after: (cursor: PageCursor | undefined) => SQL | undefined
   /** ORDER BY created_at desc, id desc: the id breaks ties. */
   readonly newestFirst: ReadonlyArray<SQL>
 }
@@ -51,8 +51,14 @@ export const keyset = (table: { readonly createdAt: PgColumn; readonly id: PgCol
 
 /** A row of a keyset query: its id and its `cursorAt`. */
 interface KeyedRow {
-  readonly id: string
   readonly cursorAt: string
+  readonly id: string
+}
+
+/** One page of a keyset listing, as the contract's page schemas carry it. */
+export interface KeysetPage<Item> {
+  readonly items: Array<Item>
+  readonly nextCursor: PageCursor | null
 }
 
 /**
@@ -63,7 +69,7 @@ export const toPage = <Row extends KeyedRow, Item>(
   rows: ReadonlyArray<Row>,
   limit: number,
   toItem: (row: Row) => Item,
-): { readonly items: Array<Item>; readonly nextCursor: PageCursor | null } => {
+): KeysetPage<Item> => {
   const shown = rows.slice(0, limit)
   const last = shown.at(-1)
   return {

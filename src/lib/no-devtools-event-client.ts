@@ -12,6 +12,12 @@
 type Unsubscribe = () => void
 
 /** The event client's public surface, with nothing behind it: events go nowhere and no listener is ever called. */
+interface EventPayload<Payload> {
+  payload: Payload
+  pluginId: string
+  type: string
+}
+
 export class EventClient {
   readonly #pluginId: string
 
@@ -23,11 +29,8 @@ export class EventClient {
     return this.#pluginId
   }
 
-  createEventPayload<Payload>(
-    eventSuffix: string,
-    payload: Payload,
-  ): { type: string; payload: Payload; pluginId: string } {
-    return { type: `${this.#pluginId}:${eventSuffix}`, payload, pluginId: this.#pluginId }
+  createEventPayload<Payload>(eventSuffix: string, payload: Payload): EventPayload<Payload> {
+    return { payload, pluginId: this.#pluginId, type: `${this.#pluginId}:${eventSuffix}` }
   }
 
   emit(): void {}

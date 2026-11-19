@@ -10,11 +10,11 @@ import { Button } from '#/components/ui/button.tsx'
  * name what failed in its own `errorComponent`: `title` is the heading, `action` completes "Could not …".
  */
 export function RouteError({
+  action = 'load this page',
   error,
   reset,
   title = 'This page could not be loaded',
-  action = 'load this page',
-}: ErrorComponentProps & { title?: string; action?: string }) {
+}: ErrorComponentProps & { action?: string; title?: string }) {
   const router = useRouter()
   const queryErrorResetBoundary = useQueryErrorResetBoundary()
   // Lets useSuspenseQuery retry instead of rethrowing the cached error when the route renders again.
@@ -23,14 +23,14 @@ export function RouteError({
   }, [queryErrorResetBoundary])
   return (
     <Page title={title}>
-      <ApiErrorAlert error={error} action={action} />
+      <ApiErrorAlert action={action} error={error} />
       <div className="flex flex-wrap gap-2">
         <Button
-          type="button"
           onClick={async () => {
             reset()
             await router.invalidate()
           }}
+          type="button"
         >
           Try again
         </Button>

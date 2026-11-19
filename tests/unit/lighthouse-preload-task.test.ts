@@ -2,24 +2,24 @@
 // script. The numbers are from the CI run whose mobile scores fell to 99 (ADR 0011): the navigation commit ran
 // 31.9 ms on the 2-vCPU runner, against 5-10 ms on an 8-core development machine.
 import { describe, expect, it } from 'vitest'
-import { type Lhr, preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
+import { type AuditItem, type Lhr, preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
 
-const report = (requests: Record<string, unknown>[], tasks: Record<string, unknown>[]): Lhr => ({
+const report = (requests: Array<AuditItem>, tasks: Array<AuditItem>): Lhr => ({
+  audits: {
+    'main-thread-tasks': { details: { items: tasks }, score: null, scoreDisplayMode: 'informative', title: '' },
+    'network-requests': { details: { items: requests }, score: null, scoreDisplayMode: 'informative', title: '' },
+  },
+  categories: {},
+  environment: { benchmarkIndex: 2258 },
   finalDisplayedUrl: 'https://localhost/',
   runWarnings: [],
-  environment: { benchmarkIndex: 2258 },
-  categories: {},
-  audits: {
-    'network-requests': { score: null, scoreDisplayMode: 'informative', title: '', details: { items: requests } },
-    'main-thread-tasks': { score: null, scoreDisplayMode: 'informative', title: '', details: { items: tasks } },
-  },
 })
 
-const documentRequest = { resourceType: 'Document', rendererStartTime: 0 }
-const stylesheet = { resourceType: 'Stylesheet', rendererStartTime: 61.9 }
+const documentRequest = { rendererStartTime: 0, resourceType: 'Document' }
+const stylesheet = { rendererStartTime: 61.9, resourceType: 'Stylesheet' }
 const tasks = [
-  { startTime: 45.5, duration: 31.9 },
-  { startTime: 137, duration: 10.1 },
+  { duration: 31.9, startTime: 45.5 },
+  { duration: 10.1, startTime: 137 },
 ]
 
 describe('preloadTaskMs', () => {
@@ -28,7 +28,7 @@ describe('preloadTaskMs', () => {
   })
 
   it('also finds a script requested first', () => {
-    const script = { resourceType: 'Script', rendererStartTime: 140 }
+    const script = { rendererStartTime: 140, resourceType: 'Script' }
     expect(preloadTaskMs(report([documentRequest, script], tasks))).toBe(10.1)
   })
 

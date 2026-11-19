@@ -21,7 +21,7 @@ beforeAll(async () => {
 const RATE_LIMITED = { _tag: 'RateLimited', message: 'Too many changes in a short time' }
 
 const deleteMissing = () =>
-  fetch(`${appUrl}/api/me/posts/${crypto.randomUUID()}`, { method: 'DELETE', headers: { cookie, origin: appUrl } })
+  fetch(`${appUrl}/api/me/posts/${crypto.randomUUID()}`, { headers: { cookie, origin: appUrl }, method: 'DELETE' })
 
 /** Sends `count` deletes at once and returns their statuses, lowest first. */
 const raceDeletes = async (count: number) => {
@@ -43,7 +43,7 @@ const timedDelete = async () => {
   const before = Date.now()
   const response = await deleteMissing()
   const after = Date.now()
-  return { status: response.status, body: (await response.json()) as { retryAfter: number }, before, after }
+  return { after, before, body: (await response.json()) as { retryAfter: number }, status: response.status }
 }
 
 /** Creating and editing share the bucket: each is refused the same way, before its body is read. */
@@ -53,9 +53,9 @@ const expectCreateAndEditRefused = async () => {
     ['PATCH', `/api/me/posts/${crypto.randomUUID()}`],
   ] as const) {
     const res = await fetch(`${appUrl}${path}`, {
-      method,
-      headers: { cookie, origin: appUrl, 'content-type': 'application/json' },
       body: JSON.stringify({ body: 'over the limit' }),
+      headers: { 'content-type': 'application/json', cookie, origin: appUrl },
+      method,
     })
     expect(res.status, method).toBe(429)
     expect(await res.json()).toMatchObject(RATE_LIMITED)
@@ -86,10 +86,10 @@ describe('write rate limit', () => {
 
     // One row per user, next to Better Auth's `<ip>|<path>` rows; reads are not counted.
     expect((await fetch(`${appUrl}/api/me/posts`, { headers: { cookie } })).status).toBe(200)
-    const { rows } = await pool.query<{ key: string; count: number }>(
+    const { rows } = await pool.query<{ count: number; key: string }>(
       'select key, count from rate_limit where key like $1',
       [`api-write|${userId}`],
     )
-    expect(rows).toEqual([{ key, count: WRITES_PER_WINDOW + 13 }])
+    expect(rows).toEqual([{ count: WRITES_PER_WINDOW + 13, key }])
   })
 })

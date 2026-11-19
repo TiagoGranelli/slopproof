@@ -106,7 +106,7 @@ test('changing the password signs out the other sessions and keeps this one', as
 
   await expectSignedOut(await elsewhere.newPage())
   await visit(page, '/account')
-  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { exact: true, name: 'Account' })).toBeVisible()
   await elsewhere.close()
 })
 

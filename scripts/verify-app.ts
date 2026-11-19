@@ -20,37 +20,39 @@ const serverLogs = () =>
     .map((name) => `test-results/${name}`)
 
 /** A layer, and the command that reruns it alone once it is fixed (a filter narrows it further). */
-type Step = { name: string; command: () => string[]; alone: string; env?: NodeJS.ProcessEnv }
-const STEPS: Step[] = [
+type Step = { alone: string; command: () => Array<string>; env?: NodeJS.ProcessEnv; name: string }
+const STEPS: Array<Step> = [
   {
-    name: 'api (recorded)',
-    command: () => ['vitest', 'run', '--project', 'api'],
     alone: 'pnpm test:api [filter]',
+    command: () => ['vitest', 'run', '--project', 'api'],
     env: { CONTRACT_OBSERVATIONS },
+    name: 'api (recorded)',
   },
-  { name: 'db', command: () => ['vitest', 'run', '--project', 'db'], alone: 'pnpm test:db [filter]' },
-  { name: 'integration', command: () => ['vitest', 'run', '--project', 'integration'], alone: 'pnpm test [filter]' },
-  { name: 'e2e', command: () => ['playwright', 'test'], alone: 'pnpm test:e2e [filter]' },
+  { alone: 'pnpm test:db [filter]', command: () => ['vitest', 'run', '--project', 'db'], name: 'db' },
+  { alone: 'pnpm test [filter]', command: () => ['vitest', 'run', '--project', 'integration'], name: 'integration' },
+  { alone: 'pnpm test:e2e [filter]', command: () => ['playwright', 'test'], name: 'e2e' },
   {
-    name: 'contract coverage',
     command: () => [process.execPath, 'scripts/contract-coverage.ts', CONTRACT_OBSERVATIONS, ...serverLogs()],
+    name: 'contract coverage',
     // It reads what every other layer recorded, so only a full run checks it.
     alone: 'pnpm verify:app',
   },
 ]
 
+type StepOutcome = { detail: string; name: string; ok: boolean }
+
 /** Runs one step with the terminal attached; tinyexec puts node_modules/.bin first on PATH. */
-const run = (step: Step): { name: string; ok: boolean; detail: string } => {
+const run = (step: Step): StepOutcome => {
   const [tool = '', ...args] = step.command()
   const started = performance.now()
   const { exitCode, signalCode } = xSync(tool, args, {
-    nodeOptions: { stdio: 'inherit', env: { ...process.env, ...step.env } },
+    nodeOptions: { env: { ...process.env, ...step.env }, stdio: 'inherit' },
   })
   const seconds = `${((performance.now() - started) / 1000).toFixed(1)}s`
   return {
+    detail: exitCode === 0 ? seconds : `exit ${exitCode ?? signalCode}, ${seconds}; rerun alone: ${step.alone}`,
     name: step.name,
     ok: exitCode === 0,
-    detail: exitCode === 0 ? seconds : `exit ${exitCode ?? signalCode}, ${seconds}; rerun alone: ${step.alone}`,
   }
 }
 
@@ -62,11 +64,15 @@ if (process.argv.length > 2) {
   process.exit(2)
 }
 // Coverage must count this run's responses only.
-rmSync(CONTRACT_OBSERVATIONS, { recursive: true, force: true })
+rmSync(CONTRACT_OBSERVATIONS, { force: true, recursive: true })
 mkdirSync('test-results', { recursive: true })
-for (const log of serverLogs()) rmSync(log)
+for (const log of serverLogs()) {
+  rmSync(log)
+}
 
 const outcomes = STEPS.map((step) => run(step))
 console.log('')
-for (const { name, ok, detail } of outcomes) console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(18)} ${detail}`)
+for (const { detail, name, ok } of outcomes) {
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(18)} ${detail}`)
+}
 process.exitCode = outcomes.every((outcome) => outcome.ok) ? 0 : 1

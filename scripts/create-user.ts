@@ -18,18 +18,20 @@ const mutableEcho = () => {
   let muted = false
   const output = new Writable({
     write(chunk: Buffer | string, encoding: BufferEncoding, callback) {
-      if (!muted) stderr.write(chunk, encoding)
+      if (!muted) {
+        stderr.write(chunk, encoding)
+      }
       callback()
     },
   })
-  return { output, mute: () => (muted = true) }
+  return { mute: () => (muted = true), output }
 }
 
 /** Asks on the terminal without echoing what is typed. */
 const askHidden = (question: string) =>
   new Promise<string>((resolve, reject) => {
     const echo = mutableEcho()
-    const rl = createInterface({ input: stdin, output: echo.output, terminal: true, historySize: 0 })
+    const rl = createInterface({ historySize: 0, input: stdin, output: echo.output, terminal: true })
     rl.on('SIGINT', () => {
       rl.close()
       stderr.write('\n')
@@ -44,14 +46,20 @@ const askHidden = (question: string) =>
   })
 
 const readPassword = async () => {
-  if (process.env.CREATE_USER_PASSWORD) return process.env.CREATE_USER_PASSWORD
+  if (process.env.CREATE_USER_PASSWORD) {
+    return process.env.CREATE_USER_PASSWORD
+  }
   if (stdin.isTTY) {
     const password = await askHidden('Password: ')
-    if ((await askHidden('Repeat password: ')) !== password) throw new Error('the passwords do not match')
+    if ((await askHidden('Repeat password: ')) !== password) {
+      throw new Error('the passwords do not match')
+    }
     return password
   }
   let data = ''
-  for await (const chunk of stdin) data += chunk
+  for await (const chunk of stdin) {
+    data += chunk
+  }
   return data.replace(/\r?\n$/, '')
 }
 
@@ -70,25 +78,29 @@ if (!email || !name) {
 try {
   const password = await readPassword()
   // Checked here so the message can name the limits; Better Auth only says "Password too short".
-  const { minPasswordLength, maxPasswordLength } = auth.options.emailAndPassword
-  if (password.length < minPasswordLength)
+  const { maxPasswordLength, minPasswordLength } = auth.options.emailAndPassword
+  if (password.length < minPasswordLength) {
     throw new Error(`password too short (${password.length} characters): use at least ${minPasswordLength}`)
-  if (password.length > maxPasswordLength)
+  }
+  if (password.length > maxPasswordLength) {
     throw new Error(`password too long (${password.length} characters): use at most ${maxPasswordLength}`)
+  }
   const [existing] = await db.select({ id: user.id }).from(user).where(eq(user.email, email))
-  if (existing) throw new Error(`a user with email ${email} already exists`)
+  if (existing) {
+    throw new Error(`a user with email ${email} already exists`)
+  }
   // What sign-up does, minus the verification mail: Better Auth's password hash, user and credential account.
   const context = await auth.$context
   const hash = await context.password.hash(password)
   const created = await context.internalAdapter.createUser(
-    { email, name, emailVerified: true },
+    { email, emailVerified: true, name },
     { method: 'email-password' },
   )
   await context.internalAdapter.linkAccount({
-    userId: created.id,
-    providerId: 'credential',
     accountId: created.id,
     password: hash,
+    providerId: 'credential',
+    userId: created.id,
   })
   console.log(`created ${created.email}`)
 } catch (error) {

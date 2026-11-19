@@ -6,19 +6,19 @@ import { callAuthFunction } from './server-functions.ts'
 
 const nextIp = clientIps('100.64.3')
 
-const signUp = (baseUrl: string, account: { name: string; email: string; password: string }, ip: string) =>
+const signUp = (baseUrl: string, account: { email: string; name: string; password: string }, ip: string) =>
   callAuthFunction('signUp', { baseUrl, data: account, headers: { origin: baseUrl, 'x-forwarded-for': ip } })
 
 const newAccount = () => ({
-  name: 'Sign-up Test',
   email: `sign-up-${crypto.randomUUID()}@example.test`,
+  name: 'Sign-up Test',
   password: `pw-${crypto.randomUUID()}`,
 })
 
 describe('closed sign-up', () => {
   it('has no sign-up endpoint', async () => {
     const { value } = await signUp(closedAppUrl, newAccount(), nextIp())
-    expect(value).toEqual({ ok: false, failure: { code: 'NOT_FOUND' } })
+    expect(value).toEqual({ failure: { code: 'NOT_FOUND' }, ok: false })
   })
 
   it('has no sign-up page, and the sign-in page does not offer one', async () => {
@@ -37,9 +37,9 @@ describe('open sign-up', () => {
 
   it('is not exposed over HTTP either', async () => {
     const res = await fetch(`${appUrl}/api/auth/sign-up/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': nextIp() },
       body: JSON.stringify(newAccount()),
+      headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': nextIp() },
+      method: 'POST',
     })
     expect(res.status).toBe(404)
   })

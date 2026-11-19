@@ -18,8 +18,8 @@ describe('ApiErrorAlert', () => {
       'a ValidationError',
       {
         _tag: 'ValidationError',
+        issues: [{ message: 'Too long.', path: ['body'] }],
         message: 'Invalid request payload',
-        issues: [{ path: ['body'], message: 'Too long.' }],
       },
       'Could not save your changes: Too long.',
     ],
@@ -36,7 +36,7 @@ describe('ApiErrorAlert', () => {
   ]
 
   it.each(cases)('announces %s without a sign-in link', async (_, error, message) => {
-    await renderInApp(<ApiErrorAlert id="err" error={error} action="save your changes" />)
+    await renderInApp(<ApiErrorAlert action="save your changes" error={error} id="err" />)
     const alert = page.getByRole('alert')
     await expect.element(alert).toHaveTextContent(message)
     await expect.element(alert).toHaveAttribute('id', 'err')
@@ -45,7 +45,7 @@ describe('ApiErrorAlert', () => {
 
   it('offers to sign in again, returning to the current page', async () => {
     const { router } = await renderInApp(
-      <ApiErrorAlert error={{ _tag: 'Unauthorized', message: 'Authentication required' }} action="save your changes" />,
+      <ApiErrorAlert action="save your changes" error={{ _tag: 'Unauthorized', message: 'Authentication required' }} />,
       { url: '/dashboard?tab=1' },
     )
     await expect

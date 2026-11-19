@@ -12,7 +12,7 @@ type InputProps = Omit<ComponentProps<'input'>, 'name' | 'value' | 'checked' | '
  * A labelled input bound to its form field. The hint and the field's error, its own or one the server reported
  * for it (ServerIssues), are read out with it.
  */
-export function TextField({ label, hint, id, ...input }: InputProps & { id: string; label: string; hint?: string }) {
+export function TextField({ hint, id, label, ...input }: InputProps & { hint?: string; id: string; label: string }) {
   const field = useFieldContext<string>()
   const serverIssue = use(ServerIssues)[field.name]
   const error = fieldErrorMessage(field.state.meta.errors) ?? serverIssue
@@ -23,16 +23,16 @@ export function TextField({ label, hint, id, ...input }: InputProps & { id: stri
       <Label htmlFor={id}>{label}</Label>
       <Input
         {...input}
+        aria-describedby={describedBy(hintId, error && errorId)}
+        aria-invalid={error ? true : undefined}
         id={id}
         name={field.name}
-        value={field.state.value}
-        onChange={(event) => field.handleChange(event.target.value)}
         onBlur={field.handleBlur}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(hintId, error && errorId)}
+        onChange={(event) => field.handleChange(event.target.value)}
+        value={field.state.value}
       />
       {hint ? (
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground" id={hintId}>
           {hint}
         </p>
       ) : null}
@@ -42,7 +42,7 @@ export function TextField({ label, hint, id, ...input }: InputProps & { id: stri
 }
 
 /** A checkbox bound to its form field, with its label after it. */
-export function CheckboxField({ label, id, ...input }: InputProps & { id: string; label: ReactNode }) {
+export function CheckboxField({ id, label, ...input }: InputProps & { id: string; label: ReactNode }) {
   const field = useFieldContext<boolean>()
   const error = fieldErrorMessage(field.state.meta.errors)
   const errorId = `${id}-error`
@@ -51,14 +51,14 @@ export function CheckboxField({ label, id, ...input }: InputProps & { id: string
       <div className="flex items-start gap-2 text-sm">
         <input
           {...input}
+          aria-describedby={describedBy(error && errorId)}
+          aria-invalid={error ? true : undefined}
+          checked={field.state.value}
           id={id}
           name={field.name}
-          type="checkbox"
-          checked={field.state.value}
-          onChange={(event) => field.handleChange(event.target.checked)}
           onBlur={field.handleBlur}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy(error && errorId)}
+          onChange={(event) => field.handleChange(event.target.checked)}
+          type="checkbox"
         />
         <label htmlFor={id}>{label}</label>
       </div>

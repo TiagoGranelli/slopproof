@@ -8,11 +8,9 @@ import type { Mailer } from './mailer.ts'
  * otherwise (production) only the subject, because the text carries single-use tokens and logs must not.
  */
 export const createLogMailer = (options: { withContent: boolean }): Mailer => ({
-  async send(message) {
-    log('warn', 'mail not delivered: SMTP_URL is unset', {
-      subject: message.subject,
-      ...(options.withContent ? { to: message.to, text: message.text } : {}),
-    })
-  },
   close() {},
+  async send(message) {
+    const { subject, text, to } = message
+    log('warn', 'mail not delivered: SMTP_URL is unset', options.withContent ? { subject, text, to } : { subject })
+  },
 })

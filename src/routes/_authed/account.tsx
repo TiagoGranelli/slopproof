@@ -13,7 +13,7 @@ export const Route = createFileRoute('/_authed/account')({
   head: () => ({ meta: [{ title: pageTitle('Account') }, { name: 'robots', content: 'noindex' }] }),
   // The loader's failures. Once the page is up, each section fails on its own (SectionErrorBoundary).
   errorComponent: (props) => (
-    <RouteError {...props} title="Your account could not be loaded" action="load your account" />
+    <RouteError {...props} action="load your account" title="Your account could not be loaded" />
   ),
   component: Account,
 })
@@ -24,9 +24,9 @@ const heading = 'text-lg font-semibold tracking-tight'
 function Account() {
   const { user } = Route.useRouteContext()
   return (
-    <Page title="Account" description={`${user.name} · ${user.email}`}>
+    <Page description={`${user.name} · ${user.email}`} title="Account">
       <section aria-labelledby="password-heading" className={section}>
-        <h2 id="password-heading" className={heading}>
+        <h2 className={heading} id="password-heading">
           Password
         </h2>
         <SectionErrorBoundary action="show the password form">
@@ -34,7 +34,7 @@ function Account() {
         </SectionErrorBoundary>
       </section>
       <section aria-labelledby="sessions-heading" className={section}>
-        <h2 id="sessions-heading" className={heading}>
+        <h2 className={heading} id="sessions-heading">
           Sessions
         </h2>
         <SectionErrorBoundary action="show your sessions">
@@ -42,7 +42,7 @@ function Account() {
         </SectionErrorBoundary>
       </section>
       <section aria-labelledby="delete-heading" className={section}>
-        <h2 id="delete-heading" className={heading}>
+        <h2 className={heading} id="delete-heading">
           Delete account
         </h2>
         <SectionErrorBoundary action="show the delete form">

@@ -11,7 +11,9 @@ const named = (name: string) => Object.assign(new URL(url), { pathname: `/${name
 /** The pid of a process that has already exited. */
 const exitedPid = () => {
   const { pid } = spawnSync(process.execPath, ['--eval', ''])
-  if (!pid) throw new Error('node --eval did not start')
+  if (!pid) {
+    throw new Error('node --eval did not start')
+  }
   return pid
 }
 
@@ -24,7 +26,7 @@ const admin = async <T>(work: (client: Client) => Promise<T>) => {
     await client.end()
   }
 }
-const existing = (names: string[]) =>
+const existing = (names: Array<string>) =>
   admin(async (client) => {
     const { rows } = await client.query<{ datname: string }>(
       'select datname from pg_database where datname = any($1) order by 1',
@@ -40,7 +42,9 @@ const running = `app_sweep_${process.ppid}_test`
 const fixed = 'app_fixed_sweep_test'
 
 afterAll(async () => {
-  for (const name of [abandoned, running, fixed, new URL(url).pathname.slice(1)]) await dropTestDatabase(named(name))
+  for (const name of [abandoned, running, fixed, new URL(url).pathname.slice(1)]) {
+    await dropTestDatabase(named(name))
+  }
 })
 
 describe('emptyTestDatabase', () => {

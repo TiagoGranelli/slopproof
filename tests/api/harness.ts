@@ -27,8 +27,8 @@ import { memoryPostsRepo } from './posts-repo.ts'
 
 /** The authors the fake session store knows, keyed by session token. */
 export const authors = {
-  alice: { id: UserId.make('user-alice'), name: 'Alice', email: 'alice@example.test' },
-  bob: { id: UserId.make('user-bob'), name: 'Bob', email: 'bob@example.test' },
+  alice: { email: 'alice@example.test', id: UserId.make('user-alice'), name: 'Alice' },
+  bob: { email: 'bob@example.test', id: UserId.make('user-bob'), name: 'Bob' },
 }
 type AuthorName = keyof typeof authors
 
@@ -72,7 +72,9 @@ export const memoryRateLimitStore = Layer.sync(RateLimitStore, () => {
         const count = expired ? 1 : bucket.count + 1
         const lastRequest = expired || bucket.count < rule.max ? now : bucket.lastRequest
         buckets.set(key, { count, lastRequest })
-        if (count <= rule.max) return { allowed: true, retryAfter: null }
+        if (count <= rule.max) {
+          return { allowed: true, retryAfter: null }
+        }
         return { allowed: false, retryAfter: Math.max(1, Math.ceil((lastRequest + windowMs - now) / 1000)) }
       }),
   }
@@ -108,12 +110,12 @@ export const webHandler = (options: RepoOptions = {}) => {
     disableLogger: true,
   })
   return {
+    dispose: web.dispose,
     handler: async (request: Request) => {
       const response = await web.handler(request)
       observe(request.method, request.url, response.status)
       return response
     },
-    dispose: web.dispose,
   }
 }
 
@@ -148,7 +150,7 @@ export const clientAs = (token: Session) =>
         return HttpServerResponse.toClientResponse(response, { request })
       }).pipe(Effect.scoped),
     )
-    return yield* HttpApiClient.makeWith(Api, { httpClient, baseUrl: 'http://localhost:3000' })
+    return yield* HttpApiClient.makeWith(Api, { baseUrl: 'http://localhost:3000', httpClient })
   }).pipe(Effect.provide(session(token)))
 
 /**
@@ -158,7 +160,9 @@ export const clientAs = (token: Session) =>
  */
 const observe = (method: string, url: string, status: number) => {
   const directory = process.env.CONTRACT_OBSERVATIONS
-  if (!directory) return
+  if (!directory) {
+    return
+  }
   mkdirSync(directory, { recursive: true })
   const line = JSON.stringify({ method, path: new URL(url).pathname, status })
   appendFileSync(join(directory, `api-${process.pid}.jsonl`), `${line}\n`)

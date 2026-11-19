@@ -9,33 +9,36 @@
 // Usage: node scripts/contract-coverage.ts <observations directory> [log file ...]
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Json } from '#/contract/json.ts'
 
-type Operation = { id: string; method: string; pattern: RegExp; declared: Set<number> }
+type Operation = { declared: Set<number>; id: string; method: string; pattern: RegExp }
 type Observation = { method: string; path: string; status: number }
 // `reason` is required, but the file is hand-edited JSON: a missing one is reported, not assumed away.
-type AllowEntry = { operation: string; status: number; reason?: string }
-type Allowlist = { unobserved: AllowEntry[]; undeclared: AllowEntry[] }
+type AllowEntry = { operation: string; reason?: string; status: number }
+type Allowlist = { undeclared: Array<AllowEntry>; unobserved: Array<AllowEntry> }
 
 export const ALLOWLIST = 'tests/contract-coverage-allowlist.json'
 
 /** `GET /api/items/{id}` and a pattern matching concrete paths of it. */
 export const operations = (spec: {
-  paths: Record<string, Record<string, { responses: Record<string, unknown> }>>
-}): Operation[] =>
+  paths: Record<string, Record<string, { responses: Record<string, Json> }>>
+}): Array<Operation> =>
   Object.entries(spec.paths).flatMap(([path, methods]) =>
     Object.entries(methods).map(([method, operation]) => ({
+      declared: new Set(Object.keys(operation.responses).map(Number)),
       id: `${method.toUpperCase()} ${path}`,
       method: method.toUpperCase(),
       pattern: new RegExp(`^${path.replaceAll(/\{[^}]+\}/g, '[^/]+')}$`),
-      declared: new Set(Object.keys(operation.responses).map(Number)),
     })),
   )
 
-type LogEntry = { msg?: unknown; method?: unknown; path?: unknown; status?: unknown; aborted?: unknown }
+type LogEntry = { aborted?: unknown; method?: unknown; msg?: unknown; path?: unknown; status?: unknown }
 
 /** A JSON log line; startup banners and other plain text are skipped. */
 const parseLogLine = (line: string): LogEntry | undefined => {
-  if (!line.startsWith('{')) return undefined
+  if (!line.startsWith('{')) {
+    return undefined
+  }
   try {
     return JSON.parse(line) as LogEntry
   } catch {
@@ -45,9 +48,13 @@ const parseLogLine = (line: string): LogEntry | undefined => {
 
 /** A request log entry whose client received the response (an `aborted` one, logged as 499, was not). */
 const answeredRequest = (entry: LogEntry | undefined): Observation | undefined => {
-  if (entry?.msg !== 'request' || entry.aborted === true) return undefined
+  if (entry?.msg !== 'request' || entry.aborted === true) {
+    return undefined
+  }
   const { method, path, status } = entry
-  if (typeof method !== 'string' || typeof path !== 'string' || typeof status !== 'number') return undefined
+  if (typeof method !== 'string' || typeof path !== 'string' || typeof status !== 'number') {
+    return undefined
+  }
   return { method, path, status }
 }
 
@@ -55,63 +62,70 @@ const answeredRequest = (entry: LogEntry | undefined): Observation | undefined =
  * Requests from Nitro's request log lines; other lines (startup, errors) are skipped, and so are requests whose
  * client disconnected first (`aborted`, logged as 499): nobody received their response.
  */
-export const logObservations = (text: string): Observation[] =>
+export const logObservations = (text: string): Array<Observation> =>
   text.split('\n').flatMap((line) => answeredRequest(parseLogLine(line)) ?? [])
 
 const matches = (entry: AllowEntry, operation: string, status: number) =>
   (entry.operation === '*' || entry.operation === operation) && entry.status === status
 
 /** Allowlist entries without a reason (the JSON may omit it). */
-const unexplained = (entries: AllowEntry[]) =>
-  entries
-    .filter((entry) => !entry.reason?.trim())
-    .map((entry) => `${ALLOWLIST}: ${entry.operation} ${entry.status} needs a reason`)
+const unexplained = (entries: Array<AllowEntry>) =>
+  entries.flatMap((entry) =>
+    entry.reason?.trim() ? [] : [`${ALLOWLIST}: ${entry.operation} ${entry.status} needs a reason`],
+  )
 
 /** The statuses observed for each operation; a request counts for the first operation whose path it matches. */
-const observedStatuses = (ops: Operation[], observed: Observation[]) => {
+const observedStatuses = (ops: Array<Operation>, observed: Array<Observation>) => {
   const seen = new Map(ops.map((op) => [op, new Set<number>()]))
   for (const { method, path, status } of observed) {
     const op = ops.find((candidate) => candidate.method === method && candidate.pattern.test(path))
-    if (op) seen.get(op)?.add(status)
+    if (op) {
+      seen.get(op)?.add(status)
+    }
   }
   return seen
 }
 
 /** A declared status nobody saw, or a seen status nobody declared, with the allowlist that may excuse it. */
-type Gap = { operation: string; status: number; excuses: AllowEntry[]; problem: string }
+type Gap = { excuses: Array<AllowEntry>; operation: string; problem: string; status: number }
 
-const gapsOf = (op: Operation, statuses: Set<number>, allowlist: Allowlist): Gap[] => [
-  ...[...op.declared]
-    .filter((status) => !statuses.has(status))
-    .map((status) => ({
-      operation: op.id,
-      status,
-      excuses: allowlist.unobserved,
-      problem: `${op.id} declares ${status}, but no test saw it answered`,
-    })),
-  ...[...statuses]
-    .filter((status) => !op.declared.has(status))
-    .map((status) => ({
-      operation: op.id,
-      status,
-      excuses: allowlist.undeclared,
-      problem: `${op.id} answered ${status}, which openapi.json does not declare`,
-    })),
+/** The statuses in `statuses` that `other` lacks. */
+const missingFrom = (statuses: Set<number>, other: Set<number>) => [...statuses].filter((status) => !other.has(status))
+
+const gapsOf = (op: Operation, statuses: Set<number>, allowlist: Allowlist): Array<Gap> => [
+  ...missingFrom(op.declared, statuses).map((status) => ({
+    excuses: allowlist.unobserved,
+    operation: op.id,
+    problem: `${op.id} declares ${status}, but no test saw it answered`,
+    status,
+  })),
+  ...missingFrom(statuses, op.declared).map((status) => ({
+    excuses: allowlist.undeclared,
+    operation: op.id,
+    problem: `${op.id} answered ${status}, which openapi.json does not declare`,
+    status,
+  })),
 ]
 
 /** Problems, one line each; empty when the contract and the observed responses agree. */
-export const contractCoverageProblems = (ops: Operation[], observed: Observation[], allowlist: Allowlist): string[] => {
+export const contractCoverageProblems = (
+  ops: Array<Operation>,
+  observed: Array<Observation>,
+  allowlist: Allowlist,
+): Array<string> => {
   const entries = [...allowlist.unobserved, ...allowlist.undeclared]
   const used = new Set<AllowEntry>()
   const gaps = [...observedStatuses(ops, observed)].flatMap(([op, statuses]) => gapsOf(op, statuses, allowlist))
-  const unexcused = gaps.flatMap(({ operation, status, excuses, problem }) => {
+  const unexcused = gaps.flatMap(({ excuses, operation, problem, status }) => {
     const entry = excuses.find((candidate) => matches(candidate, operation, status))
-    if (entry) used.add(entry)
+    if (entry) {
+      used.add(entry)
+    }
     return entry ? [] : [problem]
   })
-  const stale = entries
-    .filter((entry) => !used.has(entry))
-    .map((entry) => `${ALLOWLIST}: ${entry.operation} ${entry.status} matches no gap any more; remove it`)
+  const stale = entries.flatMap((entry) =>
+    used.has(entry) ? [] : [`${ALLOWLIST}: ${entry.operation} ${entry.status} matches no gap any more; remove it`],
+  )
   return [...unexplained(entries), ...unexcused, ...stale]
 }
 
@@ -137,18 +151,22 @@ if (import.meta.main) {
   const allowlist = JSON.parse(readFileSync(ALLOWLIST, 'utf8')) as Allowlist
   const ops = operations(spec)
   const problems = contractCoverageProblems(ops, observed, allowlist)
-  for (const problem of problems) console.error(problem)
+  for (const problem of problems) {
+    console.error(problem)
+  }
   const pairs = ops.reduce((sum, op) => sum + op.declared.size, 0)
   // For information: declared statuses only the in-memory api layer produced, never the built app. A status no
   // test produced at all is a problem above, not listed here.
-  const seenIn = (list: Observation[], op: Operation, status: number) =>
+  const seenIn = (list: Array<Observation>, op: Operation, status: number) =>
     list.some((o) => o.method === op.method && op.pattern.test(o.path) && o.status === status)
   const inMemoryOnly = ops.flatMap((op) =>
-    [...op.declared]
-      .filter((status) => !seenIn(fromApp, op, status) && seenIn(observed, op, status))
-      .map((status) => `${op.id} ${status}`),
+    [...op.declared].flatMap((status) =>
+      !seenIn(fromApp, op, status) && seenIn(observed, op, status) ? [`${op.id} ${status}`] : [],
+    ),
   )
-  if (inMemoryOnly.length) console.log(`seen only in the api layer, not from the built app: ${inMemoryOnly.join(', ')}`)
+  if (inMemoryOnly.length) {
+    console.log(`seen only in the api layer, not from the built app: ${inMemoryOnly.join(', ')}`)
+  }
   console.log(
     problems.length
       ? `contract coverage: ${problems.length} problem(s)`

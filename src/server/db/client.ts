@@ -1,27 +1,32 @@
 import '@tanstack/react-start/server-only'
 import type { ExtractTablesWithRelations } from 'drizzle-orm'
 import { drizzle, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres'
-import { PgTransaction, type PgDatabase } from 'drizzle-orm/pg-core'
+import type { PgDatabase } from 'drizzle-orm/pg-core'
 import { Context, Effect, Exit, Layer, Option, Redacted } from 'effect'
-import { Pool } from 'pg'
+import { Pool, type PoolConfig } from 'pg'
 import { env } from '../env.ts'
 import { onShutdown } from '../lifecycle.ts'
 import { log } from '../log.ts'
 import * as schema from './schema/index.ts'
 
-export const pool = new Pool({
+const poolConfig: PoolConfig = {
+  application_name: 'app',
   connectionString: Redacted.value(env.databaseUrl),
-  max: env.databasePoolMax,
   idleTimeoutMillis: 10_000,
+  max: env.databasePoolMax,
   // Fail fast instead of queueing forever when Postgres is unreachable or the pool is exhausted,
   // so /api/ready reports 503 promptly and requests do not pile up.
-  connectionTimeoutMillis: 5_000,
-  // Server-side caps for a single statement and for a transaction left idle; nothing in this app should come
-  // close. pg sends them as startup parameters, which a pooler refuses ("unsupported startup parameter"), so
-  // behind one they are set on the role instead (docs/operations.md, "Connection poolers").
-  ...(env.databaseUrlPooled ? {} : { statement_timeout: 15_000, idle_in_transaction_session_timeout: 30_000 }),
-  application_name: 'app',
-})
+  connectionTimeoutMillis: 5000,
+}
+// Server-side caps for a single statement and for a transaction left idle; nothing in this app should come
+// close. pg sends them as startup parameters, which a pooler refuses ("unsupported startup parameter"), so
+// behind one they are set on the role instead (docs/operations.md, "Connection poolers").
+if (!env.databaseUrlPooled) {
+  poolConfig.idle_in_transaction_session_timeout = 30_000
+  poolConfig.statement_timeout = 15_000
+}
+
+export const pool = new Pool(poolConfig)
 pool.on('error', (error) => log('error', 'postgres pool error', { error }))
 onShutdown('postgres-pool', () => pool.end())
 
@@ -30,8 +35,11 @@ export const db = drizzle({ client: pool, schema })
 /** The app's Drizzle client or one of its transactions: what a repository sends its statements through. */
 export type Db = PgDatabase<NodePgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>
 
+/** Drizzle's transactions are the only `Db` that can roll back. */
+const isTransaction = (database: Db): boolean => 'rollback' in database
+
 /** Carries a failed Exit through Drizzle's callback, whose only way to roll back is a rejection. */
-class Rollback extends Error {
+class RollbackError extends Error {
   readonly exit: Exit.Exit<unknown, unknown>
   constructor(exit: Exit.Exit<unknown, unknown>) {
     super('transaction rolled back')
@@ -66,7 +74,9 @@ export class Database extends Context.Service<Database, Db>()('app/Database') {
   static readonly transaction = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R | Database> =>
     Effect.gen(function* () {
       const database = yield* Database
-      if (database instanceof PgTransaction) return yield* effect
+      if (isTransaction(database)) {
+        return yield* effect
+      }
       const context = yield* Effect.context<R>()
       return yield* Effect.callback<A, E>((resume) => {
         // The body runs as its own fiber inside Drizzle's callback; interrupting the caller interrupts it.
@@ -92,11 +102,10 @@ const transactionExit = <A, E>(database: Db, body: (tx: Db) => Promise<Exit.Exit
   database
     .transaction(async (tx) => {
       const exit = await body(tx)
-      if (Exit.isFailure(exit)) throw new Rollback(exit)
+      if (Exit.isFailure(exit)) {
+        throw new RollbackError(exit)
+      }
       return exit
     })
-    .then(
-      (exit): Exit.Exit<A, E> => exit,
-      // A Rollback holds the body's own Exit, so its type is `Exit<A, E>`.
-      (error: unknown) => (error instanceof Rollback ? (error.exit as Exit.Exit<A, E>) : Exit.die(error)),
-    )
+    // A RollbackError holds the body's own Exit, so its type is `Exit<A, E>`.
+    .catch((error: unknown) => (error instanceof RollbackError ? (error.exit as Exit.Exit<A, E>) : Exit.die(error)))

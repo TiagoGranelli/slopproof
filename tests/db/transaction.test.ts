@@ -12,8 +12,8 @@ import { createAccount } from './helpers.ts'
 
 afterAll(() => pool.end())
 
-const logged: string[] = []
-const recordingDb = drizzle({ client: pool, schema, logger: { logQuery: (query) => void logged.push(query) } })
+const logged: Array<string> = []
+const recordingDb = drizzle({ client: pool, logger: { logQuery: (query) => void logged.push(query) }, schema })
 const layer = PostsRepo.layer.pipe(Layer.provideMerge(Layer.succeed(Database, recordingDb)))
 const run = <A, E>(effect: Effect.Effect<A, E, PostsRepo | Database>) =>
   Effect.runPromiseExit(effect.pipe(Effect.provide(layer)))
@@ -29,7 +29,7 @@ beforeEach(() => {
 })
 
 /** Bodies of `author`'s posts among `bodies` that are committed, read outside any transaction. */
-const committed = async (...bodies: string[]) =>
+const committed = async (...bodies: Array<string>) =>
   (
     await pool.query<{ body: string }>('select body from post where author_id = $1 and body = any($2) order by body', [
       author.id,
@@ -37,10 +37,12 @@ const committed = async (...bodies: string[]) =>
     ])
   ).rows.map((row) => row.body)
 
-const publish = (...bodies: string[]) =>
+const publish = (...bodies: Array<string>) =>
   Effect.gen(function* () {
     const repo = yield* PostsRepo
-    for (const body of bodies) yield* repo.create(author, body)
+    for (const body of bodies) {
+      yield* repo.create(author, body)
+    }
   })
 
 const unique = (label: string) => `${label} ${crypto.randomUUID()}`

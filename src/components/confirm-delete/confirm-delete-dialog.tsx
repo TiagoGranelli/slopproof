@@ -12,12 +12,12 @@ import {
 
 /** What a Delete button removes, as its label and its dialog name it. */
 export interface DeletedItem {
+  /** What deleting it means, under the dialog's title. */
+  readonly consequence: string
   /** Names the kind of item: `post` gives "Delete post: …" and "Delete this post?". */
   readonly noun: string
   /** The item's text: quoted in the dialog, and its start names the button for screen readers. */
   readonly text: string
-  /** What deleting it means, under the dialog's title. */
-  readonly consequence: string
 }
 
 /**
@@ -27,21 +27,23 @@ export interface DeletedItem {
  * the request runs.
  */
 export function ConfirmDeleteDialog(props: {
-  target: DeletedItem
-  open: boolean
-  onOpenChange: (open: boolean) => void
   onConfirm: () => void
+  onOpenChange: (open: boolean) => void
+  open: boolean
   returnFocus: RefObject<HTMLButtonElement | null>
+  target: DeletedItem
 }) {
   const confirmed = useRef(false)
   return (
-    <AlertDialog open={props.open} onOpenChange={props.onOpenChange}>
+    <AlertDialog onOpenChange={props.onOpenChange} open={props.open}>
       <AlertDialogContent
         onCloseAutoFocus={(event) => {
           // Opened without a Radix trigger, so Radix does not know where focus came from.
           event.preventDefault()
           props.returnFocus.current?.focus()
-          if (!confirmed.current) return
+          if (!confirmed.current) {
+            return
+          }
           confirmed.current = false
           props.onConfirm()
         }}
@@ -53,7 +55,7 @@ export function ConfirmDeleteDialog(props: {
         <blockquote className="border-l-2 pl-3 text-sm break-words whitespace-pre-wrap">{props.target.text}</blockquote>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep it</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => (confirmed.current = true)}>
+          <AlertDialogAction onClick={() => (confirmed.current = true)} variant="destructive">
             Delete
           </AlertDialogAction>
         </AlertDialogFooter>

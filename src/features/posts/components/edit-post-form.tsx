@@ -16,9 +16,9 @@ import { fieldIssue } from '#/lib/api-error.ts'
 import type { Post } from '#/sdk/types.gen.ts'
 
 interface EditPostProps {
-  readonly post: Post
   readonly onClose: () => void
   readonly onUpdated: (() => void) | undefined
+  readonly post: Post
 }
 
 /** The update mutation and the form it submits: a save closes the form, then tells the list. */
@@ -33,23 +33,23 @@ function useEditPost(props: EditPostProps) {
   })
   const form = useForm({
     defaultValues: { body: props.post.body },
+    onSubmit: ({ value }) => update.mutate({ body: postDraftSchema.decode(value), path: { id: props.post.id } }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
-    onSubmit: ({ value }) => update.mutate({ path: { id: props.post.id }, body: postDraftSchema.decode(value) }),
   })
   return { form, update }
 }
 
 /** The editor's row under the textarea: the character count, Cancel and Save. */
-function EditPostActions(props: { countId: string; draft: string; saving: boolean; onCancel: () => void }) {
+function EditPostActions(props: { countId: string; draft: string; onCancel: () => void; saving: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <CharacterCount id={props.countId} value={props.draft} max={POST_MAX_LENGTH} />
+      <CharacterCount id={props.countId} max={POST_MAX_LENGTH} value={props.draft} />
       <div className="flex gap-2">
-        <Button type="button" variant="outline" onClick={props.onCancel}>
+        <Button onClick={props.onCancel} type="button" variant="outline">
           Cancel
         </Button>
-        <Button type="submit" disabled={props.draft.trim().length === 0} aria-disabled={props.saving || undefined}>
+        <Button aria-disabled={props.saving || undefined} disabled={props.draft.trim().length === 0} type="submit">
           Save
         </Button>
       </div>
@@ -75,18 +75,20 @@ export function EditPostForm(props: EditPostProps) {
   }, [])
 
   const fieldId = `edit-post-${post.id}`
-  const { submit, schemaError } = useSchemaSubmit(form, postDraftSchema)
+  const { schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
   const serverIssue = fieldIssue(update.error, 'body')
   const formError = update.isError && serverIssue === undefined ? update.error : null
   return (
     <PostCard post={post}>
       <form
+        aria-busy={update.isPending}
         className="grid gap-2"
         noValidate
-        aria-busy={update.isPending}
         onSubmit={(event) => {
           event.preventDefault()
-          if (update.isPending) return
+          if (update.isPending) {
+            return
+          }
           submit(event.currentTarget)
         }}
         {...loadOnInteraction(postDraftSchema)}
@@ -99,17 +101,6 @@ export function EditPostForm(props: EditPostProps) {
               <>
                 <Label htmlFor={fieldId}>Edit post</Label>
                 <Textarea
-                  id={fieldId}
-                  ref={textarea}
-                  name={field.name}
-                  value={draft}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  onBlur={field.handleBlur}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Escape') return
-                    event.preventDefault()
-                    props.onClose()
-                  }}
                   aria-describedby={describedBy(
                     `${fieldId}-count`,
                     error && `${fieldId}-error`,
@@ -117,20 +108,33 @@ export function EditPostForm(props: EditPostProps) {
                     schemaError && `${fieldId}-schema-error`,
                   )}
                   aria-invalid={isTooLong(draft, POST_MAX_LENGTH) || Boolean(error) || undefined}
+                  id={fieldId}
+                  name={field.name}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') {
+                      return
+                    }
+                    event.preventDefault()
+                    props.onClose()
+                  }}
+                  ref={textarea}
                   required
+                  value={draft}
                 />
                 <EditPostActions
                   countId={`${fieldId}-count`}
                   draft={draft}
-                  saving={update.isPending}
                   onCancel={props.onClose}
+                  saving={update.isPending}
                 />
                 <FieldError id={`${fieldId}-error`} message={error} />
               </>
             )
           }}
         </form.Field>
-        {formError ? <ApiErrorAlert id={`${fieldId}-alert`} error={formError} action="save the post" /> : null}
+        {formError ? <ApiErrorAlert action="save the post" error={formError} id={`${fieldId}-alert`} /> : null}
         <FieldError id={`${fieldId}-schema-error`} message={schemaError} />
       </form>
     </PostCard>

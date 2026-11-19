@@ -28,7 +28,9 @@ let timer: NodeJS.Timeout | undefined
 
 const cleanUp = async () => {
   const deleted = await deleteExpiredAuthRows()
-  if (deleted.sessions || deleted.verifications) log('info', 'expired auth rows deleted', deleted)
+  if (deleted.sessions || deleted.verifications) {
+    log('info', 'expired auth rows deleted', deleted)
+  }
 }
 
 /**
@@ -37,7 +39,9 @@ const cleanUp = async () => {
  * and shutdown stops it before it drains the background tasks, so no pass starts after the pool is closing.
  */
 export const scheduleAuthCleanup = (): void => {
-  if (timer) return
+  if (timer) {
+    return
+  }
   timer = setInterval(() => runInBackground(cleanUp()), INTERVAL_MS).unref()
   onShutdown('auth-cleanup', () => {
     clearInterval(timer)

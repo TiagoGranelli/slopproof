@@ -18,8 +18,8 @@ const IMAGE = `${PROJECT}-app:smoke`
 const GRYPE_DB = `${dockerPrefix()}-grype-db`
 /** APP_URL in deploy/compose.smoke.yaml: the origin the checks send, whatever port Docker published. */
 const ORIGIN = 'http://localhost:8080'
-const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: unknown[] }).entries
-  .length
+const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: Array<unknown> })
+  .entries.length
 /**
  * Below Docker's default stop timeout (10 s), after which a stop is a kill. srvx drains in-flight requests for up
  * to 5 s (SERVER_SHUTDOWN_TIMEOUT) and then exits even if a timer is still pending, so a timer that outlives the
@@ -27,32 +27,33 @@ const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8'
  * production builds swap its event client out (TanStack/form#2132, src/lib/no-devtools-event-client.ts); with it
  * gone, `docker compose stop` takes about 2 s. The margin up to 8 s absorbs slow CI runners.
  */
-const MAX_STOP_MS = 8_000
+const MAX_STOP_MS = 8000
 
 const secret = () => randomBytes(24).toString('hex')
 /** What compose.production.yaml interpolates (deploy.env on a real server). */
 const env = {
   ...process.env,
+  APP_DB_PASSWORD: secret(),
   APP_IMAGE: IMAGE,
+  BETTER_AUTH_SECRET: randomBytes(32).toString('base64'),
   DOMAIN: 'localhost',
   POSTGRES_PASSWORD: secret(),
-  APP_DB_PASSWORD: secret(),
-  BETTER_AUTH_SECRET: randomBytes(32).toString('base64'),
 }
 const COMPOSE = ['compose', '-p', PROJECT, '-f', 'deploy/compose.production.yaml', '-f', 'deploy/compose.smoke.yaml']
 
 /** `docker compose <args>` on the smoke project; returns stdout, throws with stderr when it fails. */
-const compose = (args: string[], input?: string) => {
-  const run = spawnSync('docker', [...COMPOSE, ...args], { env, input, encoding: 'utf8', maxBuffer: 64 * 2 ** 20 })
-  if (run.status !== 0)
+const compose = (args: Array<string>, input?: string) => {
+  const run = spawnSync('docker', [...COMPOSE, ...args], { encoding: 'utf8', env, input, maxBuffer: 64 * 2 ** 20 })
+  if (run.status !== 0) {
     throw new Error(
       `docker compose ${args.join(' ')} failed (exit ${run.status ?? run.signal}, expected 0)\n${run.stderr}`,
     )
+  }
   return run.stdout.trim()
 }
 
 /** `docker compose <args>` without blocking, for runs that must overlap. Resolves with stdout. */
-const composeAsync = (args: string[]) =>
+const composeAsync = (args: Array<string>) =>
   new Promise<string>((done, reject) => {
     const child = spawn('docker', [...COMPOSE, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] })
     let [stdout, stderr] = ['', '']
@@ -90,23 +91,27 @@ const scanImage = () =>
 
 /** The `applied` count of the migrator's last log line. */
 const appliedBy = (output: string) => {
-  const last = JSON.parse(output.split('\n').at(-1) ?? '{}') as { msg?: string; applied?: number }
-  if (last.msg !== 'migrations applied')
+  const last = JSON.parse(output.split('\n').at(-1) ?? '{}') as { applied?: number; msg?: string }
+  if (last.msg !== 'migrations applied') {
     throw new Error(`the migrator's last log line is not {"msg":"migrations applied",...}. Its output:\n${output}`)
+  }
   return last.applied
 }
 
 /** One run of the image's migrator (the `migrate` service), with `env` (NAME=value) on top of its own. */
-const migrateOnce = (...overrides: string[]) =>
+const migrateOnce = (...overrides: Array<string>) =>
   composeAsync(['run', '--rm', '--no-deps', ...overrides.flatMap((e) => ['--env', e]), 'migrate'])
 
 /** Three runs at once through the pooler: exactly one applies the migrations. */
 const migrateConcurrently = async () => {
   const outputs = await Promise.all([1, 2, 3].map(() => migrateOnce()))
-  for (const output of outputs) console.log(`  pooled: ${output}`)
+  for (const output of outputs) {
+    console.log(`  pooled: ${output}`)
+  }
   const applied = outputs.map((output) => appliedBy(output)).toSorted((a, b) => (a ?? 0) - (b ?? 0))
-  if (applied.join() !== `0,0,${MIGRATIONS}`)
+  if (applied.join() !== `0,0,${MIGRATIONS}`) {
     throw new Error(`expected one run to apply ${MIGRATIONS} migrations and two to apply none, got ${applied.join()}`)
+  }
 }
 
 /** MIGRATION_DATABASE_URL (direct) wins over DATABASE_URL (the pooler), and finds nothing to do. */
@@ -114,10 +119,14 @@ const migrateDirectly = async () => {
   const direct = await migrateOnce(`MIGRATION_DATABASE_URL=postgres://app:${env.APP_DB_PASSWORD}@db:5432/app`)
   console.log(`  direct: ${direct}`)
   const applied = appliedBy(direct)
-  if (applied !== 0) throw new Error(`the direct run applied ${applied} migration(s), expected 0`)
+  if (applied !== 0) {
+    throw new Error(`the direct run applied ${applied} migration(s), expected 0`)
+  }
   const query = "select count(*) from pg_locks where locktype = 'advisory'"
   const locks = compose(['exec', '-T', 'db', 'psql', '-U', 'postgres', '-d', 'app', '-Atc', query])
-  if (locks !== '0') throw new Error(`${locks} advisory lock(s) left behind on the pooler's server connections`)
+  if (locks !== '0') {
+    throw new Error(`${locks} advisory lock(s) left behind on the pooler's server connections`)
+  }
 }
 
 const account = { email: 'first@example.test', password: randomBytes(18).toString('base64url') }
@@ -128,47 +137,64 @@ const createFirstAccount = () => {
   console.log(`  ${compose(['run', '--rm', '--no-deps', '-T', 'app', ...command], `${account.password}\n`)}`)
 }
 
-const checkPages = async (base: string) => {
-  const problems: string[] = []
-  for (const path of ['/', '/about', '/login', '/api/health']) {
-    const res = await fetch(base + path, { headers: { 'accept-encoding': 'gzip' } })
-    await res.arrayBuffer()
-    if (!res.ok) problems.push(`${path}: ${res.status}`)
-  }
+/** What the edge changed on the home page: its compression and its Cache-Control. */
+const homeProblems = async (base: string): Promise<Array<string>> => {
+  const problems: Array<string> = []
   const home = await fetch(base, { headers: { 'accept-encoding': 'gzip' } })
   await home.arrayBuffer()
   const encoding = home.headers.get('content-encoding')
-  if (encoding !== 'gzip')
+  if (encoding !== 'gzip') {
     problems.push(`/ is not compressed by the edge (Content-Encoding ${encoding}, expected gzip)`)
-  if (home.headers.get('cache-control') !== 'private, no-store')
+  }
+  if (home.headers.get('cache-control') !== 'private, no-store') {
     problems.push(
       `/ Cache-Control changed on the way: ${home.headers.get('cache-control')}, expected private, no-store (src/routes/index.tsx)`,
     )
-  if (problems.length) throw new Error(problems.join('; '))
+  }
+  return problems
+}
+
+const checkPages = async (base: string) => {
+  const problems: Array<string> = []
+  for (const path of ['/', '/about', '/login', '/api/health']) {
+    const res = await fetch(base + path, { headers: { 'accept-encoding': 'gzip' } })
+    await res.arrayBuffer()
+    if (!res.ok) {
+      problems.push(`${path}: ${res.status}`)
+    }
+  }
+  problems.push(...(await homeProblems(base)))
+  if (problems.length) {
+    throw new Error(problems.join('; '))
+  }
 }
 
 const signInAndReadPosts = async (base: string) => {
   const signIn = await fetch(`${base}/api/auth/sign-in/email`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: ORIGIN },
     body: JSON.stringify(account),
+    headers: { 'content-type': 'application/json', origin: ORIGIN },
+    method: 'POST',
   })
   await signIn.arrayBuffer()
   const cookie = signIn.headers
     .getSetCookie()
     .map((c) => c.split(';', 1)[0])
     .join('; ')
-  if (!signIn.ok || !cookie)
+  if (!signIn.ok || !cookie) {
     throw new Error(`sign-in answered ${signIn.status} ${cookie ? 'with' : 'without'} a cookie, expected 200 with one`)
+  }
   const posts = await fetch(`${base}/api/me/posts`, { headers: { cookie } })
-  const body = (await posts.json()) as { items?: unknown[] }
-  if (!posts.ok || !Array.isArray(body.items))
+  const body = (await posts.json()) as { items?: Array<unknown> }
+  if (!posts.ok || !Array.isArray(body.items)) {
     throw new Error(`GET /api/me/posts answered ${posts.status}, expected 200 with an \`items\` array`)
+  }
 }
 
 const checkPermissionModel = () => {
   const logs = compose(['logs', '--no-log-prefix', 'app'])
-  if (logs.includes('"permissionModel":true')) return
+  if (logs.includes('"permissionModel":true')) {
+    return
+  }
   const starting = logs.split('\n').find((line) => line.includes('"msg":"starting"')) ?? '(no such line)'
   throw new Error(`the "starting" log line does not say "permissionModel":true: ${starting}`)
 }
@@ -179,12 +205,16 @@ const stopGracefully = () => {
   const ms = Math.round(performance.now() - started)
   const code = compose(['ps', '--all', '--format', '{{.ExitCode}}', 'app'])
   console.log(`  docker compose stop took ${ms} ms, exit code ${code}`)
-  if (code !== '0' || ms >= MAX_STOP_MS) throw new Error(`graceful stop failed: exit ${code} after ${ms} ms`)
+  if (code !== '0' || ms >= MAX_STOP_MS) {
+    throw new Error(`graceful stop failed: exit ${code} after ${ms} ms`)
+  }
 }
 
 const cleanup = () => {
   spawnSync('docker', [...COMPOSE, 'down', '--volumes', '--remove-orphans'], { env, stdio: 'ignore' })
-  if (process.env.KEEP_SMOKE_IMAGE !== '1') spawnSync('docker', ['image', 'rm', IMAGE], { stdio: 'ignore' })
+  if (process.env.KEEP_SMOKE_IMAGE !== '1') {
+    spawnSync('docker', ['image', 'rm', IMAGE], { stdio: 'ignore' })
+  }
 }
 process.once('SIGINT', () => {
   cleanup()
@@ -212,8 +242,8 @@ try {
   console.error(`\nFAIL ${error instanceof Error ? error.message : String(error)}`)
 } finally {
   const logs = spawnSync('docker', [...COMPOSE, 'logs', '--no-color', ...(failed ? [] : ['app'])], {
-    env,
     encoding: 'utf8',
+    env,
   })
   console.log(`\n--- ${failed ? 'every service' : 'app'} logs ---\n${`${logs.stdout}${logs.stderr}`.trim()}`)
   cleanup()

@@ -12,7 +12,7 @@ import { pressAndKeepFocus, renderInApp, testQueryClient } from './test-utils.ts
 /** The public list as src/routes/index.tsx renders it. */
 function PublicPosts() {
   const pages = useSuspenseInfiniteQuery(getPublicPostsQueryOptions())
-  return <PostList pages={pages} empty="No posts yet." testId="public-posts" />
+  return <PostList empty="No posts yet." pages={pages} testId="public-posts" />
 }
 
 /** Renders the list with `first` already loaded, as the route loader leaves it. */
@@ -50,7 +50,7 @@ describe('PostList', () => {
   })
 
   it('lists posts in the given order as read-only cards, without Load more on the last page', async () => {
-    await renderList(listPage([post({ body: 'newer' }), post({ body: 'older', authorName: 'Other Author' })]))
+    await renderList(listPage([post({ body: 'newer' }), post({ authorName: 'Other Author', body: 'older' })]))
     await expect.element(items().nth(0)).toHaveTextContent('newerTest Author · Jan 2, 2026')
     await expect.element(items().nth(1)).toHaveTextContent('olderOther Author · Jan 2, 2026')
     expect(items().elements()).toHaveLength(2)
@@ -111,8 +111,8 @@ describe('PostList', () => {
     worker.use(
       apiError('publicPostsList', 400, {
         _tag: 'ValidationError',
+        issues: [{ message: 'Expected a base64url encoded string', path: ['cursor'] }],
         message: 'Invalid request query',
-        issues: [{ path: ['cursor'], message: 'Expected a base64url encoded string' }],
       }),
     )
     await renderList(firstPage)

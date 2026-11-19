@@ -16,7 +16,7 @@ const textOf = (query: unknown) =>
  * included: Drizzle, Better Auth's adapter and the rate-limit storage all go through it). Test-only
  * instrumentation on pg's Client, so production code needs no hook.
  */
-export async function statementsOf<A>(work: () => Promise<A>): Promise<{ returned: A; statements: string[] }> {
+export async function statementsOf<A>(work: () => Promise<A>): Promise<{ returned: A; statements: Array<string> }> {
   const spy = vi.spyOn(Client.prototype, 'query')
   try {
     const returned = await work()
@@ -27,16 +27,16 @@ export async function statementsOf<A>(work: () => Promise<A>): Promise<{ returne
 }
 
 /** Fails, naming `what` and listing the statements, unless exactly `budget` statements ran. */
-export const expectBudget = (what: string, statements: string[], budget: number) => {
+export const expectBudget = (what: string, statements: Array<string>, budget: number) => {
   expect(
     statements,
     `${what} issued ${statements.length} SQL statements, its budget is ${budget}:\n${statements.join('\n')}`,
   ).toHaveLength(budget)
 }
 
-const logged: string[] = []
+const logged: Array<string> = []
 /** The app's pool behind a Drizzle client that records every statement it sends. */
-export const recordingDb = drizzle({ client: pool, schema, logger: { logQuery: (query) => void logged.push(query) } })
+export const recordingDb = drizzle({ client: pool, logger: { logQuery: (query) => void logged.push(query) }, schema })
 /** `recordingDb` as the `Database` service, for building repositories whose statements `withBudget` counts. */
 export const recordingDatabase = Layer.succeed(Database, recordingDb)
 
@@ -53,14 +53,14 @@ export const createAccount = async (label: string) => {
   const context = await auth.$context
   const password = `pw-${crypto.randomUUID()}`
   const created = await context.internalAdapter.createUser(
-    { email: `${label}-${crypto.randomUUID()}@example.test`, name: `DB ${label}`, emailVerified: true },
+    { email: `${label}-${crypto.randomUUID()}@example.test`, emailVerified: true, name: `DB ${label}` },
     { method: 'email-password' },
   )
   await context.internalAdapter.linkAccount({
-    userId: created.id,
-    providerId: 'credential',
     accountId: created.id,
     password: await context.password.hash(password),
+    providerId: 'credential',
+    userId: created.id,
   })
-  return { id: UserId.make(created.id), name: created.name, email: created.email, password }
+  return { email: created.email, id: UserId.make(created.id), name: created.name, password }
 }

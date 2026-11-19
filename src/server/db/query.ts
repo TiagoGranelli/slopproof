@@ -13,7 +13,7 @@ export class DbError extends Data.TaggedError('DbError')<{ readonly cause: unkno
  */
 export const query = <A>(own: Db, run: (db: Db) => Promise<A>): Effect.Effect<A, DbError> =>
   Effect.flatMap(Database.client(own), (db) =>
-    Effect.tryPromise({ try: () => run(db), catch: (cause) => new DbError({ cause }) }),
+    Effect.tryPromise({ catch: (cause) => new DbError({ cause }), try: () => run(db) }),
   )
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

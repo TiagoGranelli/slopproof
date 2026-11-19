@@ -68,6 +68,6 @@ and hidden 1; one file, +2 −2), and `-a nop` on all four tasks scored reward 0
    (copy them from a task of the same kind).
 2. Write the hidden checks as `tests/<layer>.test.ts[x]` for `unit`, `api` or `component`. They import the
    layer's helpers by the path they will have in `tests/<layer>/` (`./harness.ts`, `./api-mocks.ts`), so Oxlint,
-   Fallow and `tsc` skip `.agents/evals/`. Prefer HTTP through `webHandler` over the typed client, so a check does not
+   Fallow and tsrs skip `.agents/evals/`. Prefer HTTP through `webHandler` over the typed client, so a check does not
    depend on how the agent typed the contract.
 3. Prove them: `harbor run -p .agents/evals/tasks/<id> -a nop` must score 0, and `-a oracle` 1 when you add a solution.

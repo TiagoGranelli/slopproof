@@ -11,24 +11,26 @@ import { useSignOut } from '#/features/auth/api/sign-out.ts'
 export function SignOutButton() {
   const navigate = useNavigate()
   const signOut = useSignOut({
-    mutationConfig: { onSuccess: () => navigate({ to: '/', state: { flash: 'signed-out' } }) },
+    mutationConfig: { onSuccess: () => navigate({ state: { flash: 'signed-out' }, to: '/' }) },
   })
   return (
     <>
       <Button
+        aria-busy={signOut.isPending}
+        aria-disabled={signOut.isPending || undefined}
+        onClick={() => {
+          if (!signOut.isPending) {
+            signOut.mutate()
+          }
+        }}
+        size="sm"
         type="button"
         variant="outline"
-        size="sm"
-        aria-disabled={signOut.isPending || undefined}
-        aria-busy={signOut.isPending}
-        onClick={() => {
-          if (!signOut.isPending) signOut.mutate()
-        }}
       >
         Sign out
       </Button>
       {signOut.isError ? (
-        <p role="alert" className="basis-full text-right text-sm text-destructive">
+        <p className="basis-full text-right text-sm text-destructive" role="alert">
           Could not sign out. Check your connection and try again.
         </p>
       ) : null}

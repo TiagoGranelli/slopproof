@@ -13,7 +13,9 @@ let lastPrune = 0
 
 /** Deletes idle rows in the background, at most once per IDLE_ROW_MS per process. */
 const pruneIdleRows = (now: number): void => {
-  if (now - lastPrune <= IDLE_ROW_MS) return
+  if (now - lastPrune <= IDLE_ROW_MS) {
+    return
+  }
   lastPrune = now
   runInBackground(db.delete(rateLimit).where(lt(rateLimit.lastRequest, now - IDLE_ROW_MS)))
 }
@@ -30,25 +32,33 @@ const pruneIdleRows = (now: number): void => {
  * upsert on the same table: with `storage: 'database'` Better Auth would own the table (an `id` column, its own
  * queries) and the API would keep this statement anyway.
  */
+/** Counts one request against `key` in one upsert, starting a new window when the last one has expired. */
+const countRequest = async (key: string, rule: { readonly max: number; readonly window: number }, now: number) => {
+  const expired = sql`${rateLimit.lastRequest} <= ${now - rule.window * 1000}`
+  const [row] = await db
+    .insert(rateLimit)
+    .values({ count: 1, key, lastRequest: now })
+    .onConflictDoUpdate({
+      set: {
+        count: sql`case when ${expired} then 1 else ${rateLimit.count} + 1 end`,
+        lastRequest: sql`case when ${expired} or ${rateLimit.count} < ${rule.max} then ${now} else ${rateLimit.lastRequest} end`,
+      },
+      target: rateLimit.key,
+    })
+    .returning({ count: rateLimit.count, lastRequest: rateLimit.lastRequest })
+  return row
+}
+
 export const postgresRateLimitStorage: RateLimitStorage = {
   async consume(key, rule) {
     const now = Date.now()
     const windowMs = rule.window * 1000
-    const expired = sql`${rateLimit.lastRequest} <= ${now - windowMs}`
-    const [row] = await db
-      .insert(rateLimit)
-      .values({ key, count: 1, lastRequest: now })
-      .onConflictDoUpdate({
-        target: rateLimit.key,
-        set: {
-          count: sql`case when ${expired} then 1 else ${rateLimit.count} + 1 end`,
-          lastRequest: sql`case when ${expired} or ${rateLimit.count} < ${rule.max} then ${now} else ${rateLimit.lastRequest} end`,
-        },
-      })
-      .returning({ count: rateLimit.count, lastRequest: rateLimit.lastRequest })
+    const row = await countRequest(key, rule, now)
     pruneIdleRows(now)
     // `count` is the number of requests since the window started, refused ones included.
-    if (row && row.count <= rule.max) return { allowed: true, retryAfter: null }
+    if (row && row.count <= rule.max) {
+      return { allowed: true, retryAfter: null }
+    }
     const lastRequest = row?.lastRequest ?? now
     return { allowed: false, retryAfter: Math.max(1, Math.ceil((lastRequest + windowMs - now) / 1000)) }
   },

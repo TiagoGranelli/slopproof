@@ -7,7 +7,7 @@ later decision supersedes it.
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-effect-httpapi-business-api.md) | The Effect HttpApi is the only business API, and SSR dispatches to it in-process | Accepted |
-| [0002](0002-typescript-7.md) | TypeScript 7 only; Hey API from its TypeScript-free `next` snapshot | Accepted |
+| [0002](0002-typescript-7.md) | TypeScript 7 only; Hey API from its TypeScript-free `next` snapshot | Accepted; type checking moved to tsrs by 0016 |
 | [0003](0003-sign-up-policy.md) | Sign-up is configurable (`AUTH_SIGN_UP`), closed by default; the account lifecycle works in both modes | Accepted |
 | [0004](0004-prerender-via-nitro.md) | Static pages are prerendered by Nitro, the deployment layer | Accepted |
 | [0005](0005-drizzle-0-45-stable.md) | Drizzle ORM 0.45 stable, not 1.0 RC | Accepted |
@@ -21,3 +21,4 @@ later decision supersedes it.
 | [0013](0013-three-request-surfaces.md) | Three request surfaces: business operations in the Effect HttpApi, account actions and guards as server functions, Better Auth HTTP only for get-session and sign-in/out | Accepted |
 | [0014](0014-uuidv7-ids-keyset-on-created-at.md) | Post ids from Postgres 18 `uuidv7()`; lists keep the `(created_at, id)` keyset, on ascending indexes | Accepted |
 | [0015](0015-login-without-javascript.md) | The login form posts itself to a FormData server function before hydration and without JavaScript | Accepted |
+| [0016](0016-tsrs-typecheck-and-lint.md) | Type checking and type-aware lint through tsrs (TypeScript 7.1 beta), on `@nkzw/oxlint-config` 3 | Accepted |

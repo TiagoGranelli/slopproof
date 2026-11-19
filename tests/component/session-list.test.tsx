@@ -51,7 +51,7 @@ describe('SessionList', () => {
     ['the server cannot be reached', 'network' as const, unreachable],
     [
       'the session has ended',
-      { ok: false, failure: { code: 'SESSION_EXPIRED' } } as const,
+      { failure: { code: 'SESSION_EXPIRED' }, ok: false } as const,
       'Your session has ended. Sign in again to continue.',
     ],
   ])('says so next to the session when %s', async (_, answer, message) => {
@@ -88,7 +88,7 @@ describe('SessionList', () => {
     const response = held()
     // The list stays mounted here after the cache is cleared (in the app, the page is left), so it reloads.
     worker.use(authFunction('signOutEverywhere', response), listSessions())
-    const { router, queryClient } = await renderWithSessions(<SessionList />, listed(thisBrowser, phone))
+    const { queryClient, router } = await renderWithSessions(<SessionList />, listed(thisBrowser, phone))
     queryClient.setQueryData(['my data'], ['private'])
     await everywhereButton().click()
     await expect.element(everywhereButton()).toBeDisabled()
@@ -102,8 +102,8 @@ describe('SessionList', () => {
   })
 
   it('stays and says so when signing out everywhere fails', async () => {
-    worker.use(authFunction('signOutEverywhere', { ok: false, failure: { code: 'RATE_LIMITED', retryAfter: 10 } }))
-    const { router, queryClient } = await renderWithSessions(<SessionList />, listed(thisBrowser, phone))
+    worker.use(authFunction('signOutEverywhere', { failure: { code: 'RATE_LIMITED', retryAfter: 10 }, ok: false }))
+    const { queryClient, router } = await renderWithSessions(<SessionList />, listed(thisBrowser, phone))
     queryClient.setQueryData(['my data'], ['private'])
     await everywhereButton().click()
     await expect.element(page.getByRole('alert')).toHaveTextContent('Too many attempts. Try again in 10 seconds.')
@@ -115,7 +115,7 @@ describe('SessionList', () => {
   it('asks for a fresh sign-in, then signs out and returns to the account page after it', async () => {
     const response = held()
     worker.use(authFunction('signOut', response))
-    const { router } = await renderWithSessions(<SessionList />, { ok: false, failure: { code: 'SESSION_NOT_FRESH' } })
+    const { router } = await renderWithSessions(<SessionList />, { failure: { code: 'SESSION_NOT_FRESH' }, ok: false })
     await expect.element(page.getByText('For your security, sign in again to see your sessions.')).toBeVisible()
     await expect.element(sessionList()).not.toBeInTheDocument()
     const again = page.getByRole('button', { name: 'Sign in again' })
@@ -127,7 +127,7 @@ describe('SessionList', () => {
 
   it('says so when signing out for a fresh sign-in fails', async () => {
     worker.use(authFunction('signOut', 'network'))
-    const { router } = await renderWithSessions(<SessionList />, { ok: false, failure: { code: 'SESSION_NOT_FRESH' } })
+    const { router } = await renderWithSessions(<SessionList />, { failure: { code: 'SESSION_NOT_FRESH' }, ok: false })
     await page.getByRole('button', { name: 'Sign in again' }).click()
     await expect.element(page.getByRole('alert')).toHaveTextContent(unreachable)
     expect(router.state.location.pathname).toBe('/account')
@@ -157,7 +157,7 @@ describe('SessionList', () => {
     const response = held()
     const calls = authCalls('signOut')
     worker.use(calls.handler, authFunction('signOut', { ...response, answer: 'network' }))
-    await renderWithSessions(<SessionList />, { ok: false, failure: { code: 'SESSION_NOT_FRESH' } })
+    await renderWithSessions(<SessionList />, { failure: { code: 'SESSION_NOT_FRESH' }, ok: false })
     const again = page.getByRole('button', { name: 'Sign in again' })
     await pressAndKeepFocus(again)
     await userEvent.keyboard('{Enter}')
@@ -168,7 +168,7 @@ describe('SessionList', () => {
   })
 
   it('shows any other refusal to list the sessions as an alert, without its code', async () => {
-    await renderWithSessions(<SessionList />, { ok: false, failure: { code: 'UNAUTHORIZED' } })
+    await renderWithSessions(<SessionList />, { failure: { code: 'UNAUTHORIZED' }, ok: false })
     await expect
       .element(page.getByRole('alert'))
       .toHaveTextContent('Your session has ended. Sign in again to continue.')

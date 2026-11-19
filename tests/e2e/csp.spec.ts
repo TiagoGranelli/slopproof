@@ -7,7 +7,7 @@ import { APP_NAME } from '#/config/app.ts'
 import { expect, signIn, test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
+  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
 
 /** On the home page, rendered: its URL and its page heading. */
 const expectHome = async (page: Page) => {
@@ -15,7 +15,7 @@ const expectHome = async (page: Page) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
-test('blocks and reports markup injected into a page', async ({ page, cspViolations }) => {
+test('blocks and reports markup injected into a page', async ({ cspViolations, page }) => {
   // Simulates stored XSS: the server's response, with its real policy, plus inline code without the nonce.
   await page.route('/', async (route) => {
     // Playwright's fetch cannot decode zstd, which Firefox accepts and the edge then uses (`TEST_EDGE=1`).
@@ -24,9 +24,9 @@ test('blocks and reports markup injected into a page', async ({ page, cspViolati
     // The body is passed decoded, so the edge's Content-Encoding must not describe it.
     const { 'content-encoding': _encoding, 'content-length': _length, ...headers } = response.headers()
     await route.fulfill({
-      response,
-      headers,
       body: (await response.text()).replace('</main>', `${injected}</main>`),
+      headers,
+      response,
     })
   })
   await visit(page, '/')
@@ -37,7 +37,7 @@ test('blocks and reports markup injected into a page', async ({ page, cspViolati
   cspViolations.length = 0
 })
 
-test('SSR pages load every module and route chunk under the nonce policy', async ({ page, author }) => {
+test('SSR pages load every module and route chunk under the nonce policy', async ({ author, page }) => {
   const response = await visit(page, '/')
   expect(response?.headers()['content-security-policy']).toContain("'strict-dynamic'")
   // Client-side navigation loads each route's chunks through dynamic import and Vite's preload helper.

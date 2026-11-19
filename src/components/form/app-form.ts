@@ -9,8 +9,8 @@ import { fieldContext, formContext } from './form-context.ts'
  * a flagged field again on each change until it is fixed.
  */
 export const { useAppForm } = createFormHook({
+  fieldComponents: { CheckboxField, TextField },
   fieldContext,
-  formContext,
-  fieldComponents: { TextField, CheckboxField },
   formComponents: {},
+  formContext,
 })

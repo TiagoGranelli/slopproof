@@ -15,36 +15,36 @@ const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((modul
  * works before hydration and without JavaScript: the browser posts it to signInFromForm, which answers with a
  * redirect back to /login, and a failure arrives here as `failure` (from the URL).
  */
-export function LoginForm(props: { redirectTo?: string; failure?: AuthFailure }) {
+export function LoginForm(props: { failure?: AuthFailure; redirectTo?: string }) {
   const navigate = useNavigate()
   const signIn = useSignIn({
     mutationConfig: { onSuccess: () => navigate({ href: safeRedirect(props.redirectTo), replace: true }) },
   })
   const form = useAppForm({
     defaultValues: { email: '', password: '' },
+    onSubmit: ({ value }) => signIn.mutate(schema.decode(value)),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
-    onSubmit: ({ value }) => signIn.mutate(schema.decode(value)),
   })
   // The failure of a post without JavaScript, until the script's own first attempt.
   const postedFailure = signIn.isIdle && props.failure ? new AuthActionError(props.failure) : null
   return (
     <AuthForm
-      id="sign-in"
-      submitLabel="Sign in"
-      form={form}
-      schema={schema}
       action={signInFromForm.url}
-      pending={signIn.isPending}
       error={signIn.error ?? postedFailure}
+      form={form}
+      id="sign-in"
+      pending={signIn.isPending}
+      schema={schema}
+      submitLabel="Sign in"
     >
-      <input type="hidden" name="redirect" value={props.redirectTo ?? ''} />
+      <input name="redirect" type="hidden" value={props.redirectTo ?? ''} />
       <form.AppField name="email">
-        {(field) => <field.TextField id="email" label="Email" type="email" autoComplete="username" required />}
+        {(field) => <field.TextField autoComplete="username" id="email" label="Email" required type="email" />}
       </form.AppField>
       <form.AppField name="password">
         {(field) => (
-          <field.TextField id="password" label="Password" type="password" autoComplete="current-password" required />
+          <field.TextField autoComplete="current-password" id="password" label="Password" required type="password" />
         )}
       </form.AppField>
     </AuthForm>

@@ -36,6 +36,14 @@ minimumReleaseAgeExcludePrune: true
 # publishing, and a takeover shows up as a new version, which is always checked.
 trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 43200
+# Exceptions name one exact version and the evidence that the release is genuine.
+trustPolicyExclude:
+  # tsrs's first 2026 release, 0.0.0-bootstrap.0 (2026-10-10), was a staged publish approved by its maintainer
+  # (boshen) to register the trusted publisher; pnpm ranks a staged publish above a trusted publisher, so every
+  # later release reads as a downgrade. This one is published by the same GitHub trusted publisher
+  # (oidcConfigId 5ef4a9f1, as 0.16 to 0.25) with SLSA provenance. Remove once the bootstrap is older than 30 days
+  # than the version in use, or when tsrs is bumped (2026-11-19).
+  - 'tsrs@7.1.0-beta.tsrs3'
 
 # Transitive versions forced for a security fix; each names the advisory. Remove an entry once the parent ships
 # the fix (`pnpm why <package>`).

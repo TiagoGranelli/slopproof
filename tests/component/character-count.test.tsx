@@ -9,14 +9,14 @@ const count = () => page.getByText(/^\d+\/10/)
 
 describe('CharacterCount', () => {
   it('counts the trimmed text, so spaces around it never go over the limit', async () => {
-    await renderInApp(<CharacterCount id="count" value={`  ${'x'.repeat(10)} \n`} max={10} />)
+    await renderInApp(<CharacterCount id="count" max={10} value={`  ${'x'.repeat(10)} \n`} />)
     await expect.element(count()).toHaveTextContent('10/10 characters.')
     await expect.element(count()).not.toHaveClass('text-destructive')
     await expect.element(page.getByText(/Over the/)).not.toBeInTheDocument()
   })
 
   it('flags text over the limit and says so in a polite live region', async () => {
-    await renderInApp(<CharacterCount id="count" value={'x'.repeat(11)} max={10} />)
+    await renderInApp(<CharacterCount id="count" max={10} value={'x'.repeat(11)} />)
     await expect.element(count()).toHaveTextContent('11/10 characters. Over the 10-character limit.')
     await expect.element(count()).toHaveClass('text-destructive')
     await expect.element(page.getByText('Over the 10-character limit.')).toHaveAttribute('aria-live', 'polite')

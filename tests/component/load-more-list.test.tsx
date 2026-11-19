@@ -10,7 +10,7 @@ import { held, listPage, listPages } from './api-mocks.ts'
 import { pressAndKeepFocus, renderInApp, testQueryClient } from './test-utils.tsx'
 
 type Note = { id: string; text: string }
-type NotePage = { items: Note[]; nextCursor: string | null }
+type NotePage = { items: Array<Note>; nextCursor: string | null }
 
 const note = (text: string): Note => ({ id: crypto.randomUUID(), text })
 const CURSOR = 'cursor-after-page-1'
@@ -22,28 +22,28 @@ type Source = (cursor: string) => Promise<NotePage>
 
 const notesQuery = (source: Source) =>
   infiniteQueryOptions({
-    queryKey: ['notes'],
-    queryFn: ({ pageParam }) => source(typeof pageParam === 'string' ? pageParam : ''),
-    initialPageParam: firstPage,
     getNextPageParam: nextPage,
+    initialPageParam: firstPage,
+    queryFn: ({ pageParam }) => source(typeof pageParam === 'string' ? pageParam : ''),
+    queryKey: ['notes'],
   })
 
 function Notes(props: { source: Source }) {
   const pages = useSuspenseInfiniteQuery(notesQuery(props.source))
   return (
     <LoadMoreList
-      pages={pages}
-      noun="notes"
       empty="No notes yet."
-      testId="notes"
+      noun="notes"
+      pages={pages}
       renderItem={(shown) => <p>{shown.text}</p>}
+      testId="notes"
     />
   )
 }
 
 /** Renders the list with `seeded` loaded; returns the cursors the list asked for. */
 const renderNotes = async (seeded: NotePage, answer: () => Promise<NotePage>) => {
-  const cursors: string[] = []
+  const cursors: Array<string> = []
   const queryClient = testQueryClient()
   const source: Source = (cursor) => {
     cursors.push(cursor)

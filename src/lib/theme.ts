@@ -25,11 +25,17 @@ export function readThemeChoice(): ThemeChoice {
 export function saveThemeChoice(choice: ThemeChoice): void {
   const root = document.documentElement
   try {
-    if (choice === 'system') localStorage.removeItem(STORAGE_KEY)
-    else localStorage.setItem(STORAGE_KEY, choice)
+    if (choice === 'system') {
+      localStorage.removeItem(STORAGE_KEY)
+    } else {
+      localStorage.setItem(STORAGE_KEY, choice)
+    }
   } catch {
     // Not persisted; the choice still applies to this page.
   }
-  if (choice === 'system') delete root.dataset.theme
-  else root.dataset.theme = choice
+  if (choice === 'system') {
+    delete root.dataset.theme
+  } else {
+    root.dataset.theme = choice
+  }
 }

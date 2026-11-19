@@ -13,20 +13,20 @@ afterAll(() => pool.end())
 
 /** A session of `userId` that expires at `expiresAt` (epoch ms), its id prefixed with `label`. */
 const sessionRow = (userId: string, label: string, expiresAt: number) => ({
-  id: `${label}-${crypto.randomUUID()}`,
-  token: crypto.randomUUID(),
-  userId,
   expiresAt: new Date(expiresAt),
-  updatedAt: new Date(),
+  id: `${label}-${crypto.randomUUID()}`,
   ipAddress: '192.0.2.1',
+  token: crypto.randomUUID(),
+  updatedAt: new Date(),
+  userId,
 })
 
 /** A password-reset token for `userId` that expires at `expiresAt` (epoch ms), its id prefixed with `label`. */
 const tokenRow = (userId: string, label: string, expiresAt: number) => ({
+  expiresAt: new Date(expiresAt),
   id: `${label}-${crypto.randomUUID()}`,
   identifier: `reset-password:${crypto.randomUUID()}`,
   value: userId,
-  expiresAt: new Date(expiresAt),
 })
 
 describe('deleteExpiredAuthRows', () => {
@@ -34,9 +34,9 @@ describe('deleteExpiredAuthRows', () => {
     const now = Date.now()
     const { id: userId } = await createAccount('cleanup')
     const sessions = {
+      active: sessionRow(userId, 'active', now + HOUR),
       old: sessionRow(userId, 'old', now - EXPIRED_SESSION_RETENTION_MS - HOUR),
       recent: sessionRow(userId, 'recent', now - HOUR),
-      active: sessionRow(userId, 'active', now + HOUR),
     }
     await db.insert(session).values(Object.values(sessions))
     const tokens = { expired: tokenRow(userId, 'expired', now - 1000), valid: tokenRow(userId, 'valid', now + HOUR) }

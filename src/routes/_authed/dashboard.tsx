@@ -12,15 +12,15 @@ export const Route = createFileRoute('/_authed/dashboard')({
   loader: ({ context }) => context.queryClient.infiniteQuery({ ...getMyPostsQueryOptions(), staleTime: 'static' }),
   head: () => ({ meta: [{ title: pageTitle('Dashboard') }, { name: 'robots', content: 'noindex' }] }),
   // The loader's failures. Once the page is up, the composer and the list fail on their own (SectionErrorBoundary).
-  errorComponent: (props) => <RouteError {...props} title="Your posts could not be loaded" action="load your posts" />,
+  errorComponent: (props) => <RouteError {...props} action="load your posts" title="Your posts could not be loaded" />,
   component: Dashboard,
 })
 
 function Dashboard() {
   // Screen-reader confirmation for writes whose result is otherwise only visual. `id` changes on every
   // write, so the same sentence twice in a row ("Post saved.") is a new node and is announced again.
-  const [status, setStatus] = useState({ text: '', id: 0 })
-  const announce = (text: string) => setStatus((previous) => ({ text, id: previous.id + 1 }))
+  const [status, setStatus] = useState({ id: 0, text: '' })
+  const announce = (text: string) => setStatus((previous) => ({ id: previous.id + 1, text }))
   const listHeading = useRef<HTMLHeadingElement>(null)
   return (
     <Page title="Your posts">
@@ -29,21 +29,21 @@ function Dashboard() {
       </SectionErrorBoundary>
       <section aria-labelledby="published-heading" className="grid gap-4">
         <h2
+          className="text-lg font-semibold tracking-tight outline-none"
           id="published-heading"
           ref={listHeading}
           tabIndex={-1}
-          className="text-lg font-semibold tracking-tight outline-none"
         >
           Published
         </h2>
         <SectionErrorBoundary action="show your posts">
           <MyPostList
-            onUpdated={() => announce('Post saved.')}
             onDeleted={() => {
               announce('Post deleted.')
               // The Delete button that had focus is gone; keep keyboard users in the list.
               listHeading.current?.focus()
             }}
+            onUpdated={() => announce('Post saved.')}
           />
         </SectionErrorBoundary>
       </section>

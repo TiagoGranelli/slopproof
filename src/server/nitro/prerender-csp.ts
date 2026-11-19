@@ -16,10 +16,14 @@ const textOf = (element: Element) =>
 /** The elements under `parent` in document order, the contents of `<template>` elements included. */
 function* elementsOf(parent: ParentNode): Generator<Element> {
   for (const node of parent.childNodes) {
-    if (!isElement(node)) continue
+    if (!isElement(node)) {
+      continue
+    }
     yield node
     yield* elementsOf(node)
-    if (node.tagName === 'template') yield* elementsOf((node as DefaultTreeAdapterTypes.Template).content)
+    if (node.tagName === 'template') {
+      yield* elementsOf((node as DefaultTreeAdapterTypes.Template).content)
+    }
   }
 }
 
@@ -29,24 +33,33 @@ function* elementsOf(parent: ParentNode): Generator<Element> {
  */
 const rejectInlineAttributes = (element: Element) => {
   const inline = element.attrs.find(({ name }) => name === 'style' || name.startsWith('on'))
-  if (inline)
+  if (inline) {
     throw new Error(
       `prerendered HTML has an inline \`${inline.name}\` attribute on <${element.tagName}>; CSP forbids it`,
     )
+  }
+}
+
+interface InlineSourceHashes {
+  script: Array<string>
+  style: Array<string>
 }
 
 /**
  * CSP hash sources for the inline scripts and styles of a static HTML page. parse5 is a WHATWG-conformant
  * parser, so each hash covers exactly the text a browser hashes (raw text, newlines normalized).
  */
-export const inlineSourceHashes = (html: string): { script: string[]; style: string[] } => {
+export const inlineSourceHashes = (html: string): InlineSourceHashes => {
   const script = new Set<string>()
   const style = new Set<string>()
   for (const element of elementsOf(parse(html))) {
     rejectInlineAttributes(element)
-    if (element.tagName === 'script' && !element.attrs.some((attr) => attr.name === 'src'))
+    if (element.tagName === 'script' && !element.attrs.some((attr) => attr.name === 'src')) {
       script.add(sha256(textOf(element)))
-    if (element.tagName === 'style') style.add(sha256(textOf(element)))
+    }
+    if (element.tagName === 'style') {
+      style.add(sha256(textOf(element)))
+    }
   }
   return { script: [...script], style: [...style] }
 }

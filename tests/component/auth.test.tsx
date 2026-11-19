@@ -33,20 +33,20 @@ describe('LoginForm', () => {
 
   it.each([
     {
-      fields: 'empty fields',
-      typed: { email: '', password: '' },
       emailMessage: 'Enter your email address.',
+      fields: 'empty fields',
       passwordMessage: 'Enter your password.',
+      typed: { email: '', password: '' },
     },
     {
-      fields: 'an address without @',
-      typed: { email: 'author.example.test', password: 'a password' },
       emailMessage: 'Enter a valid email address.',
+      fields: 'an address without @',
       passwordMessage: '',
+      typed: { email: 'author.example.test', password: 'a password' },
     },
   ])(
     'sends nothing with $fields and says why next to each field, focusing the first',
-    async ({ typed, emailMessage, passwordMessage }) => {
+    async ({ emailMessage, passwordMessage, typed }) => {
       const calls = authCalls('signIn')
       worker.use(calls.handler)
       await renderInApp(<LoginForm />, { url: '/login' })
@@ -138,7 +138,7 @@ describe('LoginForm', () => {
     ['a rate limit without Retry-After', { code: 'RATE_LIMITED' }, 'Too many attempts. Try again in a moment.'],
     ['an unknown failure', { code: 'FAILED_TO_CREATE_SESSION' }, 'Something went wrong. Try again.'],
   ])('explains %s without showing the code', async (_, failure, message) => {
-    worker.use(authFunction('signIn', { ok: false, failure }))
+    worker.use(authFunction('signIn', { failure, ok: false }))
     const { router } = await renderInApp(<LoginForm />, { url: '/login' })
     await signIn()
     await expect.element(page.getByRole('alert')).toHaveTextContent(message)
@@ -158,12 +158,12 @@ describe('LoginForm', () => {
   })
 
   it('before hydration, posts itself to signInFromForm with the browser checking the fields', async () => {
-    const { screen, form, hydrate } = await serverRendered(<LoginForm redirectTo="/about" />)
+    const { form, hydrate, screen } = await serverRendered(<LoginForm redirectTo="/about" />)
     await expect.element(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
     expect(form().getAttribute('action')).toBe('/_serverFn/auth/signInFromForm')
     expect(form().getAttribute('method')).toBe('post')
     expect(form().noValidate).toBe(false)
-    expect(Object.fromEntries(new FormData(form()))).toEqual({ redirect: '/about', email: '', password: '' })
+    expect(Object.fromEntries(new FormData(form()))).toEqual({ email: '', password: '', redirect: '/about' })
 
     hydrate()
     // Once hydrated the script submits it (signIn) and the schema's messages replace the browser's.
@@ -171,7 +171,7 @@ describe('LoginForm', () => {
   })
 
   it('keeps the button of a form without an action disabled until hydration', async () => {
-    const { screen, hydrate } = await serverRendered(<SignUpForm />)
+    const { hydrate, screen } = await serverRendered(<SignUpForm />)
     const button = screen.getByRole('button', { name: 'Create account' })
     await expect.element(button).toBeDisabled()
     hydrate()
@@ -197,7 +197,7 @@ describe('LoginForm', () => {
     ['another site', 'https://evil.example/', '/dashboard'],
   ])('after signing in with %s, clears the cache and goes to it', async (_, redirectTo, expected) => {
     worker.use(auth.signIn('ok'))
-    const { router, queryClient } = await renderInApp(<LoginForm redirectTo={redirectTo} />, { url: '/login' })
+    const { queryClient, router } = await renderInApp(<LoginForm redirectTo={redirectTo} />, { url: '/login' })
     queryClient.setQueryData(['previous user'], 'private data')
     await signIn()
     await expect.poll(() => router.state.location.href).toBe(expected)
@@ -211,7 +211,7 @@ describe('sign-out', () => {
   it('is busy while signing out, then clears the cache and goes home, where it says so', async () => {
     const response = held()
     worker.use(auth.signOut(response))
-    const { router, queryClient } = await renderInApp(<SignOutButton />, { url: '/dashboard' })
+    const { queryClient, router } = await renderInApp(<SignOutButton />, { url: '/dashboard' })
     queryClient.setQueryData(['my data'], ['private'])
     await signOutButton().click()
     await expect.element(signOutButton()).toBeDisabled()
@@ -226,7 +226,7 @@ describe('sign-out', () => {
     'says so when sign-out %s, keeps the data and can be retried',
     async (outcome) => {
       worker.use(auth.signOut(outcome))
-      const { router, queryClient } = await renderInApp(<SignOutButton />, { url: '/dashboard' })
+      const { queryClient, router } = await renderInApp(<SignOutButton />, { url: '/dashboard' })
       queryClient.setQueryData(['my data'], ['private'])
       await signOutButton().click()
       await expect

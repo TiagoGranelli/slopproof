@@ -20,7 +20,7 @@ const updatePosts = (update: (posts: Array<Post>) => Array<Post>) => (data: Infi
  */
 export const postListsChanged = (): ReadonlyArray<Invalidation> => [
   { queryKey: getMyPostsQueryOptions().queryKey },
-  { queryKey: getPublicPostsQueryOptions().queryKey, inactiveToo: true, firstPageOnly: true },
+  { firstPageOnly: true, inactiveToo: true, queryKey: getPublicPostsQueryOptions().queryKey },
 ]
 
 /** Shows a saved post right away, before the refetch of postListsChanged lands. */

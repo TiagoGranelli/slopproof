@@ -19,8 +19,8 @@ describe('safeRedirect', () => {
     ['scheme-relative URL', '//evil.example/'],
     ['triple slash', '///evil.example/'],
     ['scheme-relative URL with an unparsable host', '//['],
-    ['backslash host', '/\\evil.example'],
-    ['backslash anywhere', '/a\\b'],
+    ['backslash host', String.raw`/\evil.example`],
+    ['backslash anywhere', String.raw`/a\b`],
     ['tab inside the host', '/\t/evil.example'],
     ['newline inside the host', '/\n/evil.example'],
     ['dot segment to //host', '/.//evil.example'],
@@ -93,7 +93,7 @@ const inputs = fc.oneof(hostile, fc.string(), fc.webPath(), fc.webUrl())
 
 /** Paths just under the length limit with characters that parsing percent-encodes, which makes them longer. */
 const nearTheLimit = fc
-  .string({ unit: fc.constantFrom('a', 'b', ' ', '"', '<', '>', '`', '{', '}'), minLength: 1990, maxLength: 2047 })
+  .string({ maxLength: 2047, minLength: 1990, unit: fc.constantFrom('a', 'b', ' ', '"', '<', '>', '`', '{', '}') })
   .map((text) => `/a${text}`.slice(0, 2048))
 
 const decodeOnce = (text: string) => {

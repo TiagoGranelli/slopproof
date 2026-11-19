@@ -15,7 +15,9 @@ import { PostsRepo } from '../posts/repo.ts'
 // finishes what it has (../lifecycle.ts).
 const readiness = (database: DatabaseHealth['Service']) =>
   Effect.suspend(() => {
-    if (isDraining()) return Effect.fail(new ServiceUnavailable({ message: 'Shutting down' }))
+    if (isDraining()) {
+      return Effect.fail(new ServiceUnavailable({ message: 'Shutting down' }))
+    }
     return database.ping.pipe(
       Effect.as({ status: 'ok' as const }),
       Effect.catchTag('DbError', () => Effect.fail(new ServiceUnavailable({ message: 'Database unavailable' }))),
@@ -56,7 +58,9 @@ const updateOwnPost = (repo: Repo, id: PostId, body: string) =>
   Effect.gen(function* () {
     const author = yield* CurrentUser
     const updated = yield* repo.update(author, id, body).pipe(Effect.orDie)
-    if (!updated) return yield* new PostNotFound({ id })
+    if (!updated) {
+      return yield* new PostNotFound({ id })
+    }
     return updated
   })
 
@@ -65,7 +69,9 @@ const removeOwnPost = (repo: Repo, id: PostId) =>
   Effect.gen(function* () {
     const author = yield* CurrentUser
     const removed = yield* repo.remove(author, id).pipe(Effect.orDie)
-    if (!removed) return yield* new PostNotFound({ id })
+    if (!removed) {
+      return yield* new PostNotFound({ id })
+    }
   })
 
 /** The signed-in author's own posts: list, create, update and remove, behind the Authentication middleware. */

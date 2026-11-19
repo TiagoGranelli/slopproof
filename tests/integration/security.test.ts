@@ -27,7 +27,9 @@ describe('headers', () => {
     expect(res.headers.get('cross-origin-opener-policy')).toBe('same-origin')
     const scripts = [...(await res.text()).matchAll(/<script\b[^>]*>/g)].map((m) => m[0])
     expect(scripts.length).toBeGreaterThan(0)
-    for (const tag of scripts) expect(tag).toContain(`nonce="${nonce}"`)
+    for (const tag of scripts) {
+      expect(tag).toContain(`nonce="${nonce}"`)
+    }
     const again = (await fetch(appUrl)).headers.get('content-security-policy')
     expect(again).not.toContain(nonce!)
   })
@@ -59,18 +61,18 @@ describe('csrf', () => {
   ]
   it.each(attempts)('rejects sign-in with %s', async (_, headers) => {
     const res = await fetch(`${appUrl}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-forwarded-for': nextIp(), ...headers },
       body: JSON.stringify({ email, password }),
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': nextIp(), ...headers },
+      method: 'POST',
     })
     expect(res.status).toBe(403)
   })
 
   it('rejects cross-site server function calls before they run', async () => {
     const res = await fetch(`${appUrl}/_serverFn/anything`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: 'https://evil.example', cookie },
       body: '{}',
+      headers: { 'content-type': 'application/json', cookie, origin: 'https://evil.example' },
+      method: 'POST',
     })
     expect(res.status).toBe(403)
   })
@@ -112,9 +114,9 @@ describe('auth surface', () => {
   // re-exposes e.g. /update-user cannot change the users other tests are using.
   it.each(unused)('%s %s is not exposed', async (method, path) => {
     const res = await fetch(`${appUrl}/api/auth${path}`, {
-      method,
+      body: method === 'POST' ? '{}' : null,
       headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': nextIp() },
-      ...(method === 'POST' ? { body: '{}' } : {}),
+      method,
     })
     expect(res.status).toBe(404)
   })
@@ -129,10 +131,10 @@ describe('auth surface', () => {
 
 const postTo = (path: string, body: BodyInit) =>
   fetch(appUrl + path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: appUrl },
     body,
     duplex: 'half',
+    headers: { 'content-type': 'application/json', origin: appUrl },
+    method: 'POST',
   } as RequestInit)
 
 describe('requests', () => {
@@ -152,9 +154,9 @@ describe('requests', () => {
     const forged = await fetch(`${appUrl}/api/me`, { headers: { cookie: 'better-auth.session_token=forged.value' } })
     expect(forged.status).toBe(401)
     const unknownFn = await fetch(`${appUrl}/_serverFn/does-not-exist`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl },
       body: '{}',
+      headers: { 'content-type': 'application/json', origin: appUrl },
+      method: 'POST',
     })
     for (const text of [await forged.text(), await unknownFn.text()]) {
       expect(text).not.toMatch(/\bat .+:\d+:\d+|node_modules|\.mjs|select |postgres/i)
@@ -167,9 +169,9 @@ describe('requests', () => {
   it('answers an unknown server function with an error that leaks nothing', async () => {
     const get = await fetch(`${appUrl}/_serverFn/does-not-exist`)
     const post = await fetch(`${appUrl}/_serverFn/does-not-exist`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl },
       body: '{}',
+      headers: { 'content-type': 'application/json', origin: appUrl },
+      method: 'POST',
     })
     for (const res of [get, post]) {
       expect(res.status).toBeGreaterThanOrEqual(400)
@@ -179,7 +181,7 @@ describe('requests', () => {
 
   it('does not redirect to other hosts', async () => {
     const targets = await Promise.all(
-      ['//evil.example/', '/\\evil.example'].map(async (path) => {
+      ['//evil.example/', String.raw`/\evil.example`].map(async (path) => {
         const location = (await fetch(appUrl + path, { redirect: 'manual' })).headers.get('location')
         return location ? new URL(location, appUrl).origin : new URL(appUrl).origin
       }),
@@ -203,9 +205,10 @@ describe('sessions', () => {
 
   it('limits sign-in to 3 attempts per 10 s per client IP', async () => {
     const client = nextIp()
-    const attempts: Response[] = []
-    for (let attempt = 0; attempt < 4; attempt++)
+    const attempts: Array<Response> = []
+    for (let attempt = 0; attempt < 4; attempt++) {
       attempts.push(await postSignIn({ email, password: 'wrong-password-123' }, { 'x-forwarded-for': client }))
+    }
     expect(attempts.map((res) => res.status)).toEqual([401, 401, 401, 429])
     expect(Number(attempts[3]!.headers.get('x-retry-after'))).toBeLessThanOrEqual(10)
 
@@ -215,8 +218,9 @@ describe('sessions', () => {
       { 'x-forwarded-for': `203.0.113.7, ${client}` },
       { 'x-forwarded-for': `203.0.113.8, 198.18.0.9, ${client}` },
     ]
-    for (const headers of forgeries)
+    for (const headers of forgeries) {
       expect((await postSignIn({ email, password }, headers)).status, JSON.stringify(headers)).toBe(429)
+    }
 
     // Another client is unaffected.
     const res = await postSignIn({ email, password }, { 'x-forwarded-for': nextIp() })
@@ -225,7 +229,7 @@ describe('sessions', () => {
 
   it('signs in while the browser still sends a stale session cookie', async () => {
     for (const stale of ['better-auth.session_token=stale.not-a-valid-signature', cookie]) {
-      const res = await postSignIn({ email, password }, { 'x-forwarded-for': nextIp(), cookie: stale })
+      const res = await postSignIn({ email, password }, { cookie: stale, 'x-forwarded-for': nextIp() })
       expect(res.status).toBe(200)
       // The last session cookie wins in the browser; it must be a new, working session.
       const next = sessionCookie(res)!
@@ -239,9 +243,9 @@ describe('sessions', () => {
     const session = await signIn(sharedUsers.author, nextIp())
     expect((await me(session)).status).toBe(200)
     const out = await fetch(`${appUrl}/api/auth/sign-out`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl, cookie: session, 'x-forwarded-for': nextIp() },
       body: '{}',
+      headers: { 'content-type': 'application/json', cookie: session, origin: appUrl, 'x-forwarded-for': nextIp() },
+      method: 'POST',
     })
     expect(out.status).toBe(200)
     expect((await me(session)).status).toBe(401)

@@ -23,7 +23,7 @@ changes to the contract, database, auth, or UI flows.
   so rate limits and the endpoint allowlist apply. Authorization happens in the Effect `Authentication`
   middleware; the `_authed` route guard is only a UX redirect.
 - Boundaries are enforced by Fallow zones in `.fallowrc.json` and by `no-restricted-imports` in
-  `.oxlintrc.json`. A new top-level `src/` directory needs a zone before it can be used.
+  `.config/oxlint/`. A new top-level `src/` directory needs a zone before it can be used.
 - Imports use the `#/` alias (`package.json#imports`) with explicit `.ts` or `.tsx` extensions.
 
 ### Where code goes
@@ -45,7 +45,7 @@ layer. Imports flow one way: `components` → `features` → app (`routes/`).
 ## Code style
 
 Code is read by agents one file at a time: a module fits one read, a name greps to its definition, and a
-failure says what was wrong. Oxlint (`.oxlintrc.json`) enforces the numbers; the rest is for review. Tests:
+failure says what was wrong. Oxlint (`oxlint.config.ts`) enforces the numbers; the rest is for review. Tests:
 [tests/AGENTS.md](tests/AGENTS.md); dependencies of the Effect API: [src/server/AGENTS.md](src/server/AGENTS.md).
 
 - **Size.** Functions up to 20 lines, components (`.tsx`) up to 80, files up to 300, blank and comment lines not
@@ -117,10 +117,10 @@ Lighthouse policy and the less common commands (`audit:check`, `sbom:release`) a
 A misconfigured lint once used 17 GB of memory.
 
 - To check a few files, pass explicit paths: `pnpm lint src/x.ts`, `pnpm exec oxfmt --check src/x.ts`.
-- Keep `node_modules/**`, `.output/**`, and `.repos/**` out of every tool's scope. `.oxlintrc.json` and
+- Keep `node_modules/**`, `.output/**`, and `.repos/**` out of every tool's scope. `oxlint.config.ts` and
   `.oxfmtrc.json` list all three in `ignorePatterns`, `tsconfig.json` includes only `src`, `scripts`,
-  `tests`, and `*.config.ts` (and excludes `node_modules`, `.output`, and `.repos`), and `.fallowrc.json`
-  lists all three in `ignorePatterns`. A new tool or config needs the same exclusions.
+  `tests`, `*.config.ts`, and `.config/**/*.ts` (and excludes all three), and `.fallowrc.json` lists all
+  three in `ignorePatterns`. A new tool or config needs the same exclusions.
 - Run heavy commands one at a time (`pnpm build`, type-aware lint, `verify:app`, `lighthouse`); on Linux
   under a memory cap, see [docs/operations.md](docs/operations.md#linux-memory-caps).
 - Read upstream code with `gh api` or a sparse clone of the listed paths into `.repos/`

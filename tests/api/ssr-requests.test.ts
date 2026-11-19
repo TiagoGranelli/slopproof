@@ -11,7 +11,7 @@ import { recordSessionLookups } from './better-auth-sessions.ts'
 
 /** Runs `work` as Start runs one request with `cookie` (none when null), and returns what `work` returned. */
 const serve = async <T>(work: () => Promise<T>, cookie: string | null = 'session=a'): Promise<T> => {
-  const returned: T[] = []
+  const returned: Array<T> = []
   await createServerEntry({
     fetch: async () => {
       returned.push(await work())

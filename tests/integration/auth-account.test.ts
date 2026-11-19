@@ -3,6 +3,7 @@
 // (src/server/http/auth-endpoints.ts). Every test works on a throwaway account, because a regression here
 // deletes it.
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { Json } from '#/contract/json.ts'
 import { appUrl, clientIps, createUser, signIn } from './helpers.ts'
 import { callAuthFunction } from './server-functions.ts'
 
@@ -32,9 +33,9 @@ describe('/api/auth/* over HTTP', () => {
   it('does not delete a freshly signed-in account without its password', async () => {
     for (const body of ['{}', '{"callbackURL":"/"}', '{"password":""}']) {
       const res = await fetch(`${appUrl}/api/auth/delete-user`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', origin: appUrl, cookie, 'x-forwarded-for': nextIp() },
         body,
+        headers: { 'content-type': 'application/json', cookie, origin: appUrl, 'x-forwarded-for': nextIp() },
+        method: 'POST',
       })
       expect(res.status, body).toBe(404)
     }
@@ -48,18 +49,18 @@ describe('/api/auth/* over HTTP', () => {
     const session = await fetch(`${appUrl}/api/auth/get-session`, { headers: { cookie, 'x-forwarded-for': nextIp() } })
     const text = await session.text()
     expect(JSON.parse(text)).toMatchObject({
-      user: { email: account.email },
       session: { userId: expect.any(String) as unknown },
+      user: { email: account.email },
     })
     expect(text).not.toContain(tokenOf(cookie))
 
     const res = await fetch(`${appUrl}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': nextIp() },
       body: JSON.stringify({ email: account.email, password: account.password }),
+      headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': nextIp() },
+      method: 'POST',
     })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
+    const body = (await res.json()) as Json
     expect(body).toMatchObject({ user: { email: account.email } })
     expect(body).not.toHaveProperty('token')
   })
@@ -68,8 +69,8 @@ describe('/api/auth/* over HTTP', () => {
 describe('account server functions', () => {
   it('list the sessions without their tokens', async () => {
     const { response, value } = await callAuthFunction('listSessions', {
-      method: 'GET',
       headers: { cookie, 'x-forwarded-for': nextIp() },
+      method: 'GET',
     })
     expect(response.status).toBe(200)
     expect(await response.text()).not.toContain(tokenOf(cookie))
@@ -92,7 +93,7 @@ describe('account server functions', () => {
     expect((await deleteAccount({})).thrown).toBe('Internal error')
     expect((await deleteAccount({ password: '' })).thrown).toBe('Internal error')
     const wrong = await deleteAccount({ password: 'not-the-password-123' })
-    expect(wrong.value).toEqual({ ok: false, failure: { code: 'INVALID_PASSWORD' } })
+    expect(wrong.value).toEqual({ failure: { code: 'INVALID_PASSWORD' }, ok: false })
     expect(await sessionUser()).toMatchObject({ email: account.email })
 
     expect((await deleteAccount({ password: account.password })).value).toEqual({ ok: true, value: null })

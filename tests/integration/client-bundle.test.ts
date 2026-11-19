@@ -75,7 +75,7 @@ describe('client bundle', () => {
   it('recognizes the Effect runtime where it does belong: the lazy form chunk and the server build', () => {
     expect(scripts.some((file) => EFFECT_RUNTIME.test(read(file)))).toBe(true)
     const server = '.output/server'
-    const modules = readdirSync(server, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.mjs'))
+    const modules = readdirSync(server, { encoding: 'utf8', recursive: true }).filter((file) => file.endsWith('.mjs'))
     expect(modules.some((file) => EFFECT_RUNTIME.test(readFileSync(join(server, file), 'utf8')))).toBe(true)
     expect(modules.some((file) => EFFECT_HTTP.test(readFileSync(join(server, file), 'utf8')))).toBe(true)
   })

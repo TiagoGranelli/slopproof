@@ -49,7 +49,7 @@ describe('DeleteAccountForm', () => {
     const response = held()
     const calls = authCalls('deleteAccount')
     worker.use(calls.handler, authFunction('deleteAccount', response))
-    const { router, queryClient } = await renderInApp(<DeleteAccountForm />, { url: '/account' })
+    const { queryClient, router } = await renderInApp(<DeleteAccountForm />, { url: '/account' })
     queryClient.setQueryData(['my data'], ['private'])
     await deletePassword().fill('my password')
     await deleteConfirm().click()
@@ -64,7 +64,7 @@ describe('DeleteAccountForm', () => {
   })
 
   it('keeps the account after a wrong password, and says so next to the password, which takes focus', async () => {
-    worker.use(authFunction('deleteAccount', { ok: false, failure: { code: 'INVALID_PASSWORD' } }))
+    worker.use(authFunction('deleteAccount', { failure: { code: 'INVALID_PASSWORD' }, ok: false }))
     const { router } = await renderInApp(<DeleteAccountForm />, { url: '/account' })
     await deletePassword().fill('my password')
     await deleteConfirm().click()
@@ -77,7 +77,7 @@ describe('DeleteAccountForm', () => {
 
   it('keeps the account and says so under the form when the server fails', async () => {
     worker.use(authFunction('deleteAccount', 'thrown'))
-    const { router, queryClient } = await renderInApp(<DeleteAccountForm />, { url: '/account' })
+    const { queryClient, router } = await renderInApp(<DeleteAccountForm />, { url: '/account' })
     queryClient.setQueryData(['my data'], ['private'])
     await deletePassword().fill('my password')
     await deleteConfirm().click()

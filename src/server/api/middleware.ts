@@ -7,11 +7,7 @@ import { Authentication, CurrentUser, RequestValidation } from '#/contract/middl
 import { SessionLookup } from './session-lookup.ts'
 
 /** The request's headers as web `Headers`, the form Better Auth reads a cookie from. */
-const webHeaders = (incoming: Readonly<Record<string, unknown>>): Headers => {
-  const headers = new Headers()
-  for (const [key, value] of Object.entries(incoming)) if (typeof value === 'string') headers.set(key, value)
-  return headers
-}
+const webHeaders = (incoming: Readonly<Record<string, string>>): Headers => new Headers(Object.entries(incoming))
 
 const authenticationRequired = () => new Unauthorized({ message: 'Authentication required' })
 
@@ -29,13 +25,17 @@ export const AuthenticationLive = Layer.effect(
     const sessions = yield* SessionLookup
     const authenticate: Authentication['Service']['sessionCookie'] = (httpEffect, { credential }) =>
       Effect.gen(function* () {
-        if (Redacted.value(credential) === '') return yield* authenticationRequired()
+        if (Redacted.value(credential) === '') {
+          return yield* authenticationRequired()
+        }
         const request = yield* HttpServerRequest.HttpServerRequest
         const user = yield* sessions.userOf(webHeaders(request.headers))
-        if (!user) return yield* authenticationRequired()
+        if (!user) {
+          return yield* authenticationRequired()
+        }
         return yield* Effect.provideService(httpEffect, CurrentUser, user)
       })
-    return { sessionCookie: authenticate, secureSessionCookie: authenticate }
+    return { secureSessionCookie: authenticate, sessionCookie: authenticate }
   }),
 )
 
@@ -46,7 +46,7 @@ type FormattedIssue = ReturnType<typeof formatIssues>['issues'][number]
  * Where a schema issue points, as path segments: `['body']` for a post's body. Only the path, never the value,
  * so neither a response nor a log line echoes what the client sent.
  */
-export const issuePath = (issue: FormattedIssue): string[] =>
+export const issuePath = (issue: FormattedIssue): Array<string> =>
   issue.path?.map((segment) => String(typeof segment === 'object' ? segment.key : segment)) ?? []
 
 /** Only request input. `Body` and `ResponseHeaders` mean the server produced an invalid response: a bug. */
@@ -55,12 +55,14 @@ const REQUEST_KINDS = new Set<HttpApiError.HttpApiSchemaError['kind']>(['Params'
 /** A request decoding failure as the documented 400 body; any other error passes through unchanged. */
 const toValidationError = <E>(error: E): E | ValidationError => {
   const failure: unknown = error
-  if (!HttpApiError.HttpApiSchemaError.is(failure) || !REQUEST_KINDS.has(failure.kind)) return error
+  if (!HttpApiError.HttpApiSchemaError.is(failure) || !REQUEST_KINDS.has(failure.kind)) {
+    return error
+  }
   const issues = formatIssues(failure.cause.issue).issues.map((issue) => ({
-    path: issuePath(issue),
     message: issue.message,
+    path: issuePath(issue),
   }))
-  return new ValidationError({ message: `Invalid request ${failure.kind.toLowerCase()}`, issues })
+  return new ValidationError({ issues, message: `Invalid request ${failure.kind.toLowerCase()}` })
 }
 
 /**

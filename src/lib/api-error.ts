@@ -4,7 +4,7 @@ import type * as Sdk from '#/sdk/sdk.gen.ts'
 /** Distributes over the SDK's result union and keeps the `error` member of each variant. */
 type ErrorBody<Result> = Result extends { error: infer E } ? E : never
 /** The error body an SDK function can resolve with (`{ error }`), for every status its endpoint declares. */
-type ErrorOf<F> = F extends (...args: never[]) => infer R ? ErrorBody<Awaited<R>> : never
+type ErrorOf<F> = F extends (...args: Array<never>) => infer R ? ErrorBody<Awaited<R>> : never
 
 /**
  * The errors of the shared middleware (RequestValidation, WriteRateLimit), from the contract: handled even while no
@@ -42,7 +42,9 @@ export const apiErrorTag = (error: unknown): TaggedApiError['_tag'] | undefined 
  * such as `body`), for a form that shows it next to that field; undefined for any other error.
  */
 export function fieldIssue(error: unknown, field: string): string | undefined {
-  if (!isTaggedApiError(error) || error._tag !== 'ValidationError') return undefined
+  if (!isTaggedApiError(error) || error._tag !== 'ValidationError') {
+    return undefined
+  }
   return error.issues.find((issue) => issue.path[0] === field)?.message
 }
 
@@ -55,12 +57,7 @@ type Describe<Tag extends TaggedApiError['_tag']> = (
  * The message of each contract error. The mapped type fails to compile when the contract gains an error this table
  * does not describe.
  */
-const DESCRIBE_TAG: { readonly [Tag in TaggedApiError['_tag']]: Describe<Tag> } = {
-  ValidationError: (error, action) => {
-    const details = error.issues.map((issue) => issue.message).join(' ')
-    return { message: `Could not ${action}: ${details || error.message}`, signIn: false }
-  },
-  Unauthorized: () => ({ message: 'Your session has ended. Sign in again to continue.', signIn: true }),
+const DESCRIBE_TAG = {
   PostNotFound: () => ({ message: 'This post no longer exists. It may have been deleted elsewhere.', signIn: false }),
   RateLimited: (error, action) => ({
     message: `Could not ${action}: too many changes in a short time. Try again in ${error.retryAfter} second${error.retryAfter === 1 ? '' : 's'}.`,
@@ -70,7 +67,12 @@ const DESCRIBE_TAG: { readonly [Tag in TaggedApiError['_tag']]: Describe<Tag> } 
     message: 'The service is temporarily unavailable. Try again in a moment.',
     signIn: false,
   }),
-}
+  Unauthorized: () => ({ message: 'Your session has ended. Sign in again to continue.', signIn: true }),
+  ValidationError: (error, action) => {
+    const details = error.issues.map((issue) => issue.message).join(' ')
+    return { message: `Could not ${action}: ${details || error.message}`, signIn: false }
+  },
+} satisfies { readonly [Tag in TaggedApiError['_tag']]: Describe<Tag> }
 
 /**
  * Turns whatever the SDK threw into a user-facing message. The SDK throws the parsed JSON body for API

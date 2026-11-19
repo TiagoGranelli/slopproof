@@ -10,8 +10,8 @@ const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((modul
 
 const FIELD_CODES = {
   INVALID_PASSWORD: 'currentPassword',
-  PASSWORD_TOO_SHORT: 'newPassword',
   PASSWORD_TOO_LONG: 'newPassword',
+  PASSWORD_TOO_SHORT: 'newPassword',
 } as const
 
 /** Changes the password. Every other session of the account is signed out; this one continues. */
@@ -19,50 +19,50 @@ export function ChangePasswordForm() {
   const change = useChangePassword({ mutationConfig: { onSuccess: () => form.reset() } })
   const form = useAppForm({
     defaultValues: { currentPassword: '', newPassword: '' },
+    onSubmit: ({ value }) => change.mutate(schema.decode(value)),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
-    onSubmit: ({ value }) => change.mutate(schema.decode(value)),
   })
   return (
     <div className="grid gap-3">
       <AuthForm
-        id="change-password"
-        submitLabel="Change password"
-        form={form}
-        schema={schema}
-        pending={change.isPending}
         error={change.error}
         fieldCodes={FIELD_CODES}
+        form={form}
+        id="change-password"
+        pending={change.isPending}
+        schema={schema}
+        submitLabel="Change password"
       >
         <form.AppField name="currentPassword">
           {(field) => (
             <field.TextField
+              autoComplete="current-password"
               id="current-password"
               label="Current password"
-              type="password"
-              autoComplete="current-password"
               required
+              type="password"
             />
           )}
         </form.AppField>
         <form.AppField name="newPassword">
           {(field) => (
             <field.TextField
+              autoComplete="new-password"
+              hint={`At least ${PASSWORD_MIN_LENGTH} characters. Your other sessions will be signed out.`}
               id="new-password"
               label="New password"
-              type="password"
-              autoComplete="new-password"
-              minLength={PASSWORD_MIN_LENGTH}
               maxLength={PASSWORD_MAX_LENGTH}
-              hint={`At least ${PASSWORD_MIN_LENGTH} characters. Your other sessions will be signed out.`}
+              minLength={PASSWORD_MIN_LENGTH}
               required
+              type="password"
             />
           )}
         </form.AppField>
       </AuthForm>
       {/* The emptied form keeps no focus of its own, so the message takes it. */}
       {change.isSuccess ? (
-        <AuthStatus title="Password changed" headingLevel={3}>
+        <AuthStatus headingLevel={3} title="Password changed">
           Your other sessions were signed out.
         </AuthStatus>
       ) : null}

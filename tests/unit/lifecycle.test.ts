@@ -7,7 +7,7 @@ import { captureLog } from './process-fakes.ts'
 describe('runShutdown', () => {
   it('runs the steps one after another in their fixed order and logs that order', async () => {
     const lines = captureLog()
-    const events: string[] = []
+    const events: Array<string> = []
     const step = (name: string, ms: number) => async () => {
       events.push(`${name} start`)
       await new Promise((resolve) => setTimeout(resolve, ms))
@@ -35,8 +35,8 @@ describe('runShutdown', () => {
       'postgres-pool end',
     ])
     expect(lines.at(-1)).toMatchObject({
-      msg: 'shutdown complete',
       cleanups: ['auth-cleanup', 'background-tasks', 'mailer', 'effect-api', 'postgres-pool'],
+      msg: 'shutdown complete',
     })
   })
 
@@ -52,9 +52,9 @@ describe('runShutdown', () => {
     await runShutdown()
 
     expect(pool).toHaveBeenCalledOnce()
-    expect(lines[0]).toMatchObject({ level: 'error', msg: 'shutdown cleanup failed', cleanup: 'mailer' })
-    expect(lines[1]).toMatchObject({ msg: 'shutdown complete', cleanups: ['mailer', 'postgres-pool'] })
-    expect(lines[2]).toMatchObject({ msg: 'shutdown complete', cleanups: [] })
+    expect(lines[0]).toMatchObject({ cleanup: 'mailer', level: 'error', msg: 'shutdown cleanup failed' })
+    expect(lines[1]).toMatchObject({ cleanups: ['mailer', 'postgres-pool'], msg: 'shutdown complete' })
+    expect(lines[2]).toMatchObject({ cleanups: [], msg: 'shutdown complete' })
   })
 })
 
@@ -67,6 +67,7 @@ describe('draining', () => {
     expect(isDraining()).toBe(false)
     setDraining(true)
     expect(isDraining()).toBe(true)
-    expect((globalThis as Record<symbol, unknown>)[Symbol.for('app.draining')]).toBe(true)
+    const DRAINING = Symbol.for('app.draining')
+    expect((globalThis as { [DRAINING]?: boolean })[DRAINING]).toBe(true)
   })
 })

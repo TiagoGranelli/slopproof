@@ -54,7 +54,7 @@ const COVERAGE_GATE = [
  * as a module added without tests. Raise it when coverage grows.
  */
 // Measured lines 70.4%, branches 68.5%, functions 60.3%, statements 70.3% when set.
-const COVERAGE_FLOOR = { lines: 69, branches: 67, functions: 59, statements: 69 }
+const COVERAGE_FLOOR = { branches: 67, functions: 59, lines: 69, statements: 69 }
 for (const file of COVERAGE_GATE) {
   // A renamed file would otherwise drop out of the gate silently: a threshold glob that matches nothing passes.
   readFileSync(file)
@@ -65,7 +65,6 @@ for (const file of COVERAGE_GATE) {
  * the library version and never sits in public/ (which would ship it with the app).
  */
 const mswWorkerScript = (): Plugin => ({
-  name: 'msw-worker-script',
   configureServer(server) {
     const script = createRequire(import.meta.url).resolve('msw/mockServiceWorker.js')
     server.middlewares.use('/mockServiceWorker.js', (_req, res) => {
@@ -73,6 +72,7 @@ const mswWorkerScript = (): Plugin => ({
       res.end(readFileSync(script))
     })
   },
+  name: 'msw-worker-script',
 })
 
 // A run nobody watches live (an agent, a pipe) prints only its failures and the totals, Vitest's `agent` reporter:
@@ -83,41 +83,40 @@ const watched = Boolean(process.env.CI) || process.stdout.isTTY
 
 export default defineConfig({
   test: {
-    reporters: watched ? configDefaults.reporters : ['agent'],
     coverage: {
-      provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
+      provider: 'v8',
       // Generated code and vendored shadcn primitives.
       exclude: ['src/sdk/**', 'src/routeTree.gen.ts', 'src/components/ui/**', 'src/server/db/schema/auth.ts'],
       reporter: process.env.CI ? ['text-summary', 'html'] : ['html'],
       thresholds: {
         ...COVERAGE_FLOOR,
-        ...Object.fromEntries(COVERAGE_GATE.map((file) => [file, { lines: 100, branches: 100 }])),
+        ...Object.fromEntries(COVERAGE_GATE.map((file) => [file, { branches: 100, lines: 100 }])),
       },
     },
     projects: [
       {
         test: {
-          name: 'unit',
           include: ['tests/unit/**/*.test.ts'],
-          testTimeout: 5_000,
+          name: 'unit',
+          testTimeout: 5000,
         },
       },
       {
         test: {
-          name: 'api',
           include: ['tests/api/**/*.test.ts'],
+          name: 'api',
           // src/server/env.ts validates the environment when it is imported, and the handlers import the
           // database client and Better Auth. These values pass that validation; nothing connects to them
           // (the harness replaces the repository and the session check).
           env: {
-            DATABASE_URL: 'postgres://unused:unused@127.0.0.1:9/unused',
             APP_URL: 'http://localhost:3000',
             BETTER_AUTH_SECRET: 'api-handler-tests-only-not-a-secret-000',
-            TRUSTED_PROXIES: '',
+            DATABASE_URL: 'postgres://unused:unused@127.0.0.1:9/unused',
             NODE_ENV: 'test',
+            TRUSTED_PROXIES: '',
           },
-          testTimeout: 5_000,
+          testTimeout: 5000,
         },
       },
       {
@@ -160,27 +159,27 @@ export default defineConfig({
           ],
         },
         test: {
-          name: 'component',
-          include: ['tests/component/**/*.test.tsx'],
-          setupFiles: ['tests/component/setup.ts'],
           browser: {
             enabled: true,
             headless: true,
             // No port set, on purpose: the browser server takes Vitest's 63315 or, when another run holds it, the next
             // free one (Vite's strictPort is off), so checkouts and worktrees run this project at the same time.
             // `api.port: 0` would not ask the OS for one: Vitest reads 0 as unset and uses 63315.
-            // Playwright's Chromium, or CHROME_PATH like verify:app and lighthouse.
-            provider: playwright({ launchOptions: { executablePath: process.env.CHROME_PATH || undefined } }),
             instances: [{ browser: 'chromium' }],
             screenshotFailures: false,
+            // Playwright's Chromium, or CHROME_PATH like verify:app and lighthouse.
+            provider: playwright({ launchOptions: { executablePath: process.env.CHROME_PATH || undefined } }),
           },
+          include: ['tests/component/**/*.test.tsx'],
+          name: 'component',
+          setupFiles: ['tests/component/setup.ts'],
           testTimeout: 10_000,
         },
       },
       {
         test: {
-          name: 'db',
           include: ['tests/db/**/*.test.ts'],
+          name: 'db',
           // Creates a fresh, migrated app_db_<pid>_test next to DATABASE_URL (or .env's) and hands its URL
           // to the workers as DATABASE_URL; dropped afterwards. Needs Postgres, no build, no running app.
           globalSetup: ['tests/db/global-setup.ts'],
@@ -188,21 +187,21 @@ export default defineConfig({
           // stays off whatever .env says: nothing here sends any.
           env: {
             APP_URL: 'http://localhost:3000',
-            BETTER_AUTH_SECRET: 'db-tests-only-not-a-secret-0000000000',
-            TRUSTED_PROXIES: '',
             AUTH_SIGN_UP: 'closed',
-            SMTP_URL: '',
+            BETTER_AUTH_SECRET: 'db-tests-only-not-a-secret-0000000000',
             MAIL_FROM: '',
             NODE_ENV: 'test',
+            SMTP_URL: '',
+            TRUSTED_PROXIES: '',
           },
-          testTimeout: 15_000,
           hookTimeout: 30_000,
+          testTimeout: 15_000,
         },
       },
       {
         test: {
-          name: 'integration',
           include: ['tests/integration/**/*.test.ts'],
+          name: 'integration',
           // Starts the built app's two servers on a fresh database and hands them over (`inject('servers')`);
           // setup.ts gives each worker the app's environment. Needs `pnpm build`, Postgres and Mailpit.
           globalSetup: ['tests/integration/global-setup.ts'],
@@ -210,11 +209,13 @@ export default defineConfig({
           // Files share only the server. Each one signs in from its own client IP (X-Forwarded-For), so they
           // cannot exhaust each other's sign-in rate limit, and they only assert on posts they created.
           fileParallelism: true,
-          // Generous for a loaded CI runner or laptop; a healthy run finishes every test in well under a second.
-          testTimeout: 15_000,
+          // Generous for a loaded CI runner or laptop; a healthy run finishes every hook and test in well under a
+          // second.
           hookTimeout: 15_000,
+          testTimeout: 15_000,
         },
       },
     ],
+    reporters: watched ? configDefaults.reporters : ['agent'],
   },
 })

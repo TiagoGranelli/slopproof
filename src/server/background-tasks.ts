@@ -18,12 +18,7 @@ const track = (settled: Promise<void>) => {
  * before it closes the mail transport and the database pool (../lifecycle.ts).
  */
 export const runInBackground = (task: Promise<unknown>): void => {
-  track(
-    task.then(
-      () => undefined,
-      (error: unknown) => log('error', 'background task failed', { error }),
-    ),
-  )
+  track(task.then(() => undefined).catch((error: unknown) => log('error', 'background task failed', { error })))
 }
 
 /**
@@ -35,18 +30,15 @@ export const runInBackground = (task: Promise<unknown>): void => {
  */
 export const finishBeforeShutdown = <A>(work: Promise<A>): Promise<A> => {
   // The caller handles the failure; the tracked copy only waits.
-  track(
-    work.then(
-      () => undefined,
-      () => undefined,
-    ),
-  )
+  track(work.then(() => undefined).catch(() => undefined))
   return work
 }
 
 /** Resolves when no task is pending, including tasks scheduled while waiting. */
 const drainBackgroundTasks = async (): Promise<void> => {
-  if (pending.size === 0) return
+  if (pending.size === 0) {
+    return
+  }
   await Promise.all(pending)
   return drainBackgroundTasks()
 }

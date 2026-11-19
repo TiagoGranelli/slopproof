@@ -12,7 +12,7 @@ import { FLASH_MESSAGES } from '#/lib/flash.ts'
 import { renderInApp, serverRendered } from './test-utils.tsx'
 
 const nav = () => page.getByRole('navigation', { name: 'Main' })
-const link = (name: string) => nav().getByRole('link', { name, exact: true })
+const link = (name: string) => nav().getByRole('link', { exact: true, name })
 const radio = (name: string) => page.getByRole('radio', { name })
 
 afterEach(() => {
@@ -22,14 +22,14 @@ afterEach(() => {
 
 describe('SiteHeader', () => {
   it('offers to sign in when signed out', async () => {
-    await renderInApp(<SiteHeader user={null} signOut={<button type="button">Sign out</button>} />)
+    await renderInApp(<SiteHeader signOut={<button type="button">Sign out</button>} user={null} />)
     await expect.element(link('Sign in')).toHaveAttribute('href', '/login')
     await expect.element(link('Dashboard')).not.toBeInTheDocument()
     await expect.element(page.getByRole('button', { name: 'Sign out' })).not.toBeInTheDocument()
   })
 
   it('shows who is signed in, their pages and Sign out', async () => {
-    await renderInApp(<SiteHeader user={{ name: 'Ada Lovelace' }} signOut={<button type="button">Sign out</button>} />)
+    await renderInApp(<SiteHeader signOut={<button type="button">Sign out</button>} user={{ name: 'Ada Lovelace' }} />)
     await expect.element(nav().getByText('Ada Lovelace')).toBeVisible()
     await expect.element(link('Dashboard')).toHaveAttribute('href', '/dashboard')
     await expect.element(link('Account')).toHaveAttribute('href', '/account')
@@ -38,14 +38,14 @@ describe('SiteHeader', () => {
   })
 
   it('links only to the dashboard when it cannot know (a prerendered page), which suits either state', async () => {
-    await renderInApp(<SiteHeader user={undefined} signOut={<button type="button">Sign out</button>} />)
+    await renderInApp(<SiteHeader signOut={<button type="button">Sign out</button>} user={undefined} />)
     await expect.element(link('Dashboard')).toBeVisible()
     await expect.element(link('Sign in')).not.toBeInTheDocument()
     await expect.element(page.getByRole('button', { name: 'Sign out' })).not.toBeInTheDocument()
   })
 
   it('marks the current page', async () => {
-    await renderInApp(<SiteHeader user={null} signOut={null} />, { url: '/about' })
+    await renderInApp(<SiteHeader signOut={null} user={null} />, { url: '/about' })
     await expect.element(link('About')).toHaveAttribute('aria-current', 'page')
   })
 })
@@ -86,7 +86,7 @@ function PathPage() {
 describe('a flash message', () => {
   it('shows under the page heading when an action navigated here with one', async () => {
     const { router } = await renderInApp(<PathPage />, { url: '/dashboard' })
-    await router.navigate({ to: '/', state: { flash: 'signed-out' } })
+    await router.navigate({ state: { flash: 'signed-out' }, to: '/' })
     await expect.element(page.getByTestId('flash')).toHaveTextContent('You are signed out.')
     await router.navigate({ to: '/about' })
     await expect.element(page.getByRole('heading', { name: 'Page /about' })).toBeVisible()
@@ -95,7 +95,7 @@ describe('a flash message', () => {
 
   it('is dropped from the history entry once shown, and stays on screen until the next navigation', async () => {
     const { router } = await renderInApp(<PathPage />, { url: '/dashboard' })
-    await router.navigate({ to: '/login', state: { flash: 'password-reset' } })
+    await router.navigate({ state: { flash: 'password-reset' }, to: '/login' })
     await expect.element(page.getByTestId('flash')).toBeVisible()
     await expect.poll(() => router.state.location.state.flash).toBeUndefined()
     // Still the same entry (the back button goes to /dashboard), and still showing the message.
@@ -105,7 +105,7 @@ describe('a flash message', () => {
 
   it('shows a new flash on the same page, pushed as a new entry', async () => {
     const { router } = await renderInApp(<PathPage />, { url: '/' })
-    await router.navigate({ to: '/', state: { flash: 'signed-out' } })
+    await router.navigate({ state: { flash: 'signed-out' }, to: '/' })
     await expect.element(page.getByTestId('flash')).toHaveTextContent('You are signed out.')
   })
 })
@@ -134,7 +134,7 @@ describe('RouteAnnouncer', () => {
     const { router } = await renderPages()
     document.title = pageTitle('Latest posts')
     await router.navigate({ to: '/about' })
-    await router.navigate({ to: '/', state: { flash: 'account-deleted' } })
+    await router.navigate({ state: { flash: 'account-deleted' }, to: '/' })
     await expect
       .poll(() => announcer().textContent)
       .toBe(`${pageTitle('Latest posts')}. Your account and everything in it are deleted.`)
@@ -142,7 +142,7 @@ describe('RouteAnnouncer', () => {
 
   it('stays quiet and leaves focus alone when only the search changes', async () => {
     const { router } = await renderPages()
-    await router.navigate({ to: '/', search: { page: 2 } as never })
+    await router.navigate({ search: { page: 2 } as never, to: '/' })
     await expect.poll(() => router.state.location.searchStr).toBe('?page=2')
     expect(announcer().textContent).toBe('')
     expect(document.activeElement).toBe(document.body)

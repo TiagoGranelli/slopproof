@@ -43,9 +43,13 @@ export function safeRedirect(value: unknown): string {
   const url = parse(value)
   const decoded = url && decode(url.pathname)
   const decodedUrl = decoded === undefined ? undefined : parse(decoded)
-  if (!url || decoded === undefined || !decodedUrl || decoded.includes('\\')) return DEFAULT_AFTER_SIGN_IN
+  if (!url || decoded === undefined || !decodedUrl || decoded.includes('\\')) {
+    return DEFAULT_AFTER_SIGN_IN
+  }
   for (const path of [url.pathname, decoded, decodedUrl.pathname]) {
-    if (path.startsWith('//') || isLoginOrApi(path)) return DEFAULT_AFTER_SIGN_IN
+    if (path.startsWith('//') || isLoginOrApi(path)) {
+      return DEFAULT_AFTER_SIGN_IN
+    }
   }
   const target = url.pathname + url.search + url.hash
   // Parsing percent-encodes what the input left raw (a space becomes %20), which can make the result longer.

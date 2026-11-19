@@ -6,14 +6,18 @@ import { SignInFormPost } from '#/lib/account-input.ts'
 
 const form = (fields: Record<string, string | Blob>) => {
   const data = new FormData()
-  for (const [name, value] of Object.entries(fields)) data.set(name, value)
+  for (const [name, value] of Object.entries(fields)) {
+    data.set(name, value)
+  }
   return data
 }
 const decodePost = Schema.decodeUnknownExit(SignInFormPost)
 /** The messages of the issues the server function's validator (Standard Schema) reports for `input`. */
 const messagesOf = (input: unknown) => {
   const validation = Schema.toStandardSchemaV1(SignInFormPost)['~standard'].validate(input)
-  if (validation instanceof Promise) throw new Error('SignInFormPost validates synchronously')
+  if ('then' in validation) {
+    throw new TypeError('SignInFormPost validates synchronously')
+  }
   return validation.issues?.map((issue) => issue.message) ?? []
 }
 

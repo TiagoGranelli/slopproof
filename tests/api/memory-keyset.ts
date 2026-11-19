@@ -5,13 +5,15 @@ import type { PageRequest } from '#/server/db/keyset.ts'
 
 /** A stored row: its id and its sort key at Postgres's microsecond precision (`cursorAt` of the real query). */
 export interface KeyedRow {
-  readonly id: string
   readonly cursorAt: string
+  readonly id: string
 }
 
 /** Postgres compares uuids bytewise, which for lower-case hex is string order. */
 const compare = (a: string, b: string) => {
-  if (a === b) return 0
+  if (a === b) {
+    return 0
+  }
   return a < b ? -1 : 1
 }
 const compareKeys = (a: PageCursor, b: PageCursor) =>

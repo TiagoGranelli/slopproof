@@ -9,11 +9,11 @@ import { memoryClock, memoryPage } from './memory-keyset.ts'
 /** A stored post: the public fields, its owner, and its sort key at Postgres's microsecond precision. */
 type StoredPost = Post & { readonly authorId: UserId; readonly cursorAt: string }
 
-const view = ({ id, body, authorName, createdAt, updatedAt }: StoredPost): Post => ({
-  id,
-  body,
+const view = ({ authorName, body, createdAt, id, updatedAt }: StoredPost): Post => ({
   authorName,
+  body,
   createdAt,
+  id,
   updatedAt,
 })
 
@@ -25,11 +25,25 @@ const view = ({ id, body, authorName, createdAt, updatedAt }: StoredPost): Post 
 export const memoryPostsRepo = (options: RepoOptions) => {
   const db = memoryQuery(options)
   return Layer.sync(PostsRepo, () => {
-    const posts: StoredPost[] = []
+    const posts: Array<StoredPost> = []
     const tick = memoryClock(options.clockStepMicros ?? 1_000_000)
     const owned = (authorId: string, id: string) => posts.findIndex((p) => p.id === id && p.authorId === authorId)
     return {
-      listPublic: (page) => db(() => memoryPage(posts, page, view)),
+      create: (author, body) =>
+        db(() => {
+          const now = tick()
+          const post: StoredPost = {
+            authorId: author.id,
+            authorName: author.name,
+            body,
+            createdAt: now.iso,
+            cursorAt: now.key,
+            id: PostId.make(crypto.randomUUID()),
+            updatedAt: now.iso,
+          }
+          posts.push(post)
+          return view(post)
+        }),
       listByAuthor: (author, page) =>
         db(() =>
           memoryPage(
@@ -38,34 +52,24 @@ export const memoryPostsRepo = (options: RepoOptions) => {
             view,
           ),
         ),
-      create: (author, body) =>
+      listPublic: (page) => db(() => memoryPage(posts, page, view)),
+      remove: (author, id) =>
         db(() => {
-          const now = tick()
-          const post: StoredPost = {
-            id: PostId.make(crypto.randomUUID()),
-            body,
-            authorName: author.name,
-            authorId: author.id,
-            createdAt: now.iso,
-            updatedAt: now.iso,
-            cursorAt: now.key,
+          const index = owned(author.id, id)
+          if (index !== -1) {
+            posts.splice(index, 1)
           }
-          posts.push(post)
-          return view(post)
+          return index !== -1
         }),
       update: (author, id, body) =>
         db(() => {
           const index = owned(author.id, id)
-          if (index === -1) return undefined
+          if (index === -1) {
+            return undefined
+          }
           const post = { ...posts[index]!, body, updatedAt: tick().iso }
           posts[index] = post
           return view(post)
-        }),
-      remove: (author, id) =>
-        db(() => {
-          const index = owned(author.id, id)
-          if (index !== -1) posts.splice(index, 1)
-          return index !== -1
         }),
     }
   })

@@ -9,11 +9,12 @@ import { apiHandler } from './web-handler.ts'
  * (src/start.ts), which guard only requests that arrive over HTTP. SSR loaders read; writes come from the browser.
  */
 const dispatch = (request: Request): Promise<Response> => {
-  if (request.method !== 'GET')
+  if (request.method !== 'GET') {
     throw new Error(
       `The in-process API client only sends GET (got ${request.method} ${new URL(request.url).pathname}): ` +
         'call a write from the browser, where the CSRF check applies.',
     )
+  }
   return apiHandler(request)
 }
 
@@ -27,6 +28,6 @@ export const createInProcessApiClient = (): Client => {
   return createClient({
     baseUrl: env.appUrl,
     fetch: (input, init) => dispatch(new Request(input, init)),
-    ...(cookie ? { headers: { cookie } } : {}),
+    headers: cookie ? { cookie } : undefined,
   })
 }

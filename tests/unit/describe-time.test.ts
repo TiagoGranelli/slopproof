@@ -43,9 +43,9 @@ describe('describeTime', () => {
   })
 
   it('never throws, and without a clock depends on nothing but the time', () => {
-    const times = fc.date({ min: new Date('1970-01-01'), max: new Date('2200-01-01'), noInvalidDate: true })
+    const times = fc.date({ max: new Date('2200-01-01'), min: new Date('1970-01-01'), noInvalidDate: true })
     fc.assert(
-      fc.property(times, fc.integer({ min: -DAY, max: 400 * DAY }), (time, elapsed) => {
+      fc.property(times, fc.integer({ max: 400 * DAY, min: -DAY }), (time, elapsed) => {
         const iso = time.toISOString()
         expect(describeTime(iso, { now: time.getTime() + elapsed }).label).not.toBe('')
         expect(describeTime(iso, null)).toEqual(describeTime(iso, null))

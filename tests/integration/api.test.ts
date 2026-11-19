@@ -31,7 +31,7 @@ describe('me', () => {
     const { data, response } = await meGet({ client: sdkClient(authorCookie) })
     expect(response?.status).toBe(200)
     expect(Object.keys(data ?? {}).toSorted()).toEqual(['email', 'id', 'name'])
-    expect(data).toMatchObject({ name: sharedUsers.author.name, email: sharedUsers.author.email })
+    expect(data).toMatchObject({ email: sharedUsers.author.email, name: sharedUsers.author.name })
     expect(response?.headers.get('cache-control')).toBe('no-store')
   })
 
@@ -57,9 +57,9 @@ describe('security', () => {
   it.each(attempts)('rejects /api writes with %s before they reach the API', async (_, headers) => {
     for (const method of ['POST', 'PATCH', 'DELETE']) {
       const res = await fetch(`${appUrl}/api/me`, {
-        method,
-        headers: { cookie: authorCookie, 'content-type': 'application/json', ...headers },
         body: '{}',
+        headers: { 'content-type': 'application/json', cookie: authorCookie, ...headers },
+        method,
       })
       expect(res.status, method).toBe(403)
     }
@@ -67,9 +67,9 @@ describe('security', () => {
 
   it('lets the same writes from our own origin through to the API', async () => {
     const res = await fetch(`${appUrl}/api/me`, {
-      method: 'POST',
-      headers: { cookie: authorCookie, 'content-type': 'application/json', origin: appUrl },
       body: '{}',
+      headers: { 'content-type': 'application/json', cookie: authorCookie, origin: appUrl },
+      method: 'POST',
     })
     // GET is the only method of /api/me: the router, not the CSRF check, refuses it.
     expect(res.status).not.toBe(403)

@@ -8,10 +8,10 @@ import { Database, type Db } from '#/server/db/client.ts'
 class Refused extends Data.TaggedError('Refused') {}
 
 const fakeDriver = () => {
-  const log: string[] = []
+  const log: Array<string> = []
   const tx = Object.create(PgTransaction.prototype) as Db
   const own = {
-    transaction: async (body: (client: Db) => Promise<unknown>) => {
+    transaction: async <T>(body: (client: Db) => Promise<T>): Promise<T> => {
       log.push('begin')
       try {
         const returned = await body(tx)
@@ -22,7 +22,7 @@ const fakeDriver = () => {
         throw error
       }
     },
-  } as unknown as Db
+  } as Db
   return { log, own, tx }
 }
 
@@ -50,8 +50,10 @@ describe('Database.transaction', () => {
     expect(await run(own, Database.transaction(Effect.fail(new Refused())))).toEqual(Exit.fail(new Refused()))
     expect(log).toEqual(['begin', 'rollback'])
     const broken = {
-      transaction: () => Promise.reject(new Error('connection refused')),
-    } as unknown as Db
+      transaction: async <T>(_body: (client: Db) => Promise<T>): Promise<T> => {
+        throw new Error('connection refused')
+      },
+    } as Db
     const exit = await run(broken, Database.transaction(Effect.succeed(1)))
     expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
   })

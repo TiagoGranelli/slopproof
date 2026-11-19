@@ -6,18 +6,18 @@ import { page, userEvent } from 'vitest/browser'
 import { ConfirmDeleteButton } from '#/components/confirm-delete/confirm-delete-button.tsx'
 import { afterRendering, renderInApp } from './test-utils.tsx'
 
-const deleted = { noun: 'note', text: 'The note to delete', consequence: 'It will be gone for good.' }
+const deleted = { consequence: 'It will be gone for good.', noun: 'note', text: 'The note to delete' }
 const deleteButton = () => page.getByRole('button', { name: 'Delete note: The note to delete' })
 const dialog = () => page.getByRole('alertdialog', { name: 'Delete this note?' })
 const keepIt = () => dialog().getByRole('button', { name: 'Keep it' })
-const confirmDelete = () => dialog().getByRole('button', { name: 'Delete', exact: true })
+const confirmDelete = () => dialog().getByRole('button', { exact: true, name: 'Delete' })
 
 /** Renders the button with a confirmation that records where focus was when it ran. */
 const renderButton = async (pending = false) => {
   const focusedOnConfirm: Array<Element | null> = []
   const onConfirm = vi.fn<() => void>(() => void focusedOnConfirm.push(document.activeElement))
-  await renderInApp(<ConfirmDeleteButton target={deleted} pending={pending} onConfirm={onConfirm} />)
-  return { onConfirm, focusedOnConfirm }
+  await renderInApp(<ConfirmDeleteButton onConfirm={onConfirm} pending={pending} target={deleted} />)
+  return { focusedOnConfirm, onConfirm }
 }
 
 describe('ConfirmDeleteButton', () => {
@@ -46,7 +46,7 @@ describe('ConfirmDeleteButton', () => {
   })
 
   it('confirms once, after focus is back on Delete', async () => {
-    const { onConfirm, focusedOnConfirm } = await renderButton()
+    const { focusedOnConfirm, onConfirm } = await renderButton()
     await deleteButton().click()
     await confirmDelete().click()
     await expect.poll(() => onConfirm.mock.calls.length).toBe(1)

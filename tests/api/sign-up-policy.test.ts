@@ -10,9 +10,9 @@ import { env } from '#/server/env.ts'
 const signUp = (path: string) =>
   auth.handler(
     new Request(`${env.appUrl}/api/auth${path}`, {
-      method: 'POST',
+      body: JSON.stringify({ email: 'nobody@example.test', name: 'Nobody', password: 'a-long-enough-password' }),
       headers: { 'content-type': 'application/json', origin: env.appUrl },
-      body: JSON.stringify({ name: 'Nobody', email: 'nobody@example.test', password: 'a-long-enough-password' }),
+      method: 'POST',
     }),
   )
 
@@ -26,7 +26,8 @@ describe('closed sign-up (the default)', () => {
   })
 
   it('leaves no other way to sign up by path variants', async () => {
-    for (const path of ['/sign-up/email/', '/sign-up//email', '/SIGN-UP/EMAIL', '/sign-up'])
+    for (const path of ['/sign-up/email/', '/sign-up//email', '/SIGN-UP/EMAIL', '/sign-up']) {
       expect((await signUp(path)).status, path).toBe(404)
+    }
   })
 })

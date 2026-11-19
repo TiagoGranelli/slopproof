@@ -27,7 +27,9 @@ describe('fieldErrorMessage', () => {
       fc.property(fc.array(validatorOutcome), (errors) => {
         const message = fieldErrorMessage(errors)
         const candidates = errors.flatMap((error) => {
-          if (typeof error === 'string') return [error]
+          if (typeof error === 'string') {
+            return [error]
+          }
           return typeof error === 'object' && error !== null && typeof error.message === 'string' ? [error.message] : []
         })
         expect(message === undefined || candidates.includes(message)).toBe(true)

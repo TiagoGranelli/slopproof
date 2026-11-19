@@ -7,19 +7,21 @@ import { expect, signIn, test, visit } from './support/app.ts'
 
 const TYPED = 'typed the moment the page said it was hydrated'
 
-test('text typed the moment the page reports hydration reaches the form', async ({ page, author }) => {
+test('text typed the moment the page reports hydration reaches the form', async ({ author, page }) => {
   // Types into the composer as a user would (focus, the value, an input event), in the same task that sets the
   // attribute: the earliest moment a test may act. The value goes through the prototype's setter, as the browser's
   // own editing does, not React's tracking wrapper on a hydrated field.
   await page.addInitScript((text) => {
     new MutationObserver((_, observer) => {
       const field = document.querySelector<HTMLTextAreaElement>('#post-body')
-      if (document.body.dataset.hydrated !== 'true' || !field) return
+      if (document.body.dataset.hydrated !== 'true' || !field) {
+        return
+      }
       observer.disconnect()
       field.focus()
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(field, text)
-      field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-hydrated'] })
+      field.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }))
+    }).observe(document, { attributeFilter: ['data-hydrated'], attributes: true, subtree: true })
   }, TYPED)
   await signIn(page, author)
   await visit(page, '/dashboard')

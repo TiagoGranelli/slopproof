@@ -11,11 +11,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { dropTestDatabase, emptyTestDatabase, testDatabaseUrl } from '../../scripts/test-db.ts'
 
 const url = testDatabaseUrl('migrate')
-const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: unknown[] }).entries
-  .length
+const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: Array<unknown> })
+  .entries.length
 const LOCK_KEY = '8098991147069224299'
 
-type Run = { code: number; lines: Array<{ msg: string; applied?: number; total?: number; error?: string }> }
+type Run = { code: number; lines: Array<{ applied?: number; error?: string; msg: string; total?: number }> }
 /** Runs the migrator with only the given environment (no .env: DATABASE_URL or MIGRATION_DATABASE_URL is set). */
 const migrate = (env: Record<string, string>) =>
   new Promise<Run>((resolve) => {
@@ -54,7 +54,7 @@ const recorded = async () => {
   await client.connect()
   try {
     return (
-      await client.query<{ id: number; hash: string; created_at: string }>(
+      await client.query<{ created_at: string; hash: string; id: number }>(
         'select id, hash, created_at from drizzle.__drizzle_migrations order by id',
       )
     ).rows
@@ -79,7 +79,7 @@ describe('scripts/migrate.ts', () => {
     expect(summaries.every((summary) => summary?.total === MIGRATIONS)).toBe(true)
     // A later run finds nothing to do.
     const again = await migrate({ DATABASE_URL: url })
-    expect(again.lines.at(-1)).toMatchObject({ msg: 'migrations applied', applied: 0, total: MIGRATIONS })
+    expect(again.lines.at(-1)).toMatchObject({ applied: 0, msg: 'migrations applied', total: MIGRATIONS })
   })
 
   it('rolls back and retries when a table lock takes longer than MIGRATE_DDL_LOCK_TIMEOUT', async () => {
@@ -89,12 +89,12 @@ describe('scripts/migrate.ts', () => {
     )()
     // A long transaction on a table the migration needs; it ends after a while.
     const release = await hold(`lock table ${table} in access exclusive mode`)
-    const released = new Promise((resolve) => setTimeout(resolve, 1_500)).then(release)
+    const released = new Promise((resolve) => setTimeout(resolve, 1500)).then(release)
     const run = await migrate({ DATABASE_URL: url, MIGRATE_DDL_LOCK_TIMEOUT: '300ms' })
     await released
     expect(run.code).toBe(0)
     expect(run.lines.some((line) => line.msg.includes('retrying'))).toBe(true)
-    expect(run.lines.at(-1)).toMatchObject({ msg: 'migrations applied', applied: MIGRATIONS })
+    expect(run.lines.at(-1)).toMatchObject({ applied: MIGRATIONS, msg: 'migrations applied' })
   })
 
   it('gives up without retrying when another run holds the lock longer than MIGRATE_LOCK_TIMEOUT', async () => {
@@ -104,8 +104,8 @@ describe('scripts/migrate.ts', () => {
       expect(run.code).toBe(1)
       expect(run.lines).toEqual([
         expect.objectContaining({
-          msg: 'migration failed',
           error: 'another migration run held the lock for longer than 300ms',
+          msg: 'migration failed',
         }),
       ])
     } finally {
@@ -121,17 +121,17 @@ describe('scripts/migrate.ts', () => {
     await admin.query(`alter database "${database}" set idle_in_transaction_session_timeout = '200ms'`)
     await admin.end()
     const release = await hold(`select pg_advisory_xact_lock(${LOCK_KEY})`)
-    const released = new Promise((resolve) => setTimeout(resolve, 1_000)).then(release)
+    const released = new Promise((resolve) => setTimeout(resolve, 1000)).then(release)
     const run = await migrate({ DATABASE_URL: url })
     await released
     expect(run.code).toBe(0)
-    expect(run.lines.at(-1)).toMatchObject({ msg: 'migrations applied', applied: MIGRATIONS })
+    expect(run.lines.at(-1)).toMatchObject({ applied: MIGRATIONS, msg: 'migrations applied' })
   })
 
   it('prefers MIGRATION_DATABASE_URL (a direct connection) over DATABASE_URL (possibly a pooler)', async () => {
     const run = await migrate({ DATABASE_URL: 'postgres://nobody@127.0.0.1:1/none', MIGRATION_DATABASE_URL: url })
     expect(run.code).toBe(0)
-    expect(run.lines.at(-1)).toMatchObject({ msg: 'migrations applied', applied: MIGRATIONS })
+    expect(run.lines.at(-1)).toMatchObject({ applied: MIGRATIONS, msg: 'migrations applied' })
   })
 
   // scripts/migrate.ts copies Drizzle's bookkeeping instead of calling Drizzle's migrator, because it takes a

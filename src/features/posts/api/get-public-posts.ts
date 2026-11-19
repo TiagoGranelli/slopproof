@@ -11,10 +11,10 @@ export const getPublicPostsQueryOptions = () => {
   const { queryFn, ...options } = publicPostsListInfiniteOptions({ client: apiClient() })
   return infiniteQueryOptions({
     ...options,
+    getNextPageParam: nextPage,
+    initialPageParam: firstPage,
     // Typed as possibly `skipToken` for disabled queries; the generated one is always a function, and
     // saying so lets suspense queries (which cannot be skipped) use these options.
     queryFn: queryFn as Exclude<typeof queryFn, SkipToken | undefined>,
-    initialPageParam: firstPage,
-    getNextPageParam: nextPage,
   })
 }

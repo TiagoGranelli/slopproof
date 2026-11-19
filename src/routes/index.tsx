@@ -21,7 +21,7 @@ function Home() {
   const posts = useSuspenseInfiniteQuery(getPublicPostsQueryOptions())
   return (
     <Page title="Latest posts">
-      <PostList pages={posts} empty="No posts yet." testId="public-posts" />
+      <PostList empty="No posts yet." pages={posts} testId="public-posts" />
     </Page>
   )
 }

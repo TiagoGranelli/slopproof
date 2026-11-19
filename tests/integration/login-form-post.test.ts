@@ -15,16 +15,16 @@ beforeAll(async () => {
 /** What a browser sends for the login form: urlencoded fields, from the page's origin, no script headers. */
 const postForm = (fields: Record<string, string>, origin = appUrl) =>
   fetch(new URL(authFunctionPath('signInFromForm'), appUrl), {
-    method: 'POST',
-    redirect: 'manual',
+    body: new URLSearchParams(fields),
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
       origin,
-      'sec-fetch-site': origin === appUrl ? 'same-origin' : 'cross-site',
       'sec-fetch-mode': 'navigate',
+      'sec-fetch-site': origin === appUrl ? 'same-origin' : 'cross-site',
       'x-forwarded-for': nextIp(),
     },
-    body: new URLSearchParams(fields),
+    method: 'POST',
+    redirect: 'manual',
   })
 
 describe('the login form posted without JavaScript', () => {

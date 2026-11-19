@@ -20,7 +20,7 @@ describe('without a session', () => {
   it.each(keyed.filter(({ key }) => !PUBLIC_OPERATIONS.has(key)))(
     '$key answers 401 (behind the Authentication middleware; if it is public by design, add it to PUBLIC_OPERATIONS)',
     async ({ operation }) => {
-      const { handler, dispose } = webHandler()
+      const { dispose, handler } = webHandler()
       onTestFinished(dispose)
       // A valid request, so only the missing session can make it fail.
       const response = await handler(requestFor(operation))

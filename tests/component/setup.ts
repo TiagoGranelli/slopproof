@@ -4,9 +4,11 @@
 import { afterAll, afterEach, beforeAll, expect } from 'vitest'
 import { releaseHeld, worker } from './api-mocks.ts'
 
-const unhandled: string[] = []
+const unhandled: Array<string> = []
 
 const frameRequest = (data: unknown): Request | undefined =>
+  // A web Request has no brand to check but its class.
+  // oxlint-disable-next-line @nkzw/no-instanceof
   typeof data === 'object' && data !== null && 'request' in data && data.request instanceof Request
     ? data.request
     : undefined
@@ -18,9 +20,13 @@ beforeAll(async () => {
     // MSW 3 types every frame's data as unknown, so read the request of an HTTP frame by narrowing.
     onUnhandledFrame: ({ frame }) => {
       const request = frameRequest(frame.data)
-      if (!request) return
+      if (!request) {
+        return
+      }
       const url = new URL(request.url)
-      if (/^\/(api|_serverFn)\//.test(url.pathname)) unhandled.push(`${request.method} ${url.pathname}`)
+      if (/^\/(api|_serverFn)\//.test(url.pathname)) {
+        unhandled.push(`${request.method} ${url.pathname}`)
+      }
     },
   })
 })

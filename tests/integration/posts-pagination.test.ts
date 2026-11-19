@@ -31,9 +31,9 @@ const tag = crypto.randomUUID().slice(0, 8)
 
 /** Publishes posts one after another (distinct timestamps), oldest first. */
 const publish = async (client: Client, label: string, count: number) => {
-  const posts: Post[] = []
+  const posts: Array<Post> = []
   for (let i = 0; i < count; i++) {
-    const res = await myPostsCreate({ client, body: { body: `pagination ${tag} ${label} ${i}` } })
+    const res = await myPostsCreate({ body: { body: `pagination ${tag} ${label} ${i}` }, client })
     expect(res.response?.status).toBe(201)
     posts.push(res.data!)
     created.push({ client, id: res.data!.id })
@@ -60,15 +60,17 @@ const myPage = async (client: Client, query: Query) => {
 const walk = async (
   fetchPage: (query: Query) => Promise<PostPage>,
   limit: number,
-  options: { done?: (seen: Post[]) => boolean; between?: (page: number) => Promise<void> } = {},
+  options: { between?: (page: number) => Promise<void>; done?: (seen: Array<Post>) => boolean } = {},
 ) => {
-  const pages: PostPage[] = []
+  const pages: Array<PostPage> = []
   let cursor: string | undefined
   for (let n = 0; n < 200; n++) {
-    const page = await fetchPage({ limit: String(limit), ...(cursor ? { cursor } : {}) })
+    const page = await fetchPage(cursor ? { cursor, limit: String(limit) } : { limit: String(limit) })
     pages.push(page)
     const seen = pages.flatMap((p) => p.items)
-    if (!page.nextCursor || options.done?.(seen)) return pages
+    if (!page.nextCursor || options.done?.(seen)) {
+      return pages
+    }
     await options.between?.(n)
     cursor = page.nextCursor
   }
@@ -76,7 +78,7 @@ const walk = async (
 }
 
 /** Every full page (one with a next cursor) holds exactly `limit` posts; the last one at most `limit`. */
-const expectPageSizes = (pages: PostPage[], limit: number) => {
+const expectPageSizes = (pages: Array<PostPage>, limit: number) => {
   for (const page of pages.slice(0, -1)) {
     expect(page.nextCursor).toEqual(expect.any(String))
     expect(page.items).toHaveLength(limit)
@@ -85,12 +87,12 @@ const expectPageSizes = (pages: PostPage[], limit: number) => {
 }
 
 /** Newest first: createdAt never increases (it is rounded to milliseconds, so equal values are allowed). */
-const expectNewestFirst = (posts: Post[]) => {
+const expectNewestFirst = (posts: Array<Post>) => {
   const times = posts.map((p) => Date.parse(p.createdAt))
   expect(times).toEqual(times.toSorted((a, b) => b - a))
 }
 
-const ids = (posts: Post[]) => posts.map((p) => p.id)
+const ids = (posts: Array<Post>) => posts.map((p) => p.id)
 
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url')
 
@@ -98,7 +100,9 @@ const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('
 const cursorAfter = async (count: number) => {
   let cursor: string | undefined
   for (let left = count; left > 0; left -= 50) {
-    const page = await publicPage({ limit: String(Math.min(left, 50)), ...(cursor ? { cursor } : {}) })
+    const page = await publicPage(
+      cursor ? { cursor, limit: String(Math.min(left, 50)) } : { limit: String(Math.min(left, 50)) },
+    )
     cursor = page.nextCursor ?? undefined
   }
   return cursor!
@@ -153,9 +157,11 @@ describe('cursor', () => {
     ]) {
       expect(res.response?.status).toBe(400)
       expect(res.error).toMatchObject({ _tag: 'ValidationError', message: 'Invalid request query' })
-      const issues = (res.error as { issues: Array<{ path: string[] }> }).issues
+      const issues = (res.error as { issues: Array<{ path: Array<string> }> }).issues
       expect(issues.length).toBeGreaterThan(0)
-      for (const issue of issues) expect(issue.path[0]).toBe('cursor')
+      for (const issue of issues) {
+        expect(issue.path[0]).toBe('cursor')
+      }
     }
   })
 
@@ -172,8 +178,9 @@ describe('cursor', () => {
       for (const res of [
         await publicPostsList({ client: anonymous, query: { cursor: encode({ createdAt, id }) } }),
         await myPostsList({ client: author, query: { cursor: encode({ createdAt, id }) } }),
-      ])
+      ]) {
         expect(res.response?.status, `${createdAt} ${id}: ${JSON.stringify(res.error)}`).toBe(200)
+      }
     }
   })
 
@@ -219,7 +226,7 @@ describe('paging', () => {
     // Published concurrently: timestamps can collide at millisecond precision, and the id breaks ties.
     const burst = await Promise.all(
       Array.from({ length: 6 }, async (_, i) => {
-        const res = await myPostsCreate({ client: author, body: { body: `pagination ${tag} burst ${i}` } })
+        const res = await myPostsCreate({ body: { body: `pagination ${tag} burst ${i}` }, client: author })
         expect(res.response?.status).toBe(201)
         created.push({ client: author, id: res.data!.id })
         return res.data!
@@ -249,7 +256,9 @@ describe('paging', () => {
       // A page that ends exactly at the last post says there is no next page (the server reads limit + 1).
       const cursor = await cursorAfter(all.length - 3)
       const [exact, short] = await Promise.all([publicPage({ cursor, limit: '3' }), publicPage({ cursor, limit: '2' })])
-      if (ids(exact.items).join() !== ids(all.slice(-3)).join() && attempt < 5) continue
+      if (ids(exact.items).join() !== ids(all.slice(-3)).join() && attempt < 5) {
+        continue
+      }
       expect(exact).toEqual({ items: all.slice(-3), nextCursor: null })
       expect(short.items).toEqual(all.slice(-3, -1))
       expect(short.nextCursor).toEqual(expect.any(String))
@@ -271,14 +280,18 @@ describe('author isolation across pages', () => {
         done: (seen) => [...ownIds].every((id) => ids(seen).includes(id)),
       })
       const seen = ids(pages.flatMap((p) => p.items))
-      for (const post of foreign) expect(seen).not.toContain(post.id)
+      for (const post of foreign) {
+        expect(seen).not.toContain(post.id)
+      }
       expect(seen.filter((id) => ownIds.has(id))).toEqual(ids(own).toReversed())
     }
 
     // A cursor taken from one author's list is only a position in the other's list.
     const first = await myPage(author, { limit: '1' })
     const across = await myPage(other, { cursor: first.nextCursor!, limit: '50' })
-    for (const post of mine) expect(ids(across.items)).not.toContain(post.id)
+    for (const post of mine) {
+      expect(ids(across.items)).not.toContain(post.id)
+    }
   })
 
   it('requires a session for the author list, whatever the query', async () => {

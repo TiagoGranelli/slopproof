@@ -54,7 +54,7 @@ describe('PostComposer', () => {
 
   it('is busy while publishing, then clears the draft, reports success and invalidates the public list', async () => {
     const response = held()
-    const sent: unknown[] = []
+    const sent: Array<unknown> = []
     worker.use(
       api.myPostsCreate(async ({ request }) => {
         sent.push(await request.json())
@@ -118,40 +118,40 @@ describe('PostComposer', () => {
 
   const failures = [
     {
-      name: 'a ValidationError, next to the field it names',
+      describedBy: 'post-body-count post-body-error',
       handler: () =>
         apiError('myPostsCreate', 400, {
           _tag: 'ValidationError',
+          issues: [{ message: 'Use at most 280 characters.', path: ['body'] }],
           message: 'Invalid request payload',
-          issues: [{ path: ['body'], message: 'Use at most 280 characters.' }],
         }),
-      message: 'Use at most 280 characters.',
-      describedBy: 'post-body-count post-body-error',
       invalid: true,
+      message: 'Use at most 280 characters.',
+      name: 'a ValidationError, next to the field it names',
     },
     {
-      name: 'an ended session',
+      describedBy: 'post-body-count post-error',
       handler: () => apiError('myPostsCreate', 401, { _tag: 'Unauthorized', message: 'Authentication required' }),
+      invalid: false,
       message: 'Your session has ended. Sign in again to continue. Sign in',
-      describedBy: 'post-body-count post-error',
-      invalid: false,
+      name: 'an ended session',
     },
     {
-      name: 'a network failure',
+      describedBy: 'post-body-count post-error',
       handler: () => apiFailure('myPostsCreate', { network: true }),
-      message: 'Could not publish the post. Check your connection and try again.',
-      describedBy: 'post-body-count post-error',
       invalid: false,
+      message: 'Could not publish the post. Check your connection and try again.',
+      name: 'a network failure',
     },
     {
-      name: 'a CSRF rejection (plain-text 403)',
-      handler: () => apiFailure('myPostsCreate', { status: 403, text: 'Forbidden' }),
-      message: 'Could not publish the post. Try again.',
       describedBy: 'post-body-count post-error',
+      handler: () => apiFailure('myPostsCreate', { status: 403, text: 'Forbidden' }),
       invalid: false,
+      message: 'Could not publish the post. Try again.',
+      name: 'a CSRF rejection (plain-text 403)',
     },
   ]
-  it.each(failures)('keeps the draft and describes $name', async ({ handler, message, describedBy, invalid }) => {
+  it.each(failures)('keeps the draft and describes $name', async ({ describedBy, handler, invalid, message }) => {
     worker.use(handler())
     const onPublished = vi.fn<() => void>()
     await renderInApp(<PostComposer onPublished={onPublished} />)

@@ -6,14 +6,16 @@ import { log } from '../log.ts'
 const https = env.appUrl.startsWith('https://')
 
 const baselineHeaders = Object.entries({
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'x-frame-options': 'DENY',
   'cross-origin-opener-policy': 'same-origin',
   'cross-origin-resource-policy': 'same-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-  ...(https ? { 'strict-transport-security': 'max-age=63072000; includeSubDomains' } : {}),
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
 })
+if (https) {
+  baselineHeaders.push(['strict-transport-security', 'max-age=63072000; includeSubDomains'])
+}
 
 /**
  * Content-Security-Policy for responses that bring none: JSON, public/ files, Nitro's own error responses.
@@ -37,10 +39,17 @@ type Event = { req: Request }
 
 /** The production security headers, where the response does not set its own. */
 const addSecurityHeaders = (headers: Headers) => {
-  for (const [name, value] of baselineHeaders) if (!headers.has(name)) headers.set(name, value)
+  for (const [name, value] of baselineHeaders) {
+    if (!headers.has(name)) {
+      headers.set(name, value)
+    }
+  }
   const csp = headers.get('content-security-policy')
-  if (!csp) headers.set('content-security-policy', LOCKED_DOWN_CSP)
-  else if (https) headers.set('content-security-policy', `${csp}; upgrade-insecure-requests`)
+  if (!csp) {
+    headers.set('content-security-policy', LOCKED_DOWN_CSP)
+  } else if (https) {
+    headers.set('content-security-policy', `${csp}; upgrade-insecure-requests`)
+  }
 }
 
 /** One JSON line per request. Never the query string, headers or body: they can carry credentials. */
@@ -48,14 +57,16 @@ const logRequest = (response: Response, event: Event) => {
   const path = new URL(event.req.url).pathname
   const aborted = event.req.signal.aborted
   const status = aborted ? CLIENT_CLOSED : response.status
-  if (QUIET.test(path) && status < 400) return
+  if (QUIET.test(path) && status < 400) {
+    return
+  }
   const since = started.get(event)
   log(status >= 500 ? 'error' : 'info', 'request', {
+    aborted: aborted || undefined,
     method: event.req.method,
+    ms: since === undefined ? undefined : Math.round(performance.now() - since),
     path,
     status,
-    ...(aborted ? { aborted: true } : {}),
-    ms: since === undefined ? undefined : Math.round(performance.now() - since),
   })
 }
 
@@ -74,8 +85,12 @@ export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('response', (response, event) => {
     // Once draining, every response closes its connection: a keep-alive client (a load balancer) then opens a
     // new one, which the closed listener refuses, instead of sending more requests to a stopping process.
-    if (isDraining()) response.headers.set('connection', 'close')
-    if (production) addSecurityHeaders(response.headers)
+    if (isDraining()) {
+      response.headers.set('connection', 'close')
+    }
+    if (production) {
+      addSecurityHeaders(response.headers)
+    }
     logRequest(response, event)
   })
 })

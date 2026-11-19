@@ -31,8 +31,10 @@ filter = '''
     `not-a-secret`,
     // Dummies and documentation examples: postgres://build:build@127.0.0.1:1/build, smtps://user:password@...
     `^(build|unused|password)$`,
-    // An expression, not a literal: BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET
+    // An expression, not a literal: BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET, or a value generated per
+    // run such as randomBytes(32).toString('base64') (scripts/docker-smoke.ts).
     `^process\.env\.`,
+    `^randomBytes$`,
   ])
 )
 ||
@@ -51,13 +53,6 @@ filter = '''
     // has it.
     (attributes["git.sha"] == "be0c75cff2dfdc4d28d2e1bf745ad5d43edb83ba" && finding["secret"] == "secret")
   )
-)
-||
-// Commit 89fe6ec set BETTER_AUTH_SECRET to `randomBytes(32).toString('base64')`, an expression the rule reads as a
-// literal; the smoke test now takes its secret from the compose recipe.
-(
-  attributes["path"] == "scripts/docker-smoke.ts" && finding["rule_id"] == "better-auth-secret" &&
-  attributes["git.sha"] == "89fe6ec190b7bc2d69b1735a7fb1333541ecf358" && finding["secret"] == "randomBytes"
 )
 '''
 

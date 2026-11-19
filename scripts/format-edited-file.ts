@@ -9,7 +9,7 @@ import { join, relative } from 'node:path'
 const root = join(import.meta.dirname, '..')
 const input = JSON.parse(readFileSync(0, 'utf8')) as { tool_input?: { file_path?: string } }
 const file = relative(root, input.tool_input?.file_path ?? root)
-const run = (tool: string, args: string[]) =>
+const run = (tool: string, args: Array<string>) =>
   spawnSync(join('node_modules', '.bin', tool), [...args, '--no-error-on-unmatched-pattern', file], {
     cwd: root,
     encoding: 'utf8',

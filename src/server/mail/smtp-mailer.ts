@@ -8,19 +8,19 @@ import type { Mailer } from './mailer.ts'
  * start), with credentials in the userinfo part: `smtps://user:password@smtp.example.com:465`. Timeouts are
  * short because sends run in the background and shutdown waits for them.
  */
-export const createSmtpMailer = (options: { url: Redacted.Redacted; from: string }): Mailer => {
+export const createSmtpMailer = (options: { from: string; url: Redacted.Redacted }): Mailer => {
   const transport = createTransport({
-    url: Redacted.value(options.url),
-    connectionTimeout: 5_000,
-    greetingTimeout: 5_000,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
     socketTimeout: 15_000,
+    url: Redacted.value(options.url),
   })
   return {
-    async send(message) {
-      await transport.sendMail({ from: options.from, to: message.to, subject: message.subject, text: message.text })
-    },
     close() {
       transport.close()
+    },
+    async send(message) {
+      await transport.sendMail({ from: options.from, subject: message.subject, text: message.text, to: message.to })
     },
   }
 }

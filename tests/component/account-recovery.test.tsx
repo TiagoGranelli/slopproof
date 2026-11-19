@@ -14,9 +14,9 @@ const unreachable = 'Could not reach the server. Check your connection and try a
 const expiredLink = 'This link is invalid or has expired. Ask for a new one.'
 
 const renderReset = (url: string) =>
-  renderInApp(null, { url, route: { path: '/reset-password', route: ResetPasswordRoute } })
+  renderInApp(null, { route: { path: '/reset-password', route: ResetPasswordRoute }, url })
 const renderVerify = (url: string) =>
-  renderInApp(null, { url, route: { path: '/verify-email', route: VerifyEmailRoute } })
+  renderInApp(null, { route: { path: '/verify-email', route: VerifyEmailRoute }, url })
 const button = (name: string) => page.getByRole('button', { name })
 const email = () => page.getByLabelText('Email')
 const password = () => page.getByLabelText('Password')
@@ -47,7 +47,9 @@ describe('SignUpForm', () => {
     await expect.element(page.getByLabelText('Name')).toHaveAttribute('autocomplete', 'name')
     await expect.element(email()).toHaveAttribute('type', 'email')
     await expect.element(password()).toHaveAttribute('autocomplete', 'new-password')
-    for (const field of [page.getByLabelText('Name'), email(), password()]) await expect.element(field).toBeRequired()
+    for (const field of [page.getByLabelText('Name'), email(), password()]) {
+      await expect.element(field).toBeRequired()
+    }
     await expect.element(password()).toHaveAccessibleDescription('At least 12 characters.')
     await expect.element(formOf(button('Create account'))).toHaveAttribute('method', 'post')
   })
@@ -95,25 +97,25 @@ describe('SignUpForm', () => {
     await expectFocusedStatus('Confirm your email')
     await expect.element(password()).not.toBeInTheDocument()
     expect(calls.data).toEqual([
-      { name: 'Ada Lovelace', email: 'ada@example.test', password: 'a long enough password' },
+      { email: 'ada@example.test', name: 'Ada Lovelace', password: 'a long enough password' },
     ])
   })
 
-  it.each<{ name: string; failure: AuthFailure; field: typeof password; message: string }>([
+  it.each<{ failure: AuthFailure; field: typeof password; message: string; name: string }>([
     {
-      name: 'a password the server finds too short',
       failure: { code: 'PASSWORD_TOO_SHORT' },
       field: password,
       message: 'Use at least 12 characters.',
+      name: 'a password the server finds too short',
     },
     {
-      name: 'an address the server rejects',
       failure: { code: 'INVALID_EMAIL' },
       field: email,
       message: 'Enter a valid email address.',
+      name: 'an address the server rejects',
     },
   ])('explains $name next to that field and keeps the form', async ({ failure, field, message }) => {
-    worker.use(authFunction('signUp', { ok: false, failure }))
+    worker.use(authFunction('signUp', { failure, ok: false }))
     await renderInApp(<SignUpForm />, { url: '/sign-up' })
     await signUp()
     await expectFieldIssue(field(), message, button('Create account'))
@@ -125,7 +127,7 @@ describe('SignUpForm', () => {
     ['an unknown failure', { code: 'FAILED_TO_CREATE_USER' }, 'Something went wrong. Try again.'],
     ['a network failure', 'network', unreachable],
   ])('explains %s and keeps the form', async (_, failure, message) => {
-    worker.use(authFunction('signUp', failure === 'network' ? failure : { ok: false, failure }))
+    worker.use(authFunction('signUp', failure === 'network' ? failure : { failure, ok: false }))
     await renderInApp(<SignUpForm />, { url: '/sign-up' })
     await signUp()
     await expect.element(page.getByRole('alert')).toHaveTextContent(message)
@@ -162,7 +164,7 @@ describe('ForgotPasswordForm', () => {
     ['a rate limit', { code: 'RATE_LIMITED', retryAfter: 1 }, 'Too many attempts. Try again in 1 second.'],
     ['a failing server', 'thrown', unreachable],
   ])('explains %s and lets the visitor retry', async (_, failure, message) => {
-    worker.use(authFunction('requestPasswordReset', failure === 'thrown' ? failure : { ok: false, failure }))
+    worker.use(authFunction('requestPasswordReset', failure === 'thrown' ? failure : { failure, ok: false }))
     await renderInApp(<ForgotPasswordForm />, { url: '/forgot-password' })
     await email().fill('someone@example.test')
     await button('Send reset link').click()
@@ -197,7 +199,7 @@ describe('/reset-password', () => {
     const { queryClient, router } = await renderReset('/reset-password?token=abc123')
     queryClient.setQueryData(['my data'], ['private'])
     // The flash leaves the location once /login shows it, so it is read from the navigation itself.
-    const flashes: unknown[] = []
+    const flashes: Array<unknown> = []
     router.subscribe('onBeforeNavigate', (event) => flashes.push(event.toLocation.state.flash))
     await setNewPassword()
     await expectBusy('Set new password')
@@ -205,7 +207,7 @@ describe('/reset-password', () => {
     await expect.poll(() => router.state.location.pathname).toBe('/login')
     expect(flashes).toContain('password-reset')
     expect(queryClient.getQueryData(['my data'])).toBeUndefined()
-    expect(calls.data).toEqual([{ token: 'abc123', newPassword: 'a brand new password' }])
+    expect(calls.data).toEqual([{ newPassword: 'a brand new password', token: 'abc123' }])
   })
 
   it('does not send a new password shorter than 12 characters', async () => {
@@ -221,7 +223,7 @@ describe('/reset-password', () => {
   })
 
   it('explains a password the server finds too long next to it, without the code', async () => {
-    worker.use(authFunction('resetPassword', { ok: false, failure: { code: 'PASSWORD_TOO_LONG' } }))
+    worker.use(authFunction('resetPassword', { failure: { code: 'PASSWORD_TOO_LONG' }, ok: false }))
     await renderReset('/reset-password?token=abc123')
     await setNewPassword()
     await expectFieldIssue(newPassword(), 'Use at most 128 characters.', button('Set new password'))
@@ -233,7 +235,7 @@ describe('/reset-password', () => {
     ['an expired token', { code: 'TOKEN_EXPIRED' }, expiredLink],
     ['a deleted account', { code: 'USER_NOT_FOUND' }, expiredLink],
   ])('explains %s without the code', async (_, failure, message) => {
-    worker.use(authFunction('resetPassword', { ok: false, failure }))
+    worker.use(authFunction('resetPassword', { failure, ok: false }))
     const { queryClient } = await renderReset('/reset-password?token=abc123')
     queryClient.setQueryData(['my data'], ['private'])
     await setNewPassword()
@@ -279,7 +281,7 @@ describe('/verify-email', () => {
     ['an invalid', { code: 'INVALID_TOKEN' }],
     ['an expired', { code: 'TOKEN_EXPIRED' }],
   ])('says %s link cannot be used, without the code, and offers a new one', async (_, failure) => {
-    worker.use(authFunction('verifyEmail', { ok: false, failure }))
+    worker.use(authFunction('verifyEmail', { failure, ok: false }))
     await renderVerify('/verify-email?token=tok-1')
     await expect.element(resend()).not.toBeInTheDocument()
     await button('Confirm email').click()

@@ -5,23 +5,23 @@ import { describe, expect, it } from 'vitest'
 import { createQueryClient } from '#/lib/query-client.ts'
 
 const setup = async () => {
-  const events: string[] = []
+  const events: Array<string> = []
   const queryClient = createQueryClient()
   const list = (name: string) => ({
-    queryKey: [name],
+    getNextPageParam: (_: string, pages: Array<string>) => pages.length,
+    initialPageParam: 0,
     queryFn: ({ pageParam }: { pageParam: number }) => {
       events.push(`fetch ${name} ${pageParam}`)
       return Promise.resolve(`${name} page ${pageParam}`)
     },
-    initialPageParam: 0,
-    getNextPageParam: (_: string, pages: string[]) => pages.length,
+    queryKey: [name],
   })
   // Three pages each; only `mine` has an observer (on screen), `public` and `other` are inactive.
   for (const name of ['public', 'mine', 'other']) {
     await queryClient.infiniteQuery(list(name))
     queryClient.setQueryData<InfiniteData<string, number>>([name], {
-      pages: [0, 1, 2].map((n) => `${name} page ${n}`),
       pageParams: [0, 1, 2],
+      pages: [0, 1, 2].map((n) => `${name} page ${n}`),
     })
   }
   const unsubscribe = new InfiniteQueryObserver(queryClient, { ...list('mine'), staleTime: Infinity }).subscribe(
@@ -29,21 +29,21 @@ const setup = async () => {
   )
   events.length = 0
   const pages = (name: string) => queryClient.getQueryData<InfiniteData<string>>([name])?.pages
-  return { events, queryClient, pages, unsubscribe }
+  return { events, pages, queryClient, unsubscribe }
 }
 
 describe('createQueryClient', () => {
   it('refetches what a mutation invalidates after its onSuccess, before it resolves', async () => {
-    const { events, queryClient, pages, unsubscribe } = await setup()
+    const { events, pages, queryClient, unsubscribe } = await setup()
     const mutation = new MutationObserver(queryClient, {
-      mutationFn: () => Promise.resolve('saved'),
       meta: {
         invalidates: [
-          { queryKey: ['public'], inactiveToo: true, firstPageOnly: true },
+          { firstPageOnly: true, inactiveToo: true, queryKey: ['public'] },
           { queryKey: ['mine'] },
           { queryKey: ['other'] },
         ],
       },
+      mutationFn: () => Promise.resolve('saved'),
       onSuccess: () => void events.push('caller onSuccess'),
     })
     await mutation.mutate(undefined)
@@ -69,11 +69,11 @@ describe('createQueryClient', () => {
     const { queryClient, unsubscribe } = await setup()
     const failing = (message: string) =>
       new MutationObserver(queryClient, {
-        mutationFn: () => Promise.reject(new Error(message)),
         meta: {
           invalidates: [{ queryKey: ['other'] }],
           invalidatesOnError: (error) => error instanceof Error && error.message === 'gone',
         },
+        mutationFn: () => Promise.reject(new Error(message)),
       })
     await expect(failing('offline').mutate(undefined)).rejects.toThrow('offline')
     expect(queryClient.getQueryState(['other'])?.isInvalidated).toBe(false)
@@ -83,14 +83,14 @@ describe('createQueryClient', () => {
   })
 
   it('clears the cache before the caller onSuccess, and leaves it alone without meta', async () => {
-    const { queryClient, pages, unsubscribe } = await setup()
+    const { pages, queryClient, unsubscribe } = await setup()
     await new MutationObserver(queryClient, { mutationFn: () => Promise.resolve(null) }).mutate(undefined)
     expect(pages('mine')).toHaveLength(3)
 
-    const seen: unknown[] = []
+    const seen: Array<unknown> = []
     await new MutationObserver(queryClient, {
-      mutationFn: () => Promise.resolve(null),
       meta: { clearsCache: true },
+      mutationFn: () => Promise.resolve(null),
       onSuccess: () => void seen.push(pages('mine')),
     }).mutate(undefined)
     expect(seen).toEqual([undefined])

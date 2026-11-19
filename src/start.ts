@@ -23,16 +23,24 @@ const csrf = createCsrfMiddleware({
 
 // Nothing downstream limits body size (srvx and Better Auth read whole bodies into memory).
 // 413 for a declared oversize body, 411 for a body without Content-Length (chunked upload).
-const bodyLimit = createMiddleware().server(({ request, next }) => {
-  if (SAFE_METHODS.has(request.method)) return next()
+const bodyLimit = createMiddleware().server(({ next, request }) => {
+  if (SAFE_METHODS.has(request.method)) {
+    return next()
+  }
   const length = request.headers.get('content-length')
-  if (length === null) return request.headers.has('transfer-encoding') ? new Response(null, { status: 411 }) : next()
-  if (!/^\d+$/.test(length)) return new Response(null, { status: 400 })
-  if (Number(length) > MAX_BODY_BYTES) return new Response(null, { status: 413 })
+  if (length === null) {
+    return request.headers.has('transfer-encoding') ? new Response(null, { status: 411 }) : next()
+  }
+  if (!/^\d+$/.test(length)) {
+    return new Response(null, { status: 400 })
+  }
+  if (Number(length) > MAX_BODY_BYTES) {
+    return new Response(null, { status: 413 })
+  }
   return next()
 })
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [serverFunctionRequestErrors, csrf, bodyLimit],
   functionMiddleware: [serverFunctionErrors],
+  requestMiddleware: [serverFunctionRequestErrors, csrf, bodyLimit],
 }))

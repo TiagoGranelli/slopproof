@@ -14,42 +14,42 @@ const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((modul
 export function DeleteAccountForm() {
   const navigate = useNavigate()
   const remove = useDeleteAccount({
-    mutationConfig: { onSuccess: () => navigate({ to: '/', replace: true, state: { flash: 'account-deleted' } }) },
+    mutationConfig: { onSuccess: () => navigate({ replace: true, state: { flash: 'account-deleted' }, to: '/' }) },
   })
   const form = useAppForm({
-    defaultValues: { password: '', confirm: false },
+    defaultValues: { confirm: false, password: '' },
+    onSubmit: ({ value }) => remove.mutate({ password: value.password }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
-    onSubmit: ({ value }) => remove.mutate({ password: value.password }),
   })
   return (
     <AuthForm
-      id="delete-account"
-      submitLabel="Delete account"
-      submitVariant="destructive"
-      form={form}
-      schema={schema}
-      pending={remove.isPending}
       error={remove.error}
       fieldCodes={{ INVALID_PASSWORD: 'password' }}
+      form={form}
+      id="delete-account"
+      pending={remove.isPending}
+      schema={schema}
+      submitLabel="Delete account"
+      submitVariant="destructive"
     >
       <form.AppField name="password">
         {(field) => (
           <field.TextField
+            autoComplete="current-password"
             id="delete-password"
             label="Password"
-            type="password"
-            autoComplete="current-password"
             required
+            type="password"
           />
         )}
       </form.AppField>
       <form.AppField name="confirm">
         {(field) => (
           <field.CheckboxField
+            className="mt-0.5 size-4 accent-destructive"
             id="delete-confirm"
             label="I understand that my account and all its data are deleted for good."
-            className="mt-0.5 size-4 accent-destructive"
             required
           />
         )}

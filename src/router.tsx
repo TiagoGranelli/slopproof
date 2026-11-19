@@ -36,6 +36,6 @@ export function getRouter() {
     scrollRestoration: true,
     ssr: getSsrOptions(),
   })
-  setupRouterSsrQueryIntegration({ router, queryClient })
+  setupRouterSsrQueryIntegration({ queryClient, router })
   return router
 }

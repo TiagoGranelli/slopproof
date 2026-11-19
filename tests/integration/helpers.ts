@@ -46,17 +46,21 @@ export const postSignIn = (
   headers: Record<string, string> & { 'x-forwarded-for': string },
 ) =>
   fetch(`${appUrl}/api/auth/sign-in/email`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: appUrl, ...headers },
     body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+    headers: { 'content-type': 'application/json', origin: appUrl, ...headers },
+    method: 'POST',
   })
 
 /** Signs in and returns the session cookie; fails the test on anything but 200. */
 export const signIn = async (credentials: { email: string; password: string }, ip: string) => {
   const res = await postSignIn(credentials, { 'x-forwarded-for': ip })
-  if (res.status !== 200) throw new Error(`sign-in as ${credentials.email} failed: ${res.status} ${await res.text()}`)
+  if (res.status !== 200) {
+    throw new Error(`sign-in as ${credentials.email} failed: ${res.status} ${await res.text()}`)
+  }
   const cookie = sessionCookie(res)
-  if (!cookie) throw new Error(`sign-in as ${credentials.email} set no session cookie`)
+  if (!cookie) {
+    throw new Error(`sign-in as ${credentials.email} set no session cookie`)
+  }
   return cookie
 }
 

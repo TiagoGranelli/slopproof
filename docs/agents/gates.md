@@ -12,8 +12,8 @@ covers and how to make an exception.
 | --- | --- |
 | `secrets` | Betterleaks on the staged changes, only when a `betterleaks` 2 binary is on the `PATH` (CI's `secrets` job always runs). Until 2.0.0 is released Homebrew installs version 1, which the job skips: take 2.0.0-rc.1 from the [release](https://github.com/betterleaks/betterleaks/releases/tag/v2.0.0-rc.1) |
 | `format` | `oxfmt --check` |
-| `lint` | type-aware Oxlint with the `pedantic` category, TanStack Query/Router, Playwright and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
-| `typecheck` | `tsc` |
+| `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 3 with sorting, the `pedantic` category, TanStack Query/Router, Playwright and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
+| `typecheck` | `tsrs --noEmit` (TypeScript 7.1 beta, the same checker the type-aware lint uses: ADR 0016) |
 | `effect` | Effect language-service diagnostics (`effect-tsgo diagnostics --strict`); every rule whose default is a suggestion is promoted to a warning in `tsconfig.json`, so it fails too |
 | `deadcode` | Fallow with `--fail-on-issues`: unused files, exports, types and dependencies, zones |
 | `complexity` | Fallow: cognitive 15, cyclomatic 20 per function |
@@ -45,8 +45,8 @@ gate files to review:
 - **Lint:** a rule that is wrong for one line takes `// oxlint-disable-next-line <rule>` under a comment line
   saying why (`tests/unit/repo-policy.test.ts` rejects one without; a stale directive fails). `@ts-expect-error`
   needs a reason of 10 or more characters; `@ts-ignore` and `@ts-nocheck` are banned. Turned-off rules are
-  commented in `.oxlintrc.json`.
-- **Repository syntax rules** (`eslint-js/no-restricted-syntax` selectors in `.oxlintrc.json`, each message says
+  commented in `.config/oxlint/`.
+- **Repository syntax rules** (`eslint-js/no-restricted-syntax` selectors in `.config/oxlint/`, each message says
   what to do instead): in `src/`, `as unknown as`, a CORS header, `import.meta.env.VITE_*` (compiled into the
   browser bundle) and a server function validator that is not `Schema.toStandardSchemaV1(...)`; in `src/contract/`,
   an id declared as `Schema.String` instead of a brand from `ids.ts`; in `src/routes/`,

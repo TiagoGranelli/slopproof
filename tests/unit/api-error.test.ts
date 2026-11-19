@@ -32,11 +32,11 @@ describe('describeApiError', () => {
   it('lists every validation issue', () => {
     const error = {
       _tag: 'ValidationError',
-      message: 'Invalid request payload',
       issues: [
-        { path: ['body'], message: 'Expected a value with a length of at most 280.' },
-        { path: ['title'], message: 'Missing key.' },
+        { message: 'Expected a value with a length of at most 280.', path: ['body'] },
+        { message: 'Missing key.', path: ['title'] },
       ],
+      message: 'Invalid request payload',
     }
     expect(describeApiError(error, ACTION)).toEqual({
       message: 'Could not save your changes: Expected a value with a length of at most 280. Missing key.',
@@ -45,7 +45,7 @@ describe('describeApiError', () => {
   })
 
   it('falls back to the validation message when there are no issues', () => {
-    const error = { _tag: 'ValidationError', message: 'Invalid request payload', issues: [] }
+    const error = { _tag: 'ValidationError', issues: [], message: 'Invalid request payload' }
     expect(describeApiError(error, ACTION).message).toBe('Could not save your changes: Invalid request payload')
   })
 
@@ -104,12 +104,12 @@ describe('apiErrorTag', () => {
 describe('fieldIssue', () => {
   const invalid = {
     _tag: 'ValidationError',
-    message: 'Invalid request payload',
     issues: [
-      { path: [], message: 'Missing body.' },
-      { path: ['body'], message: 'Use at most 280 characters.' },
-      { path: ['body', 'nested'], message: 'A later issue for the same field.' },
+      { message: 'Missing body.', path: [] },
+      { message: 'Use at most 280 characters.', path: ['body'] },
+      { message: 'A later issue for the same field.', path: ['body', 'nested'] },
     ],
+    message: 'Invalid request payload',
   }
 
   it('finds the first issue that names the field', () => {

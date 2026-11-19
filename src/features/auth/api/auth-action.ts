@@ -16,17 +16,16 @@ export class AuthActionError extends Error {
 
 /** The value of a successful outcome; throws AuthActionError for a failed one. */
 const unwrap = <T>(outcome: AuthOutcome<T>): T => {
-  if (!outcome.ok) throw new AuthActionError(outcome.failure)
+  if (!outcome.ok) {
+    throw new AuthActionError(outcome.failure)
+  }
   return outcome.value
 }
 
 /** The `data` a server function takes. */
-export type DataOf<F> = F extends (options: { data: infer D }) => unknown ? D : never
+export type DataOf<F extends (options: { data: never }) => object> = Parameters<F>[0]['data']
 
-export type AuthMutationConfig<TInput, TOutput = null> = Omit<
-  UseMutationOptions<TOutput, Error, TInput>,
-  'mutationFn' | 'onSuccess'
-> & { onSuccess?: (data: TOutput, input: TInput) => unknown }
+export type AuthMutationConfig<TInput, TOutput = null> = Omit<UseMutationOptions<TOutput, Error, TInput>, 'mutationFn'>
 
 /**
  * A mutation over an account server function. `effects` declares what it does to the cache (src/lib/query-client.ts
@@ -39,7 +38,7 @@ export function useAuthMutation<TInput, TOutput>(
 ) {
   return useMutation({
     ...config,
-    mutationFn: async (input: TInput) => unwrap(await action(input)),
     meta: effects,
+    mutationFn: async (input: TInput) => unwrap(await action(input)),
   })
 }

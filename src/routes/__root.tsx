@@ -17,7 +17,7 @@ const NOT_FOUND_TITLE = pageTitle('Page not found')
  * Whether the page is the not-found state: a route threw notFound(), or no route matches the address (then
  * TanStack marks the match that renders the not-found page `_notFound`, a field of its public match type).
  */
-const isNotFound = (matches: ReadonlyArray<{ status: string; _notFound?: boolean }>) =>
+const isNotFound = (matches: ReadonlyArray<{ _notFound?: boolean; status: string }>) =>
   // The leading underscore is TanStack's name for the field, not ours to change.
   // oxlint-disable-next-line eslint/no-underscore-dangle
   matches.some((match) => match.status === 'notFound' || match._notFound === true)
@@ -35,6 +35,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   headers: ({ ssr }) => (import.meta.env.PROD && ssr?.nonce ? documentHeaders(nonceSources(ssr.nonce)) : undefined),
   head: ({ matches }) => ({
     meta: [
+      // HTML requires the label `utf-8` in <meta charset>; `utf8` is only an alias browsers tolerate.
+      // oxlint-disable-next-line unicorn/text-encoding-identifier-case
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       // A page's own head() replaces this title; the not-found page has none of its own.
@@ -62,8 +64,8 @@ function RootDocument() {
       {/* data-hydrated, for E2E tests, is set by the page once its content has hydrated (Page, MarkHydrated). */}
       <body className="flex min-h-dvh flex-col bg-background text-foreground antialiased">
         <SkipLink />
-        <SiteHeader user={user} signOut={<SignOutButton />} />
-        <main id="main" tabIndex={-1} className="flex-1 outline-none">
+        <SiteHeader signOut={<SignOutButton />} user={user} />
+        <main className="flex-1 outline-none" id="main" tabIndex={-1}>
           <Outlet />
           <RouteAnnouncer />
         </main>

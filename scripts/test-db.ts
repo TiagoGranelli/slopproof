@@ -7,8 +7,9 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Client, Pool } from 'pg'
 
 const assertTestName = (name: string) => {
-  if (!/^[a-z0-9_]+_test$/.test(name))
+  if (!/^[a-z0-9_]+_test$/.test(name)) {
     throw new Error(`refusing to use database "${name}": test database names must match [a-z0-9_]+_test`)
+  }
   return name
 }
 
@@ -16,14 +17,17 @@ const adminUrl = (url: string) => Object.assign(new URL(url), { pathname: '/post
 
 /** The base DATABASE_URL (from the environment or .env), with a message that says how to get one. */
 export const baseDatabaseUrl = (): string => {
-  if (!process.env.DATABASE_URL && existsSync('.env')) process.loadEnvFile('.env')
+  if (!process.env.DATABASE_URL && existsSync('.env')) {
+    process.loadEnvFile('.env')
+  }
   const url = process.env.DATABASE_URL?.trim()
-  if (!url)
+  if (!url) {
     throw new Error(
       existsSync('.env')
         ? 'DATABASE_URL is not set in .env. Copy it from .env.example, or run `pnpm bootstrap`.'
         : 'No .env file and no DATABASE_URL. Run `pnpm bootstrap` (creates .env and starts Postgres).',
     )
+  }
   return url
 }
 
@@ -41,7 +45,7 @@ export const testDatabaseUrl = (purpose: string, override?: string): string => {
 
 /** Connects to the server's `postgres` database, turning "connection refused" into a setup hint. */
 const connectAdmin = async (url: string) => {
-  const admin = new Client({ connectionString: adminUrl(url), connectionTimeoutMillis: 5_000 })
+  const admin = new Client({ connectionString: adminUrl(url), connectionTimeoutMillis: 5000 })
   try {
     await admin.connect()
   } catch (error) {
@@ -56,11 +60,13 @@ const connectAdmin = async (url: string) => {
 }
 
 /** Runs `statements(name)` one after the other on the server of the test database `name` in `testUrl`. */
-const administer = async (testUrl: string, statements: (name: string) => string[]) => {
+const administer = async (testUrl: string, statements: (name: string) => Array<string>) => {
   const name = assertTestName(new URL(testUrl).pathname.slice(1))
   const admin = await connectAdmin(testUrl)
   try {
-    for (const statement of statements(name)) await admin.query(statement)
+    for (const statement of statements(name)) {
+      await admin.query(statement)
+    }
   } finally {
     await admin.end()
   }
@@ -96,8 +102,9 @@ const dropAbandoned = async (testUrl: string) => {
   try {
     const { rows } = await admin.query<{ datname: string }>('select datname from pg_database')
     // `if exists`: another run's sweep may drop the same one first.
-    for (const name of rows.map(({ datname }) => datname).filter((datname) => isAbandoned(datname)))
+    for (const name of rows.map(({ datname }) => datname).filter((datname) => isAbandoned(datname))) {
       await admin.query(`drop database if exists "${name}" with (force)`)
+    }
   } finally {
     await admin.end()
   }
@@ -123,7 +130,7 @@ export const resetTestDatabase = async (testUrl: string): Promise<void> => {
 }
 
 /** Sessions other than our own connected to the test database, e.g. an app that did not close its pool. */
-export const openConnections = async (testUrl: string): Promise<{ application_name: string; n: number }[]> => {
+export const openConnections = async (testUrl: string): Promise<Array<{ application_name: string; n: number }>> => {
   const name = assertTestName(new URL(testUrl).pathname.slice(1))
   const admin = await connectAdmin(testUrl)
   try {
@@ -140,8 +147,9 @@ export const openConnections = async (testUrl: string): Promise<{ application_na
 
 if (import.meta.main) {
   const url = process.env.TEST_DATABASE_URL
-  if (!url)
+  if (!url) {
     throw new Error('TEST_DATABASE_URL is not set; expected a postgres:// URL whose database name ends in _test')
+  }
   await resetTestDatabase(url)
   console.log(`reset ${new URL(url).pathname.slice(1)} and applied migrations`)
 }

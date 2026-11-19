@@ -10,30 +10,30 @@ const CHROME_WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
 
 const session = (overrides: Partial<SessionView>): SessionView => ({
-  id: crypto.randomUUID(),
-  current: false,
   createdAt: '2026-09-01T10:00:00.000Z',
-  lastActiveAt: '2026-09-20T12:30:00.000Z',
+  current: false,
+  id: crypto.randomUUID(),
   ipAddress: '198.51.100.7',
+  lastActiveAt: '2026-09-20T12:30:00.000Z',
   userAgent: FIREFOX_LINUX,
   ...overrides,
 })
 /** The session of the browser the page runs in: Firefox on Linux. */
 export const thisBrowser = session({ current: true, lastActiveAt: '2026-09-27T09:00:00.000Z' })
 /** Another session, Chrome on Windows, whose address Better Auth did not keep. */
-export const phone = session({ userAgent: CHROME_WINDOWS, ipAddress: null })
+export const phone = session({ ipAddress: null, userAgent: CHROME_WINDOWS })
 /** The accessible name of `phone`'s Sign out button. */
 export const otherName = 'Sign out Chrome on Windows, signed in 2026-09-01 10:00 UTC'
 
 /** The outcome of listing `sessions`, as the listSessions server function answers it. */
-export const listed = (...sessions: SessionView[]) => ({ ok: true, value: sessions }) as const
+export const listed = (...sessions: Array<SessionView>) => ({ ok: true, value: sessions }) as const
 /** Answers the listSessions server function with `sessions`, for the refetch after an action. */
-export const listSessions = (...sessions: SessionView[]) =>
+export const listSessions = (...sessions: Array<SessionView>) =>
   authFunction<ReadonlyArray<SessionView>>('listSessions', listed(...sessions))
 
 /** Renders `ui` with the session list already loaded (the route loader does that in the app). */
 export const renderWithSessions = (ui: ReactNode, sessions: AuthOutcome<ReadonlyArray<SessionView>>) => {
   const queryClient = testQueryClient()
   queryClient.setQueryData(sessionsQueryKey, sessions)
-  return renderInApp(ui, { url: '/account', queryClient })
+  return renderInApp(ui, { queryClient, url: '/account' })
 }

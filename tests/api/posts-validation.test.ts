@@ -12,16 +12,16 @@ const APP = 'http://localhost:3000'
 const NUL_MESSAGE = 'Remove the invisible NUL character (U+0000) from the text.'
 
 const send = async (method: string, path: string, body?: string) => {
-  const { handler, dispose } = webHandler()
+  const { dispose, handler } = webHandler()
   onTestFinished(dispose)
   const response = await handler(
     new Request(`${APP}${path}`, {
+      body: body ?? null,
+      headers: { 'content-type': 'application/json', cookie: 'better-auth.session_token=alice' },
       method,
-      headers: { cookie: 'better-auth.session_token=alice', 'content-type': 'application/json' },
-      ...(body === undefined ? {} : { body }),
     }),
   )
-  return { status: response.status, json: (await response.json()) as unknown }
+  return { json: (await response.json()) as unknown, status: response.status }
 }
 
 describe('payload validation', () => {
@@ -47,8 +47,8 @@ describe('payload validation', () => {
     ] as const) {
       const response = await send(method, path, body)
       expect(response, `${method} ${path}`).toEqual({
+        json: { _tag: 'ValidationError', issues: [{ message, path: ['body'] }], message: 'Invalid request payload' },
         status: 400,
-        json: { _tag: 'ValidationError', message: 'Invalid request payload', issues: [{ path: ['body'], message }] },
       })
     }
   })
@@ -90,16 +90,16 @@ describe('list query validation', () => {
     for (const path of ['/api/posts', '/api/me/posts']) {
       const response = await send('GET', `${path}?${query}`)
       expect(response, `${path}?${query}`).toMatchObject({
-        status: 400,
         json: { _tag: 'ValidationError', message: 'Invalid request query' },
+        status: 400,
       })
-      const { issues } = response.json as { issues: Array<{ path: unknown[] }> }
+      const { issues } = response.json as { issues: Array<{ path: Array<unknown> }> }
       expect(issues.map((issue) => issue.path[0])).toEqual([query.slice(0, query.indexOf('='))])
     }
   })
 
   it('answers any cursor with a page or a 400, never anything else', async () => {
-    const { handler, dispose } = webHandler()
+    const { dispose, handler } = webHandler()
     onTestFinished(dispose)
     const cursors = fc.oneof(
       fc.string(),
@@ -127,8 +127,8 @@ describe('list query validation', () => {
   it('accepts a well-formed cursor that matches no post, and the largest limit', async () => {
     for (const path of ['/api/posts', '/api/me/posts']) {
       expect(await send('GET', `${path}?cursor=${cursor(valid)}&limit=${POSTS_PAGE_MAX}`)).toEqual({
-        status: 200,
         json: { items: [], nextCursor: null },
+        status: 200,
       })
     }
   })

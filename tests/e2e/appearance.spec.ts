@@ -7,7 +7,7 @@ import { expect, test, visit } from './support/app.ts'
 /** The page background as the browser paints it, as `rgb(r, g, b)` (a canvas pixel, whatever the color syntax). */
 const background = (page: Page) =>
   page.evaluate(() => {
-    const context = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d')!
+    const context = Object.assign(document.createElement('canvas'), { height: 1, width: 1 }).getContext('2d')!
     context.fillStyle = getComputedStyle(document.body).backgroundColor
     context.fillRect(0, 0, 1, 1)
     const [red, green, blue] = context.getImageData(0, 0, 1, 1).data
@@ -19,7 +19,7 @@ const WHITE = 'rgb(255, 255, 255)'
 const NEAR_BLACK = 'rgb(10, 10, 10)'
 
 test('follows the system theme with CSS alone, JavaScript off', async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false, colorScheme: 'dark' })
+  const context = await browser.newContext({ colorScheme: 'dark', javaScriptEnabled: false })
   const page = await context.newPage()
   await page.goto('/login')
   expect(await background(page)).toBe(NEAR_BLACK)
@@ -82,7 +82,7 @@ test.describe('forced colors', () => {
 
   test('keeps keyboard focus visible as an outline on links, fields and buttons', async ({ page }) => {
     await visit(page, '/login')
-    const outlines: string[] = []
+    const outlines: Array<string> = []
     // Skip link, the header's three links, then the form's two fields and its button.
     for (let press = 0; press < 7; press++) {
       await page.keyboard.press('Tab')

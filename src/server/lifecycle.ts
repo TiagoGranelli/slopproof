@@ -17,7 +17,7 @@ export type ShutdownStep = (typeof STEPS)[number]
 // globalThis, where both copies find the same ones.
 const REGISTRY = Symbol.for('app.shutdown')
 const DRAINING = Symbol.for('app.draining')
-const shared = globalThis as { [REGISTRY]?: Map<ShutdownStep, Cleanup>; [DRAINING]?: boolean }
+const shared = globalThis as { [DRAINING]?: boolean; [REGISTRY]?: Map<ShutdownStep, Cleanup> }
 const registry = (shared[REGISTRY] ??= new Map<ShutdownStep, Cleanup>())
 
 /**
@@ -58,18 +58,20 @@ const runStep = async (step: ShutdownStep, cleanup: Cleanup): Promise<number> =>
  */
 export const runShutdown = async (): Promise<void> => {
   const started = performance.now()
-  const ran: { step: ShutdownStep; ms: number }[] = []
+  const ran: Array<{ ms: number; step: ShutdownStep }> = []
   for (const step of STEPS) {
     const cleanup = registry.get(step)
-    if (!cleanup) continue
+    if (!cleanup) {
+      continue
+    }
     registry.delete(step)
     // One step at a time on purpose: each one may still need what the later ones release.
     // oxlint-disable-next-line no-await-in-loop
-    ran.push({ step, ms: await runStep(step, cleanup) })
+    ran.push({ ms: await runStep(step, cleanup), step })
   }
   log('info', 'shutdown complete', {
     cleanups: ran.map(({ step }) => step),
-    steps: ran,
     ms: Math.round(performance.now() - started),
+    steps: ran,
   })
 }

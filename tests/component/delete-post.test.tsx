@@ -14,7 +14,7 @@ const editButton = () => page.getByRole('button', { name: /^Edit/ })
 const deleteButton = () => page.getByRole('button', { name: /^Delete post/ })
 const field = () => page.getByLabelText('Edit post')
 const dialog = () => page.getByRole('alertdialog', { name: 'Delete this post?' })
-const confirmDelete = () => dialog().getByRole('button', { name: 'Delete', exact: true })
+const confirmDelete = () => dialog().getByRole('button', { exact: true, name: 'Delete' })
 const card = () =>
   page.elementLocator(
     page
@@ -49,7 +49,7 @@ const heldFailingDelete = () => {
       return HttpResponse.error()
     }),
   )
-  return { release: response.release, calls }
+  return { calls, release: response.release }
 }
 
 describe('deleting a post', () => {
@@ -93,7 +93,7 @@ describe('deleting a post', () => {
       }),
     )
     const onDeleted = vi.fn<() => void>()
-    const { queryClient } = await renderInApp(<MyPost post={original} onDeleted={onDeleted} />)
+    const { queryClient } = await renderInApp(<MyPost onDeleted={onDeleted} post={original} />)
     queryClient.setQueryData(getMyPostsQueryOptions().queryKey, listPages(listPage([original])))
     await deletePost()
     await expect.element(deleteButton()).toBeDisabled()
@@ -108,7 +108,7 @@ describe('deleting a post', () => {
   it('stays quiet when the post was already deleted elsewhere, and refreshes the lists', async () => {
     worker.use(apiError('myPostsRemove', 404, { _tag: 'PostNotFound', id: original.id }))
     const onDeleted = vi.fn<() => void>()
-    const { queryClient } = await renderInApp(<MyPost post={original} onDeleted={onDeleted} />)
+    const { queryClient } = await renderInApp(<MyPost onDeleted={onDeleted} post={original} />)
     queryClient.setQueryData(getPublicPostsQueryOptions().queryKey, listPages(listPage([original])))
     await deletePost()
     await expect.poll(() => queryClient.getQueryState(getPublicPostsQueryOptions().queryKey)?.isInvalidated).toBe(true)

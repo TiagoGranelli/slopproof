@@ -19,7 +19,9 @@ let databaseUrl: string
 /** Everything a leak would consist of: credentials, the session token, and database internals. */
 const secrets = () => [app.user.email, app.user.password, app.otherUser.email, token]
 const expectNoLeak = (text: string, label: string) => {
-  for (const secret of secrets()) expect(text.includes(secret), `${label} contains a secret`).toBe(false)
+  for (const secret of secrets()) {
+    expect(text.includes(secret), `${label} contains a secret`).toBe(false)
+  }
   expect(text, label).not.toMatch(/Failed query|relation "|_offline|Failed to get session|node_modules|\.mjs:\d+/)
 }
 
@@ -27,8 +29,11 @@ const expectNoLeak = (text: string, label: string) => {
 const serverFunctionIds = () => {
   const dir = '.output/public/assets'
   const ids = new Set<string>()
-  for (const file of readdirSync(dir).filter((name) => name.endsWith('.js')))
-    for (const [, id] of readFileSync(join(dir, file), 'utf8').matchAll(/[`'"]([0-9a-f]{64})[`'"]/g)) ids.add(id!)
+  for (const file of readdirSync(dir).filter((name) => name.endsWith('.js'))) {
+    for (const [, id] of readFileSync(join(dir, file), 'utf8').matchAll(/[`'"]([0-9a-f]{64})[`'"]/g)) {
+      ids.add(id!)
+    }
+  }
   return [...ids]
 }
 
@@ -37,9 +42,9 @@ describe('database failure', () => {
     databaseUrl = testDatabaseUrl('dbfail')
     app = await startApp({ databaseUrl, logFile: LOG_FILE })
     const res = await fetch(`${app.url}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: app.url },
       body: JSON.stringify({ email: app.user.email, password: app.user.password }),
+      headers: { 'content-type': 'application/json', origin: app.url },
+      method: 'POST',
     })
     expect(res.status).toBe(200)
     cookie = res.headers
@@ -58,23 +63,26 @@ describe('database failure', () => {
   afterAll(async () => {
     // Still unassigned when beforeAll failed before the app started.
     await (app as RunningApp | undefined)?.stop()
-    if (databaseUrl) await dropTestDatabase(databaseUrl)
+    if (databaseUrl) {
+      await dropTestDatabase(databaseUrl)
+    }
   })
 
   it('answers server functions with a generic error', async () => {
     const ids = serverFunctionIds()
     expect(ids.length).toBeGreaterThan(0)
-    const bodies: string[] = []
+    const bodies: Array<string> = []
     for (const id of ids) {
       const url = `${app.url}/_serverFn/${id}`
       const headers = { cookie, origin: app.url, 'x-tsr-serverFn': 'true' }
       let res = await fetch(url, { headers })
-      if (res.status === 405)
+      if (res.status === 405) {
         res = await fetch(url, {
-          method: 'POST',
-          headers: { ...headers, 'content-type': 'application/json' },
           body: '{}',
+          headers: { ...headers, 'content-type': 'application/json' },
+          method: 'POST',
         })
+      }
       const text = await res.text()
       expectNoLeak(text, `server function ${id}`)
       bodies.push(text)
@@ -89,9 +97,9 @@ describe('database failure', () => {
     expectNoLeak(await api.text(), 'GET /api/me')
 
     const signIn = await fetch(`${app.url}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: app.url },
       body: JSON.stringify({ email: app.user.email, password: app.user.password }),
+      headers: { 'content-type': 'application/json', origin: app.url },
+      method: 'POST',
     })
     expect(signIn.status).toBe(500)
     expectNoLeak(await signIn.text(), 'POST /api/auth/sign-in/email')
@@ -111,7 +119,9 @@ describe('database failure', () => {
   it('logs the failures as JSON lines without parameters', async () => {
     await app.stop()
     const log = readFileSync(LOG_FILE, 'utf8')
-    for (const secret of secrets()) expect(log.includes(secret), 'the server log contains a secret').toBe(false)
+    for (const secret of secrets()) {
+      expect(log.includes(secret), 'the server log contains a secret').toBe(false)
+    }
     expect(log).not.toMatch(/params:/)
     const lines = log.split('\n').filter((line) => line.startsWith('{'))
     const messages = lines.map((line) => (JSON.parse(line) as { msg: string }).msg)

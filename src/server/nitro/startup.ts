@@ -20,18 +20,19 @@ const onError: NitroRuntimeHooks['error'] = (error, { event, tags = [] }) => {
     return
   }
   log('error', 'request error', {
-    tags,
-    ...(event ? { method: event.req.method, path: new URL(event.req.url).pathname } : {}),
     error,
+    method: event?.req.method,
+    path: event ? new URL(event.req.url).pathname : undefined,
+    tags,
   })
 }
 
 export default definePlugin((nitroApp) => {
   log('info', 'starting', {
     appUrl: env.appUrl,
-    trustedProxies: env.trustedProxies,
     databasePoolMax: env.databasePoolMax,
     databaseUrlPooled: env.databaseUrlPooled,
+    trustedProxies: env.trustedProxies,
     // Whether Node's permission model restricts the process (the image's CMD, scripts/server-process.ts).
     permissionModel: process.execArgv.includes('--permission'),
   })
@@ -43,12 +44,14 @@ export default definePlugin((nitroApp) => {
   // From the signal on, /api/ready answers 503 and responses close their connections (../lifecycle.ts). srvx
   // handles the signals unless CI or TEST is set (its gracefulShutdownPlugin), and only then may this listen
   // too: any listener replaces Node's default of exiting on the signal.
-  if (!process.env.CI && !process.env.TEST)
-    for (const signal of ['SIGTERM', 'SIGINT'] as const)
+  if (!process.env.CI && !process.env.TEST) {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
       process.once(signal, () => {
         setDraining(true)
         log('info', 'draining', { signal })
       })
+    }
+  }
 
   nitroApp.hooks.hook('error', onError)
 })

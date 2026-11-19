@@ -8,6 +8,8 @@ export default async function setup() {
   await resetTestDatabase(url)
   process.env.DATABASE_URL = url
   return async () => {
-    if (process.env.KEEP_TEST_DB !== '1') await dropTestDatabase(url)
+    if (process.env.KEEP_TEST_DB !== '1') {
+      await dropTestDatabase(url)
+    }
   }
 }

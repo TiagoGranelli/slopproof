@@ -1,4 +1,5 @@
-type Sources = { script: readonly string[]; style: readonly string[] }
+type Sources = { script: ReadonlyArray<string>; style: ReadonlyArray<string> }
+type DocumentHeaders = { 'content-security-policy': string }
 
 /**
  * The Content-Security-Policy headers of every HTML document the app serves. Two callers fill in the sources:
@@ -9,7 +10,7 @@ type Sources = { script: readonly string[]; style: readonly string[] }
  * Neither allows 'unsafe-inline'. src/server/nitro/http.ts adds `upgrade-insecure-requests` over https
  * and a locked-down policy for responses that set none (JSON, static files, Nitro error responses).
  */
-export const documentHeaders = (sources: Sources): { 'content-security-policy': string } => ({
+export const documentHeaders = (sources: Sources): DocumentHeaders => ({
   'content-security-policy': [
     "default-src 'self'",
     `script-src ${["'self'", ...sources.script].join(' ')}`,

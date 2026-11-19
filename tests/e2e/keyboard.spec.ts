@@ -39,12 +39,18 @@ const FOOTER = ['radio "System"']
 // but Playwright's WebKit 1.63 includes them, as `pnpm ci:local verify` showed.
 
 /** A row: the header the page starts with, its own controls in order, and what must not be a stop. */
-type Row = { header: string[]; controls: string[]; never?: string[]; footer?: string[] }
+type Row = { controls: Array<string>; footer?: Array<string>; header: Array<string>; never?: Array<string> }
 
 test.describe('tab order', () => {
-  const pages: Array<[string, (page: Page, author: Author) => Promise<unknown>, Row]> = [
+  const pages: Array<[string, (page: Page, author: Author) => Promise<void>, Row]> = [
     // The seed project publishes more than a page of posts (seed.setup.ts), so `/` always ends in Load more.
-    ['home', (page) => visit(page, '/'), { header: SIGNED_OUT, controls: ['button "Load more posts"'] }],
+    [
+      'home',
+      async (page) => {
+        await visit(page, '/')
+      },
+      { controls: ['button "Load more posts"'], header: SIGNED_OUT },
+    ],
     [
       'home, flash message after signing out',
       async (page, author) => {
@@ -53,7 +59,7 @@ test.describe('tab order', () => {
         await page.getByRole('button', { name: 'Sign out' }).click()
         await expect(page.getByTestId('flash')).toBeVisible()
       },
-      { header: SIGNED_OUT, controls: ['button "Load more posts"'] },
+      { controls: ['button "Load more posts"'], header: SIGNED_OUT },
     ],
     [
       'about',
@@ -64,14 +70,15 @@ test.describe('tab order', () => {
           page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Sign in' }),
         ).toBeVisible()
       },
-      { header: SIGNED_OUT, controls: [] },
+      { controls: [], header: SIGNED_OUT },
     ],
     [
       'login',
-      (page) => visit(page, '/login'),
+      async (page) => {
+        await visit(page, '/login')
+      },
       // The open server (APP_URL) has open sign-up, so the page links to it.
       {
-        header: SIGNED_OUT,
         controls: [
           'textbox "Email"',
           'textbox "Password"',
@@ -79,13 +86,15 @@ test.describe('tab order', () => {
           'link "Forgot your password?"',
           'link "Create one"',
         ],
+        header: SIGNED_OUT,
       },
     ],
     [
       'sign-up',
-      (page) => visit(page, '/sign-up'),
+      async (page) => {
+        await visit(page, '/sign-up')
+      },
       {
-        header: SIGNED_OUT,
         controls: [
           'textbox "Name"',
           'textbox "Email"',
@@ -93,27 +102,36 @@ test.describe('tab order', () => {
           'button "Create account"',
           'link "Sign in"',
         ],
+        header: SIGNED_OUT,
       },
     ],
     [
       'forgot password',
-      (page) => visit(page, '/forgot-password'),
-      { header: SIGNED_OUT, controls: ['textbox "Email"', 'button "Send reset link"', 'link "Back to sign in"'] },
+      async (page) => {
+        await visit(page, '/forgot-password')
+      },
+      { controls: ['textbox "Email"', 'button "Send reset link"', 'link "Back to sign in"'], header: SIGNED_OUT },
     ],
     [
       'reset password',
-      (page) => visit(page, '/reset-password?token=not-a-token'),
-      { header: SIGNED_OUT, controls: ['textbox "New password"', 'button "Set new password"'] },
+      async (page) => {
+        await visit(page, '/reset-password?token=not-a-token')
+      },
+      { controls: ['textbox "New password"', 'button "Set new password"'], header: SIGNED_OUT },
     ],
     [
       'reset password, no link',
-      (page) => visit(page, '/reset-password'),
-      { header: SIGNED_OUT, controls: ['link "Ask for a new one"'] },
+      async (page) => {
+        await visit(page, '/reset-password')
+      },
+      { controls: ['link "Ask for a new one"'], header: SIGNED_OUT },
     ],
     [
       'verify email',
-      (page) => visit(page, '/verify-email?token=not-a-token'),
-      { header: SIGNED_OUT, controls: ['button "Confirm email"'] },
+      async (page) => {
+        await visit(page, '/verify-email?token=not-a-token')
+      },
+      { controls: ['button "Confirm email"'], header: SIGNED_OUT },
     ],
     [
       'account',
@@ -123,7 +141,6 @@ test.describe('tab order', () => {
         await visit(page, '/account')
       },
       {
-        header: SIGNED_IN,
         controls: [
           'textbox "Current password"',
           'textbox "New password"',
@@ -133,23 +150,26 @@ test.describe('tab order', () => {
           'checkbox "I understand that my account and all its data are deleted for good."',
           'button "Delete account"',
         ],
+        header: SIGNED_IN,
         // Disabled without other sessions.
         never: ['button "Sign out other sessions"'],
       },
     ],
     [
       'not found',
-      (page) => visit(page, '/no-such-page'),
-      { header: SIGNED_OUT, controls: ['link "Go to the home page"'] },
+      async (page) => {
+        await visit(page, '/no-such-page')
+      },
+      { controls: ['link "Go to the home page"'], header: SIGNED_OUT },
     ],
     [
       'error page',
       async (page, author) => {
         await signIn(page, author)
-        await navigateWithApiResponse(page, '/api/posts', { status: 503, json: {} })
+        await navigateWithApiResponse(page, '/api/posts', { json: {}, status: 503 })
         await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
       },
-      { header: SIGNED_IN, controls: ['button "Try again"', 'link "Go to the home page"'] },
+      { controls: ['button "Try again"', 'link "Go to the home page"'], header: SIGNED_IN },
     ],
     [
       'dashboard',
@@ -159,7 +179,6 @@ test.describe('tab order', () => {
         await expect(page.getByText('Second', { exact: true })).toBeVisible()
       },
       {
-        header: SIGNED_IN,
         controls: [
           'textbox "New post"',
           'button "Edit post: First"',
@@ -167,6 +186,7 @@ test.describe('tab order', () => {
           'button "Edit post: Second"',
           'button "Delete post: Second"',
         ],
+        header: SIGNED_IN,
         // Disabled until there is text.
         never: ['button "Publish"'],
       },
@@ -179,17 +199,17 @@ test.describe('tab order', () => {
         await page.getByRole('radio', { name: 'Dark' }).check()
       },
       {
-        header: SIGNED_IN,
         controls: ['textbox "New post"', 'button "Edit post: First"', 'button "Delete post: First"'],
         footer: ['radio "Dark"'],
+        header: SIGNED_IN,
       },
     ],
   ]
 
   for (const [name, reach, row] of pages) {
-    test(`${name}: its controls in order, with visible focus, then past the last one`, async ({ page, author }) => {
+    test(`${name}: its controls in order, with visible focus, then past the last one`, async ({ author, page }) => {
       await reach(page, author)
-      const { header, controls, never, footer = FOOTER } = row
+      const { controls, footer = FOOTER, header, never } = row
       expectTabStops(await tabOrder(page), { first: header, inOrder: controls, last: footer, never })
     })
   }
@@ -208,8 +228,8 @@ test.describe('tab order', () => {
 
 test.describe('focus traps', () => {
   test('the edit form is not a trap: Tab goes on to Cancel, Save and the rest of the page', async ({
-    page,
     author,
+    page,
   }) => {
     await signIn(page, author)
     await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('First'), fakePost('Second')) })
@@ -223,8 +243,8 @@ test.describe('focus traps', () => {
   })
 
   test('the delete dialog keeps Tab inside it; Escape closes it and puts focus back on Delete', async ({
-    page,
     author,
+    page,
   }) => {
     // A document of its own: the dialog's scroll lock needs the SSR page's nonce (not /about's hash policy).
     const { post } = await dashboardWithMyPost(page, author)
@@ -234,7 +254,7 @@ test.describe('focus traps', () => {
     const dialog = page.getByRole('alertdialog', { name: 'Delete this post?' })
     // The dialog loads on demand: it opens with focus on Keep it.
     await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused()
-    const stops: string[] = []
+    const stops: Array<string> = []
     for (let press = 0; press < 3; press++) {
       await page.keyboard.press('Tab')
       stops.push((await page.locator(':focus').textContent()) ?? '')

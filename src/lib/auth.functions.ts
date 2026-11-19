@@ -38,23 +38,25 @@ export interface AuthFailure {
 /** Expected failures are values, not exceptions: a wrong password is not a server error. */
 export type AuthOutcome<T = null> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly failure: AuthFailure }
+  | { readonly failure: AuthFailure; readonly ok: false }
 
 type EndpointFailure = Extract<AuthEndpointResult, { ok: false }>
 
 const failureCode = (refused: EndpointFailure): AuthFailureCode => {
-  if (refused.status === 429) return 'RATE_LIMITED'
-  if (refused.code !== undefined) return refused.code
+  if (refused.status === 429) {
+    return 'RATE_LIMITED'
+  }
+  if (refused.code !== undefined) {
+    return refused.code
+  }
   return refused.status === 404 ? 'NOT_FOUND' : 'UNEXPECTED'
 }
 
-const failure = (refused: EndpointFailure): AuthOutcome<never> => ({
-  ok: false,
-  failure: {
-    code: failureCode(refused),
-    ...(refused.retryAfter === undefined ? {} : { retryAfter: refused.retryAfter }),
-  },
-})
+const failure = (refused: EndpointFailure): AuthOutcome<never> => {
+  const code = failureCode(refused)
+  const { retryAfter } = refused
+  return { failure: retryAfter === undefined ? { code } : { code, retryAfter }, ok: false }
+}
 
 const done = (answer: AuthEndpointResult): AuthOutcome => (answer.ok ? { ok: true, value: null } : failure(answer))
 
@@ -73,10 +75,15 @@ export const getSignUpPolicy = createServerFn({ method: 'GET' }).handler(() => {
  */
 const loginPageAfter = (outcome: AuthOutcome, redirectTo: string) => {
   const search = new URLSearchParams()
-  if (redirectTo) search.set('redirect', redirectTo)
-  if (!outcome.ok) search.set('error', outcome.failure.code)
-  if (!outcome.ok && outcome.failure.retryAfter !== undefined)
+  if (redirectTo) {
+    search.set('redirect', redirectTo)
+  }
+  if (!outcome.ok) {
+    search.set('error', outcome.failure.code)
+  }
+  if (!outcome.ok && outcome.failure.retryAfter !== undefined) {
     search.set('retryAfter', String(outcome.failure.retryAfter))
+  }
   return search.size > 0 ? `/login?${search}` : '/login'
 }
 
@@ -141,11 +148,11 @@ export const changePassword = createServerFn({ method: 'POST' })
   )
 
 const ListedSession = Schema.Struct({
-  id: Schema.String,
-  token: Schema.String,
   createdAt: Schema.String,
-  updatedAt: Schema.String,
+  id: Schema.String,
   ipAddress: Schema.NullishOr(Schema.String),
+  token: Schema.String,
+  updatedAt: Schema.String,
   userAgent: Schema.NullishOr(Schema.String),
 })
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(ListedSession))
@@ -153,41 +160,54 @@ const decodeCurrent = Schema.decodeUnknownSync(Schema.Struct({ session: Schema.S
 
 /** A session as the account page shows it. Tokens never leave the server. */
 export interface SessionView {
-  readonly id: string
-  readonly current: boolean
   readonly createdAt: string
-  readonly lastActiveAt: string
+  readonly current: boolean
+  readonly id: string
   /** An IPv4 address, or the IPv6 network Better Auth recorded, in CIDR notation (`2001:db8:1:2::/64`). */
   readonly ipAddress: string | null
+  readonly lastActiveAt: string
   readonly userAgent: string | null
 }
 
 const listRaw = async () => {
   const listed = await callAuthEndpoint('GET', '/list-sessions')
-  if (!listed.ok) return listed
+  if (!listed.ok) {
+    return listed
+  }
   return { ok: true as const, sessions: decodeSessions(listed.body) }
 }
+
+/** `sessions` as the account page shows them, newest activity first, the one of this request marked current. */
+const sessionViews = (
+  sessions: ReadonlyArray<typeof ListedSession.Type>,
+  currentId: string,
+): ReadonlyArray<SessionView> =>
+  sessions
+    .map((session) => ({
+      createdAt: session.createdAt,
+      current: session.id === currentId,
+      id: session.id,
+      ipAddress: session.ipAddress ? displayClientAddress(session.ipAddress) : null,
+      lastActiveAt: session.updatedAt,
+      userAgent: session.userAgent ?? null,
+    }))
+    .toSorted((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
 
 /** The account's active sessions, newest activity first. Better Auth wants a recent sign-in (SESSION_NOT_FRESH). */
 export const listSessions = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AuthOutcome<ReadonlyArray<SessionView>>> => {
     noStore()
     const [listed, current] = await Promise.all([listRaw(), callAuthEndpoint('GET', '/get-session')])
-    if (!listed.ok) return failure(listed)
-    if (!current.ok) return failure(current)
-    if (current.body === null) return { ok: false, failure: { code: 'UNAUTHORIZED' } }
-    const currentId = decodeCurrent(current.body).session.id
-    const sessions = listed.sessions
-      .map((session) => ({
-        id: session.id,
-        current: session.id === currentId,
-        createdAt: session.createdAt,
-        lastActiveAt: session.updatedAt,
-        ipAddress: session.ipAddress ? displayClientAddress(session.ipAddress) : null,
-        userAgent: session.userAgent ?? null,
-      }))
-      .toSorted((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
-    return { ok: true, value: sessions }
+    if (!listed.ok) {
+      return failure(listed)
+    }
+    if (!current.ok) {
+      return failure(current)
+    }
+    if (current.body === null) {
+      return { failure: { code: 'UNAUTHORIZED' }, ok: false }
+    }
+    return { ok: true, value: sessionViews(listed.sessions, decodeCurrent(current.body).session.id) }
   },
 )
 
@@ -196,10 +216,14 @@ export const revokeSession = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(SessionInput))
   .handler(async ({ data }): Promise<AuthOutcome> => {
     const listed = await listRaw()
-    if (!listed.ok) return failure(listed)
+    if (!listed.ok) {
+      return failure(listed)
+    }
     const session = listed.sessions.find((candidate) => candidate.id === data.id)
     // Already gone (or never the caller's): the outcome the user asked for.
-    if (!session) return { ok: true, value: null }
+    if (!session) {
+      return { ok: true, value: null }
+    }
     return done(await callAuthEndpoint('POST', '/revoke-session', { body: { token: session.token } }))
   })
 
@@ -211,7 +235,9 @@ export const revokeOtherSessions = createServerFn({ method: 'POST' }).handler(as
 /** Ends every session of the account, this one included, and clears this browser's cookie. */
 export const signOutEverywhere = createServerFn({ method: 'POST' }).handler(async (): Promise<AuthOutcome> => {
   const revoked = await callAuthEndpoint('POST', '/revoke-sessions', { body: {} })
-  if (!revoked.ok) return failure(revoked)
+  if (!revoked.ok) {
+    return failure(revoked)
+  }
   return done(await callAuthEndpoint('POST', '/sign-out', { body: {} }))
 })
 

@@ -17,25 +17,27 @@ const alert = 'text-sm text-destructive'
 function SignInAgain() {
   const navigate = useNavigate()
   const signOut = useSignOut({
-    mutationConfig: { onSuccess: () => navigate({ to: '/login', search: { redirect: '/account' } }) },
+    mutationConfig: { onSuccess: () => navigate({ search: { redirect: '/account' }, to: '/login' }) },
   })
   return (
     <div className="grid gap-2">
       <p>{describeAuthFailure(new AuthActionError({ code: 'SESSION_NOT_FRESH' }))}</p>
       <div>
         <Button
-          type="button"
-          variant="outline"
           aria-disabled={signOut.isPending || undefined}
           onClick={() => {
-            if (!signOut.isPending) signOut.mutate()
+            if (!signOut.isPending) {
+              signOut.mutate()
+            }
           }}
+          type="button"
+          variant="outline"
         >
           Sign in again
         </Button>
       </div>
       {signOut.isError ? (
-        <p role="alert" className={alert}>
+        <p className={alert} role="alert">
           {describeAuthFailure(signOut.error)}
         </p>
       ) : null}
@@ -59,22 +61,24 @@ function SessionItem(props: { session: SessionView }) {
           {formatTimestamp(session.createdAt)}, last active {formatTimestamp(session.lastActiveAt)}
         </p>
         {revoke.isError ? (
-          <p role="alert" className={alert}>
+          <p className={alert} role="alert">
             {describeAuthFailure(revoke.error)}
           </p>
         ) : null}
       </div>
       {session.current ? null : (
         <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          aria-disabled={revoke.isPending || undefined}
           aria-busy={revoke.isPending}
+          aria-disabled={revoke.isPending || undefined}
           aria-label={`Sign out ${device}, signed in ${formatTimestamp(session.createdAt)}`}
           onClick={() => {
-            if (!revoke.isPending) revoke.mutate({ id: session.id })
+            if (!revoke.isPending) {
+              revoke.mutate({ id: session.id })
+            }
           }}
+          size="sm"
+          type="button"
+          variant="outline"
         >
           Sign out
         </Button>
@@ -93,17 +97,18 @@ export function SessionList() {
   const { data: sessions } = useSuspenseQuery(getSessionsQueryOptions())
   const others = useRevokeOtherSessions()
   const everywhere = useSignOutEverywhere({
-    mutationConfig: { onSuccess: () => navigate({ to: '/login', state: { flash: 'signed-out-everywhere' } }) },
+    mutationConfig: { onSuccess: () => navigate({ state: { flash: 'signed-out-everywhere' }, to: '/login' }) },
   })
 
-  if (!sessions.ok)
+  if (!sessions.ok) {
     return sessions.failure.code === 'SESSION_NOT_FRESH' ? (
       <SignInAgain />
     ) : (
-      <p role="alert" className={alert}>
+      <p className={alert} role="alert">
         {describeAuthFailure(new AuthActionError(sessions.failure))}
       </p>
     )
+  }
 
   const hasOthers = sessions.value.some((session) => !session.current)
   return (
@@ -115,31 +120,35 @@ export function SessionList() {
       </ul>
       <div className="flex flex-wrap gap-2">
         <Button
+          aria-busy={others.isPending}
+          aria-disabled={others.isPending || undefined}
+          disabled={!hasOthers}
+          onClick={() => {
+            if (!others.isPending) {
+              others.mutate()
+            }
+          }}
           type="button"
           variant="outline"
-          disabled={!hasOthers}
-          aria-disabled={others.isPending || undefined}
-          aria-busy={others.isPending}
-          onClick={() => {
-            if (!others.isPending) others.mutate()
-          }}
         >
           Sign out other sessions
         </Button>
         <Button
+          aria-busy={everywhere.isPending}
+          aria-disabled={everywhere.isPending || undefined}
+          onClick={() => {
+            if (!everywhere.isPending) {
+              everywhere.mutate()
+            }
+          }}
           type="button"
           variant="outline"
-          aria-disabled={everywhere.isPending || undefined}
-          aria-busy={everywhere.isPending}
-          onClick={() => {
-            if (!everywhere.isPending) everywhere.mutate()
-          }}
         >
           Sign out everywhere
         </Button>
       </div>
       {others.isError || everywhere.isError ? (
-        <p role="alert" className={alert}>
+        <p className={alert} role="alert">
           {describeAuthFailure(others.error ?? everywhere.error)}
         </p>
       ) : null}

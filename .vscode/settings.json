@@ -1,5 +1,5 @@
 {
-  // Oxfmt formats on save and Oxlint fixes on save; both read the repo's .oxfmtrc.json and .oxlintrc.json.
+  // Oxfmt formats on save and Oxlint fixes on save; both read the repo's .oxfmtrc.json and oxlint.config.ts.
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": { "source.fixAll.oxc": "explicit" },

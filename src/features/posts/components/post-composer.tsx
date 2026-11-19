@@ -33,22 +33,24 @@ export function PostComposer(props: { onPublished?: () => void }) {
   })
   const form = useForm({
     defaultValues: { body: '' },
+    onSubmit: ({ value }) => create.mutate({ body: postDraftSchema.decode(value) }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
-    onSubmit: ({ value }) => create.mutate({ body: postDraftSchema.decode(value) }),
   })
-  const { submit, schemaError } = useSchemaSubmit(form, postDraftSchema)
+  const { schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
   const serverIssue = fieldIssue(create.error, 'body')
   const formError = create.isError && serverIssue === undefined ? create.error : null
   return (
     <form
+      aria-busy={create.isPending}
       className="grid gap-2"
       noValidate
-      aria-busy={create.isPending}
       onSubmit={(event) => {
         event.preventDefault()
         // Publish stays focusable while pending (aria-disabled, see below), so a second press lands here.
-        if (create.isPending) return
+        if (create.isPending) {
+          return
+        }
         submit(event.currentTarget)
       }}
       {...loadOnInteraction(postDraftSchema)}
@@ -61,12 +63,6 @@ export function PostComposer(props: { onPublished?: () => void }) {
             <>
               <Label htmlFor="post-body">New post</Label>
               <Textarea
-                id="post-body"
-                ref={textarea}
-                name={field.name}
-                value={body}
-                onChange={(event) => field.handleChange(event.target.value)}
-                onBlur={field.handleBlur}
                 aria-describedby={describedBy(
                   'post-body-count',
                   error && 'post-body-error',
@@ -74,13 +70,19 @@ export function PostComposer(props: { onPublished?: () => void }) {
                   schemaError && 'post-schema-error',
                 )}
                 aria-invalid={isTooLong(body, POST_MAX_LENGTH) || Boolean(error) || undefined}
+                id="post-body"
+                name={field.name}
+                onBlur={field.handleBlur}
+                onChange={(event) => field.handleChange(event.target.value)}
+                ref={textarea}
                 required
+                value={body}
               />
               <div className="flex items-center justify-between gap-2">
-                <CharacterCount id="post-body-count" value={body} max={POST_MAX_LENGTH} />
+                <CharacterCount id="post-body-count" max={POST_MAX_LENGTH} value={body} />
                 {/* Only aria-disabled while pending: a disabled button loses focus, and a keyboard user would be left
                     on <body> when publishing fails. */}
-                <Button type="submit" disabled={body.trim().length === 0} aria-disabled={create.isPending || undefined}>
+                <Button aria-disabled={create.isPending || undefined} disabled={body.trim().length === 0} type="submit">
                   Publish
                 </Button>
               </div>
@@ -89,7 +91,7 @@ export function PostComposer(props: { onPublished?: () => void }) {
           )
         }}
       </form.Field>
-      {formError ? <ApiErrorAlert id="post-error" error={formError} action="publish the post" /> : null}
+      {formError ? <ApiErrorAlert action="publish the post" error={formError} id="post-error" /> : null}
       <FieldError id="post-schema-error" message={schemaError} />
     </form>
   )

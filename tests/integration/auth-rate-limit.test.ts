@@ -11,7 +11,7 @@ afterAll(() => pool.end())
 
 const counters = async (ip: string) =>
   (
-    await pool.query<{ key: string; count: number }>(
+    await pool.query<{ count: number; key: string }>(
       'select key, count from rate_limit where key like $1 order by key',
       [`${ip}|%`],
     )
@@ -28,7 +28,7 @@ describe('auth rate limit', () => {
     const statuses = attempts.map((res) => res.status).toSorted((a, b) => a - b)
     expect(statuses).toEqual([401, 401, 401, 429, 429, 429, 429, 429, 429, 429])
     // One shared row counts every attempt in the window (src/server/auth-rate-limit.ts); 3 were admitted.
-    expect(await counters(ip)).toEqual([{ key: `${ip}|/sign-in/email`, count: 10 }])
+    expect(await counters(ip)).toEqual([{ count: 10, key: `${ip}|/sign-in/email` }])
   })
 
   it('does not count /get-session', async () => {
@@ -48,9 +48,9 @@ describe('auth rate limit', () => {
     const ip = nextIp()
     for (const path of ['/update-user', `/invented-${crypto.randomUUID()}`]) {
       const res = await fetch(`${appUrl}/api/auth${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': ip },
         body: '{}',
+        headers: { 'content-type': 'application/json', origin: appUrl, 'x-forwarded-for': ip },
+        method: 'POST',
       })
       expect(res.status, path).toBe(404)
     }

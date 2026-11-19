@@ -7,13 +7,13 @@ export const isTooLong = (value: string, max: number) => value.trim().length > m
  * "123/280" counter of a text field with a length limit, referenced by the field's aria-describedby. The count
  * itself is not a live region (that would announce every keystroke); only crossing the limit is announced.
  */
-export function CharacterCount(props: { id: string; value: string; max: number }) {
+export function CharacterCount(props: { id: string; max: number; value: string }) {
   const tooLong = isTooLong(props.value, props.max)
   return (
-    <span id={props.id} className={cn('text-sm tabular-nums', tooLong ? 'text-destructive' : 'text-muted-foreground')}>
+    <span className={cn('text-sm tabular-nums', tooLong ? 'text-destructive' : 'text-muted-foreground')} id={props.id}>
       {props.value.trim().length}/{props.max}
       <span className="sr-only"> characters. </span>
-      <span className="sr-only" aria-live="polite">
+      <span aria-live="polite" className="sr-only">
         {tooLong ? `Over the ${props.max}-character limit.` : ''}
       </span>
     </span>

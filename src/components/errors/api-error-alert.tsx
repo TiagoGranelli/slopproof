@@ -2,16 +2,16 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { describeApiError } from '#/lib/api-error.ts'
 
 /** Announces a failed API call. `action` completes "Could not …", e.g. "save your changes". */
-export function ApiErrorAlert(props: { error: unknown; action: string; id?: string }) {
+export function ApiErrorAlert(props: { action: string; error: unknown; id?: string }) {
   const href = useLocation({ select: (location) => location.href })
   const { message, signIn } = describeApiError(props.error, props.action)
   return (
-    <p id={props.id} role="alert" className="text-sm text-destructive">
+    <p className="text-sm text-destructive" id={props.id} role="alert">
       {message}
       {signIn ? (
         <>
           {' '}
-          <Link to="/login" search={{ redirect: href }} className="font-medium underline underline-offset-4">
+          <Link className="font-medium underline underline-offset-4" search={{ redirect: href }} to="/login">
             Sign in
           </Link>
         </>

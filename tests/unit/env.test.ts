@@ -7,23 +7,23 @@ import { stubEnvironment } from './process-fakes.ts'
 
 /** Valid values for every required variable; each test overrides what it checks. */
 const BASE = {
-  DATABASE_URL: 'postgres://app:not-a-secret@127.0.0.1:5432/app',
   APP_URL: 'https://app.example.com',
-  BETTER_AUTH_SECRET: 'x'.repeat(32),
-  TRUSTED_PROXIES: '',
-  DATABASE_POOL_MAX: '',
-  DATABASE_URL_POOLED: '',
-  SMTP_URL: '',
-  MAIL_FROM: '',
   AUTH_SIGN_UP: '',
+  BETTER_AUTH_SECRET: 'x'.repeat(32),
+  DATABASE_POOL_MAX: '',
+  DATABASE_URL: 'postgres://app:not-a-secret@127.0.0.1:5432/app',
+  DATABASE_URL_POOLED: '',
+  MAIL_FROM: '',
   NODE_ENV: 'test',
+  SMTP_URL: '',
+  TRUSTED_PROXIES: '',
 }
 
 /** `env` with each Redacted value read, so a test compares the secret itself and not two `<redacted>` wrappers. */
 const revealed = (env: Awaited<ReturnType<typeof load>>) => ({
   ...env,
-  databaseUrl: Redacted.value(env.databaseUrl),
   authSecret: Redacted.value(env.authSecret),
+  databaseUrl: Redacted.value(env.databaseUrl),
   smtp: env.smtp && { ...env.smtp, url: Redacted.value(env.smtp.url) },
 })
 
@@ -36,25 +36,27 @@ const load = async (overrides: Partial<Record<keyof typeof BASE, string | undefi
 describe('env', () => {
   it('reads a minimal environment with its defaults', async () => {
     expect(revealed(await load())).toEqual({
-      databaseUrl: BASE.DATABASE_URL,
-      databasePoolMax: 10,
-      databaseUrlPooled: false,
       appUrl: 'https://app.example.com',
       authSecret: BASE.BETTER_AUTH_SECRET,
-      trustedProxies: [],
-      smtp: undefined,
       authSignUp: 'closed',
+      databasePoolMax: 10,
+      databaseUrl: BASE.DATABASE_URL,
+      databaseUrlPooled: false,
       isProduction: false,
+      smtp: undefined,
+      trustedProxies: [],
     })
   })
 
   it('never shows a credential when it is printed, logged or serialized', async () => {
     const smtpUrl = 'smtps://user:mail-not-a-secret@smtp.example.com:465'
-    const env = await load({ SMTP_URL: smtpUrl, MAIL_FROM: 'no-reply@example.com' })
+    const env = await load({ MAIL_FROM: 'no-reply@example.com', SMTP_URL: smtpUrl })
     // What a log line and `console.log` do with a value.
     const printed = [JSON.stringify(env), inspect(env, { depth: 5 })]
     for (const text of printed) {
-      for (const secret of [BASE.DATABASE_URL, BASE.BETTER_AUTH_SECRET, smtpUrl]) expect(text).not.toContain(secret)
+      for (const secret of [BASE.DATABASE_URL, BASE.BETTER_AUTH_SECRET, smtpUrl]) {
+        expect(text).not.toContain(secret)
+      }
     }
   })
 
@@ -155,8 +157,8 @@ describe('env', () => {
 
   describe('AUTH_SIGN_UP and mail', () => {
     const smtp = {
-      SMTP_URL: 'smtps://user:password@smtp.example.com:465',
       MAIL_FROM: 'Acme <no-reply@example.com>',
+      SMTP_URL: 'smtps://user:password@smtp.example.com:465',
     }
 
     it('is closed by default, and open only when asked, trimmed', async () => {
@@ -170,9 +172,9 @@ describe('env', () => {
     })
 
     it('reads SMTP over STARTTLS or TLS with a sender', async () => {
-      expect(revealed(await load(smtp)).smtp).toEqual({ url: smtp.SMTP_URL, from: smtp.MAIL_FROM })
-      const plain = await load({ SMTP_URL: 'smtp://127.0.0.1:1025', MAIL_FROM: 'no-reply@example.com' })
-      expect(revealed(plain).smtp).toEqual({ url: 'smtp://127.0.0.1:1025', from: 'no-reply@example.com' })
+      expect(revealed(await load(smtp)).smtp).toEqual({ from: smtp.MAIL_FROM, url: smtp.SMTP_URL })
+      const plain = await load({ MAIL_FROM: 'no-reply@example.com', SMTP_URL: 'smtp://127.0.0.1:1025' })
+      expect(revealed(plain).smtp).toEqual({ from: 'no-reply@example.com', url: 'smtp://127.0.0.1:1025' })
     })
 
     it.each([
@@ -185,11 +187,11 @@ describe('env', () => {
       ['no host', { SMTP_URL: 'smtp://' }, 'SMTP_URL must use smtp:// (STARTTLS) or smtps:// (TLS) and name a host'],
       [
         'no sender',
-        { SMTP_URL: 'smtp://smtp.example.com', MAIL_FROM: '' },
+        { MAIL_FROM: '', SMTP_URL: 'smtp://smtp.example.com' },
         'Missing required environment variable MAIL_FROM',
       ],
-      ['a sender without an address', { SMTP_URL: 'smtp://smtp.example.com', MAIL_FROM: 'Acme' }, 'MAIL_FROM must be'],
-      ['a sender with two @', { SMTP_URL: 'smtp://smtp.example.com', MAIL_FROM: 'a@b@' }, 'MAIL_FROM must be'],
+      ['a sender without an address', { MAIL_FROM: 'Acme', SMTP_URL: 'smtp://smtp.example.com' }, 'MAIL_FROM must be'],
+      ['a sender with two @', { MAIL_FROM: 'a@b@', SMTP_URL: 'smtp://smtp.example.com' }, 'MAIL_FROM must be'],
     ])('refuses %s', async (_, overrides, message) => {
       await expect(load(overrides)).rejects.toThrow(message)
     })

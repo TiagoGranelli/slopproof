@@ -8,14 +8,14 @@ import {
 
 /** A query a mutation makes stale, and how to bring it back. */
 export interface Invalidation {
-  readonly queryKey: QueryKey
+  /** An infinite list that is cut back to its first page before the refetch, instead of refetching every page. */
+  readonly firstPageOnly?: boolean
   /**
    * Refetch it even while nothing on screen reads it, so a cached route renders it fresh on the next visit
    * instead of first showing the old data. Otherwise only an active query refetches (the rest when next read).
    */
   readonly inactiveToo?: boolean
-  /** An infinite list that is cut back to its first page before the refetch, instead of refetching every page. */
-  readonly firstPageOnly?: boolean
+  readonly queryKey: QueryKey
 }
 
 /** What a mutation declares in `meta`; the MutationCache below acts on it. A type, not an interface: TanStack Query
@@ -37,12 +37,13 @@ declare module '@tanstack/react-query' {
 
 const invalidate = (queryClient: QueryClient, invalidations: ReadonlyArray<Invalidation>) =>
   Promise.all(
-    invalidations.map(({ queryKey, inactiveToo, firstPageOnly }) => {
-      if (firstPageOnly)
+    invalidations.map(({ firstPageOnly, inactiveToo, queryKey }) => {
+      if (firstPageOnly) {
         queryClient.setQueriesData<InfiniteData<unknown>>(
-          { queryKey, exact: true },
-          (data) => data && { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) },
+          { exact: true, queryKey },
+          (data) => data && { pageParams: data.pageParams.slice(0, 1), pages: data.pages.slice(0, 1) },
         )
+      }
       return queryClient.invalidateQueries({ queryKey, refetchType: inactiveToo ? 'all' : 'active' })
     }),
   )
@@ -60,7 +61,9 @@ export function createQueryClient(config: QueryClientConfig = {}): QueryClient {
       // TanStack Query passes the mutation last, after data, variables and context: its signature, not ours.
       // oxlint-disable-next-line eslint/max-params
       onSuccess: (_data, _variables, _context, mutation) => {
-        if (mutation.meta?.clearsCache) queryClient.clear()
+        if (mutation.meta?.clearsCache) {
+          queryClient.clear()
+        }
       },
       // Same: TanStack Query's positional signature, with the error second and the mutation last.
       // oxlint-disable-next-line eslint/max-params

@@ -29,7 +29,7 @@ if ((jobs.has('verify') || jobs.has('lighthouse')) && !jobs.has('build')) {
 }
 const plan = ORDER.filter((job) => jobs.has(job))
 
-const git = (...args: string[]) => spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 2 ** 20 }).stdout
+const git = (...args: Array<string>) => spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 2 ** 20 }).stdout
 const TOP = git('rev-parse', '--show-toplevel').trim()
 const RESULTS = resolve('test-results/ci-local')
 const PROJECT = `${dockerPrefix()}-local-${process.pid}`
@@ -39,14 +39,14 @@ const { packageManager } = JSON.parse(readFileSync('package.json', 'utf8')) as {
 const env = {
   ...process.env,
   CI_DOCKER_PREFIX: dockerPrefix(),
-  PNPM_VERSION: packageManager.replace(/^pnpm@/, '').replace(/\+.*$/, ''),
-  CI_LOCAL_TOP: TOP,
   CI_LOCAL_GIT: resolve(git('rev-parse', '--git-common-dir').trim()),
   CI_LOCAL_RESULTS: RESULTS,
+  CI_LOCAL_TOP: TOP,
+  PNPM_VERSION: packageManager.replace(/^pnpm@/, '').replace(/\+.*$/, ''),
 }
 
 /** `docker compose` on this run's project; the exit code, with the terminal attached unless `input` is given. */
-const compose = (args: string[], input?: string) =>
+const compose = (args: Array<string>, input?: string) =>
   spawnSync('docker', ['compose', '-p', PROJECT, '-f', '.github/compose.ci.yaml', ...args], {
     env,
     input,
@@ -57,7 +57,7 @@ const compose = (args: string[], input?: string) =>
  * One step in a fresh runner container: the command, then its peak memory and reports in RESULTS/<step>/
  * (.github/compose.ci.yaml's entrypoint). `input` goes to the command's stdin.
  */
-const inRunner = (step: string, command: string[], input?: string) => {
+const inRunner = (step: string, command: Array<string>, input?: string) => {
   const noTty = input === undefined ? [] : ['-T']
   const owner = ['-e', `STEP=${step}`, '-e', `HOST_UID=${process.getuid?.() ?? 0}`]
   return compose(['run', '--rm', ...noTty, ...owner, 'runner', ...command], input)
@@ -80,23 +80,32 @@ const checkoutFiles = () => {
     .filter((file) => file !== '' && !deleted.has(file))
 }
 
-type Row = { job: string; status: number; seconds: number; peakBytes?: number }
+type Row = { job: string; peakBytes?: number; seconds: number; status: number }
 const timed = (job: string, run: () => number): Row => {
   const started = performance.now()
   const status = run()
   const seconds = (performance.now() - started) / 1000
   const peakFile = `${RESULTS}/${job}/memory.peak`
   const peakBytes = existsSync(peakFile) ? Number(readFileSync(peakFile, 'utf8')) : undefined
-  return { job, status, seconds, peakBytes }
+  return { job, peakBytes, seconds, status }
 }
 
-const runContainerJobs = (containerJobs: string[]) => {
+/** Builds the runner image and installs the checkout in it: the first row of the results. */
+const prepareRunner = () => {
   spawnSync('docker', ['volume', 'create', `${dockerPrefix()}-pnpm-store`], { stdio: 'ignore' })
-  if (compose(['build', 'runner']) !== 0) return [{ job: 'runner image', status: 1, seconds: 0 }]
+  if (compose(['build', 'runner']) !== 0) {
+    return { job: 'runner image', seconds: 0, status: 1 }
+  }
   const files = checkoutFiles()
   console.log(`▶ copy ${files.length} files into the runner's checkout; pnpm install --frozen-lockfile`)
-  const rows = [timed('setup', () => inRunner('setup', ['sh', '-c', COPY_CHECKOUT], `${files.join('\0')}\0`))]
-  if (rows[0]?.status !== 0) return rows
+  return timed('setup', () => inRunner('setup', ['sh', '-c', COPY_CHECKOUT], `${files.join('\0')}\0`))
+}
+
+const runContainerJobs = (containerJobs: Array<string>) => {
+  const rows = [prepareRunner()]
+  if (rows[0]?.status !== 0) {
+    return rows
+  }
   for (const job of containerJobs) {
     console.log(`\n▶ ci:${job} (container)`)
     rows.push(timed(job, () => inRunner(job, ['pnpm', `ci:${job}`])))
@@ -109,18 +118,21 @@ const runContainerJobs = (containerJobs: string[]) => {
 }
 
 const cleanup = () => compose(['down', '--volumes', '--rmi', 'local', '--remove-orphans'])
-for (const signal of ['SIGINT', 'SIGTERM'] as const)
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     cleanup()
     process.exit(130)
   })
+}
 
-rmSync(RESULTS, { recursive: true, force: true })
+rmSync(RESULTS, { force: true, recursive: true })
 mkdirSync(RESULTS, { recursive: true })
-const rows: Row[] = []
+const rows: Array<Row> = []
 const containerJobs = plan.filter((job) => !HOST_JOBS.has(job))
 try {
-  if (containerJobs.length) rows.push(...runContainerJobs(containerJobs))
+  if (containerJobs.length) {
+    rows.push(...runContainerJobs(containerJobs))
+  }
 } finally {
   cleanup()
 }
@@ -133,18 +145,23 @@ for (const job of plan.filter((j) => HOST_JOBS.has(j))) {
 const gib = (bytes: number | undefined) => (bytes === undefined ? 'n/a' : `${(bytes / 1024 ** 3).toFixed(2)} GiB`)
 /** A job's exit status in words: 2 is Lighthouse's "the machine was too slow to judge". */
 const outcome = (status: number) => {
-  if (status === 0) return 'ok'
+  if (status === 0) {
+    return 'ok'
+  }
   return status === 2 ? 'INCONCLUSIVE' : `FAIL (${status})`
 }
 /** 1 when a job failed, else 2 when one was inconclusive, else 0. */
-const runStatus = (statuses: number[]) => {
-  if (statuses.some((status) => status !== 0 && status !== 2)) return 1
+const runStatus = (statuses: Array<number>) => {
+  if (statuses.some((status) => status !== 0 && status !== 2)) {
+    return 1
+  }
   return statuses.includes(2) ? 2 : 0
 }
 console.log('\nci:local (reports in test-results/ci-local/)')
 console.log('job            result         time   peak memory (cgroup memory.peak, page cache included)')
-for (const row of rows)
+for (const row of rows) {
   console.log(
     `${row.job.padEnd(14)} ${outcome(row.status).padEnd(12)} ${row.seconds.toFixed(0).padStart(5)}s   ${gib(row.peakBytes)}`,
   )
+}
 process.exitCode = runStatus(rows.map((row) => row.status))

@@ -1,6 +1,7 @@
 // The example's posts through the generated SDK against the running app and a real, freshly migrated Postgres:
 // CRUD, validation, author isolation, and CSRF on each write, against the running app (`pnpm test`).
 import { beforeAll, describe, expect, it } from 'vitest'
+import type { Json } from '#/contract/json.ts'
 import { createClient } from '#/sdk/client/index.ts'
 import { myPostsCreate, myPostsList, myPostsRemove, myPostsUpdate, publicPostsList } from '#/sdk/sdk.gen.ts'
 import { appUrl, clientIps, createUser, sdkClient, signIn } from './helpers.ts'
@@ -10,8 +11,10 @@ const anonymous = sdkClient()
 let author: ReturnType<typeof sdkClient>
 let other: ReturnType<typeof sdkClient>
 let authorCookie: string
+type Account = Awaited<ReturnType<typeof createUser>>
+type Users = { author: Account; other: Account }
 // This file's own accounts: other files run in parallel, and their posts would show up in what these two own.
-let users: { author: Awaited<ReturnType<typeof createUser>>; other: Awaited<ReturnType<typeof createUser>> }
+let users: Users
 
 beforeAll(async () => {
   const [authorAccount, otherAccount] = await Promise.all([createUser('posts-author'), createUser('posts-other')])
@@ -22,7 +25,7 @@ beforeAll(async () => {
 })
 
 const create = async (client: ReturnType<typeof sdkClient>, body: string) => {
-  const res = await myPostsCreate({ client, body: { body } })
+  const res = await myPostsCreate({ body: { body }, client })
   expect(res.response?.status).toBe(201)
   return res.data!
 }
@@ -44,10 +47,13 @@ describe('posts', () => {
   it('rejects every write without a session, or with a forged one, as Unauthorized', async () => {
     const post = await create(author, `401 target ${crypto.randomUUID()}`)
     for (const cookie of [undefined, 'better-auth.session_token=forged.token']) {
-      const client = createClient({ baseUrl: appUrl, headers: { origin: appUrl, ...(cookie ? { cookie } : {}) } })
+      const client = createClient({
+        baseUrl: appUrl,
+        headers: cookie ? { cookie, origin: appUrl } : { origin: appUrl },
+      })
       for (const [name, call] of [
-        ['create', () => myPostsCreate({ client, body: { body: 'no session' } })],
-        ['update', () => myPostsUpdate({ client, path: { id: post.id }, body: { body: 'no session' } })],
+        ['create', () => myPostsCreate({ body: { body: 'no session' }, client })],
+        ['update', () => myPostsUpdate({ body: { body: 'no session' }, client, path: { id: post.id } })],
         ['remove', () => myPostsRemove({ client, path: { id: post.id } })],
       ] as const) {
         const { error, response } = await call()
@@ -65,8 +71,8 @@ describe('posts', () => {
     const { id } = created
     expect(created.updatedAt).toBe(created.createdAt)
 
-    const updated = await myPostsUpdate({ client: author, path: { id }, body: { body: 'edited' } })
-    expect(updated.data).toMatchObject({ id, body: 'edited', authorName: users.author.name })
+    const updated = await myPostsUpdate({ body: { body: 'edited' }, client: author, path: { id } })
+    expect(updated.data).toMatchObject({ authorName: users.author.name, body: 'edited', id })
     // An edit moves updatedAt (the column the UI marks "edited" from) and leaves createdAt, the sort key, alone.
     expect(updated.data!.createdAt).toBe(created.createdAt)
     expect(Date.parse(updated.data!.updatedAt)).toBeGreaterThan(Date.parse(created.updatedAt))
@@ -85,7 +91,7 @@ describe('posts', () => {
   it('returns documented validation errors', async () => {
     // A NUL reaches Postgres as a 500 unless the contract refuses it (src/contract/stored-text.ts).
     for (const body of ['', '   ', 'x'.repeat(281), 'before\u0000after']) {
-      const invalid = await myPostsCreate({ client: author, body: { body } })
+      const invalid = await myPostsCreate({ body: { body }, client: author })
       expect(invalid.response?.status, JSON.stringify(body)).toBe(400)
       expect(invalid.error).toMatchObject({ _tag: 'ValidationError', issues: [{ path: ['body'] }] })
     }
@@ -93,7 +99,7 @@ describe('posts', () => {
 
   it('treats malformed ids as not found, on edit and delete alike', async () => {
     for (const id of ['not-a-uuid', '00000000-0000-4000-8000-00000000000', "1' or '1'='1", '%00']) {
-      const update = await myPostsUpdate({ client: author, path: { id }, body: { body: 'x' } })
+      const update = await myPostsUpdate({ body: { body: 'x' }, client: author, path: { id } })
       expect(update.response?.status, `PATCH ${id}`).toBe(404)
       expect(update.error).toEqual({ _tag: 'PostNotFound', id })
       const remove = await myPostsRemove({ client: author, path: { id } })
@@ -111,7 +117,7 @@ describe('author isolation', () => {
     expect(mine.response?.status).toBe(200)
     expect(mine.data!.items.map((p) => p.id)).not.toContain(theirs.id)
 
-    const update = await myPostsUpdate({ client: author, path: { id: theirs.id }, body: { body: 'hijacked' } })
+    const update = await myPostsUpdate({ body: { body: 'hijacked' }, client: author, path: { id: theirs.id } })
     expect(update.response?.status).toBe(404)
     expect(update.error).toMatchObject({ _tag: 'PostNotFound', id: theirs.id })
     const remove = await myPostsRemove({ client: author, path: { id: theirs.id } })
@@ -123,8 +129,8 @@ describe('author isolation', () => {
     expect(own.data!.items.find((p) => p.id === theirs.id)).toEqual(theirs)
     const pub = await publicPostsList({ client: anonymous })
     expect(pub.data!.items.find((p) => p.id === theirs.id)).toMatchObject({
-      body: theirs.body,
       authorName: users.other.name,
+      body: theirs.body,
     })
 
     expect((await myPostsRemove({ client: other, path: { id: theirs.id } })).response?.status).toBe(204)
@@ -151,12 +157,15 @@ describe('author isolation', () => {
     const theirs = await create(other, `public by other ${crypto.randomUUID()}`)
     const res = await fetch(`${appUrl}/api/posts`)
     const text = await res.text()
-    for (const user of Object.values(users)) expect(text).not.toContain(user.email)
+    for (const user of Object.values(users)) {
+      expect(text).not.toContain(user.email)
+    }
     expect(text).not.toMatch(/authorId|author_id|email/i)
 
-    const { items: posts } = JSON.parse(text) as { items: Array<Record<string, unknown>> }
-    for (const post of posts)
+    const { items: posts } = JSON.parse(text) as { items: Array<Readonly<Record<string, Json>>> }
+    for (const post of posts) {
       expect(Object.keys(post).toSorted()).toEqual(['authorName', 'body', 'createdAt', 'id', 'updatedAt'])
+    }
     expect(posts.find((p) => p.id === mine.id)?.authorName).toBe(users.author.name)
     expect(posts.find((p) => p.id === theirs.id)?.authorName).toBe(users.other.name)
     await myPostsRemove({ client: author, path: { id: mine.id } })
@@ -181,9 +190,9 @@ describe('csrf on post writes', () => {
     ]
     for (const [method, path, body] of requests) {
       const res = await fetch(appUrl + path, {
+        body: body ?? null,
+        headers: { 'content-type': 'application/json', cookie: authorCookie, ...headers },
         method,
-        headers: { cookie: authorCookie, 'content-type': 'application/json', ...headers },
-        ...(body ? { body } : {}),
       })
       expect(res.status, `${method} ${path}`).toBe(403)
     }
@@ -195,9 +204,9 @@ describe('csrf on post writes', () => {
 
   it('answers a malformed body with a 400 that leaks nothing', async () => {
     const res = await fetch(`${appUrl}/api/me/posts`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: appUrl, cookie: authorCookie },
       body: '{',
+      headers: { 'content-type': 'application/json', cookie: authorCookie, origin: appUrl },
+      method: 'POST',
     })
     expect(res.status).toBe(400)
     expect(await res.text()).not.toMatch(/\bat .+:\d+:\d+|node_modules|\.mjs|select |postgres/i)

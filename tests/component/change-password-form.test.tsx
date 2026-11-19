@@ -80,27 +80,27 @@ describe('ChangePasswordForm', () => {
     await expect.element(page.getByRole('button', { name: otherName })).not.toBeInTheDocument()
   })
 
-  it.each<{ name: string; failure: AuthFailure; field: typeof newPassword; message: string }>([
+  it.each<{ failure: AuthFailure; field: typeof newPassword; message: string; name: string }>([
     {
-      name: 'a wrong current password',
       failure: { code: 'INVALID_PASSWORD' },
       field: currentPassword,
       message: 'That password is not correct.',
+      name: 'a wrong current password',
     },
     {
-      name: 'a new password the server finds too short',
       failure: { code: 'PASSWORD_TOO_SHORT' },
       field: newPassword,
       message: 'Use at least 12 characters.',
+      name: 'a new password the server finds too short',
     },
     {
-      name: 'a new password the server finds too long',
       failure: { code: 'PASSWORD_TOO_LONG' },
       field: newPassword,
       message: 'Use at most 128 characters.',
+      name: 'a new password the server finds too long',
     },
   ])('explains $name next to that field and keeps what was typed', async ({ failure, field, message }) => {
-    worker.use(authFunction('changePassword', { ok: false, failure }))
+    worker.use(authFunction('changePassword', { failure, ok: false }))
     await renderInApp(<ChangePasswordForm />, { url: '/account' })
     await change()
     await expectFieldIssue(field(), message, changeButton())
@@ -110,7 +110,7 @@ describe('ChangePasswordForm', () => {
 
   it('explains an ended session under the form, which it describes, and keeps focus on the button', async () => {
     const message = 'Your session has ended. Sign in again to continue.'
-    worker.use(authFunction('changePassword', { ok: false, failure: { code: 'SESSION_EXPIRED' } }))
+    worker.use(authFunction('changePassword', { failure: { code: 'SESSION_EXPIRED' }, ok: false }))
     await renderInApp(<ChangePasswordForm />, { url: '/account' })
     await change()
     await expect.element(page.getByRole('alert')).toHaveTextContent(message)
@@ -121,7 +121,7 @@ describe('ChangePasswordForm', () => {
   })
 
   it('clears a field issue on the next attempt', async () => {
-    worker.use(authFunction('changePassword', { ok: false, failure: { code: 'INVALID_PASSWORD' } }))
+    worker.use(authFunction('changePassword', { failure: { code: 'INVALID_PASSWORD' }, ok: false }))
     await renderInApp(<ChangePasswordForm />, { url: '/account' })
     await change()
     await expect.element(currentPassword()).toHaveAttribute('aria-invalid', 'true')

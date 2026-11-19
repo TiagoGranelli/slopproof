@@ -91,8 +91,11 @@ describe('isAuthFailureCode', () => {
   )
 })
 
+/** What the login URL can carry: the failure, and the redirect the failure ignores. */
+type LoginSearch = Parameters<typeof failureFromSearch>[0] & { readonly redirect?: string }
+
 describe('failureFromSearch', () => {
-  it.each<[string, Record<string, unknown>, ReturnType<typeof failureFromSearch>]>([
+  it.each<[string, LoginSearch, ReturnType<typeof failureFromSearch>]>([
     ['a known code', { error: 'INVALID_EMAIL_OR_PASSWORD' }, { error: 'INVALID_EMAIL_OR_PASSWORD' }],
     [
       'a rate limit with its wait',

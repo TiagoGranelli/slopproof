@@ -6,9 +6,9 @@ import { CurrentUser, WriteRateLimit } from '#/contract/middleware.ts'
 import { postgresRateLimitStorage } from '../auth-rate-limit.ts'
 
 interface Rule {
+  readonly max: number
   /** Seconds. */
   readonly window: number
-  readonly max: number
 }
 
 interface Decision {
@@ -32,7 +32,7 @@ export class RateLimitStore extends Context.Service<
   })
 }
 
-const WRITES: Rule = { window: WRITE_WINDOW_SECONDS, max: WRITES_PER_WINDOW }
+const WRITES: Rule = { max: WRITES_PER_WINDOW, window: WRITE_WINDOW_SECONDS }
 
 /**
  * Open sign-up means anyone can hold a session, so writes are limited per user, not per IP: a bucket per
@@ -46,11 +46,12 @@ export const WriteRateLimitLive = Layer.effect(
       Effect.gen(function* () {
         const user = yield* CurrentUser
         const decision = yield* store.consume(`api-write|${user.id}`, WRITES)
-        if (!decision.allowed)
+        if (!decision.allowed) {
           return yield* new RateLimited({
             message: 'Too many changes in a short time',
             retryAfter: decision.retryAfter ?? WRITES.window,
           })
+        }
         return yield* httpEffect
       })
   }),

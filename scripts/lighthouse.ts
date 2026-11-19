@@ -41,15 +41,21 @@ const OUT = 'lighthouse-report'
 const option = (name: string) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1]
 
 /** `--<name>=<value>` when `value` is one of `allowed`, else `fallback`; anything else is a usage error. */
-const oneOf = <T extends string>(name: string, allowed: readonly T[], fallback: T[]): T[] => {
+const oneOf = <T extends string>(name: string, allowed: ReadonlyArray<T>, fallback: Array<T>): Array<T> => {
   const value = option(name)
-  if (value === undefined) return fallback
-  if (!allowed.includes(value as T)) throw new Error(`--${name} must be one of ${allowed.join(', ')} (got "${value}")`)
+  if (value === undefined) {
+    return fallback
+  }
+  if (!allowed.includes(value as T)) {
+    throw new Error(`--${name} must be one of ${allowed.join(', ')} (got "${value}")`)
+  }
   return [value as T]
 }
 
 const runs = Number(option('runs') ?? 3)
-if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer (got "${option('runs')}")`)
+if (!Number.isInteger(runs) || runs < 1) {
+  throw new Error(`--runs must be a positive integer (got "${option('runs')}")`)
+}
 const formFactors = oneOf<FormFactor>('form-factor', ['mobile', 'desktop'], ['mobile', 'desktop'])
 const pageNames = oneOf(
   'page',
@@ -80,7 +86,9 @@ const seedPosts = async (databaseUrl: string, email: string) => {
   try {
     const db = drizzle({ client: pool })
     const [author] = await db.select({ id: user.id }).from(user).where(eq(user.email, email))
-    if (!author) throw new Error(`seed author ${email} not found in the user table of ${new URL(databaseUrl).pathname}`)
+    if (!author) {
+      throw new Error(`seed author ${email} not found in the user table of ${new URL(databaseUrl).pathname}`)
+    }
     await db
       .insert(post)
       .values(POSTS.map((body, i) => ({ authorId: author.id, body, createdAt: new Date(Date.UTC(2026, 0, 1 + i)) })))
@@ -91,12 +99,13 @@ const seedPosts = async (databaseUrl: string, email: string) => {
 
 const signIn = async (appUrl: string, credentials: { email: string; password: string }) => {
   const res = await fetch(`${appUrl}/api/auth/sign-in/email`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: appUrl },
     body: JSON.stringify(credentials),
+    headers: { 'content-type': 'application/json', origin: appUrl },
+    method: 'POST',
   })
-  if (!res.ok)
+  if (!res.ok) {
     throw new Error(`sign-in as ${credentials.email} failed: ${res.status}, expected 200. ${await res.text()}`)
+  }
   return res.headers
     .getSetCookie()
     .map((c) => c.split(';')[0])
@@ -104,46 +113,49 @@ const signIn = async (appUrl: string, credentials: { email: string; password: st
 }
 
 /** Where the runs point: the app's public URL, the author's session cookie (for `auth` pages) and Chrome. */
-type Target = { url: string; cookie: string | undefined; chrome: Chrome }
+type Target = { chrome: Chrome; cookie: string | undefined; url: string }
 
 /** `runs` Lighthouse runs of one page and form factor; each must have loaded the page itself. */
-const measureRuns = (target: Target, page: Page, formFactor: FormFactor): Lhr[] =>
+const measureRuns = (target: Target, page: Page, formFactor: FormFactor): Array<Lhr> =>
   Array.from({ length: runs }, (_, index) => {
     const lhr = runLighthouse({
-      url: target.url + page.path,
+      chrome: target.chrome,
+      cookie: page.auth ? target.cookie : undefined,
       formFactor,
       outputBase: join(OUT, `${page.name}-${formFactor}-${index + 1}`),
-      cookie: page.auth ? target.cookie : undefined,
-      chrome: target.chrome,
+      url: target.url + page.path,
     })
-    if (lhr.runtimeError) throw new Error(`${page.name} ${formFactor}: ${lhr.runtimeError.message}`)
-    if (new URL(lhr.finalDisplayedUrl).pathname !== page.path)
+    if (lhr.runtimeError) {
+      throw new Error(`${page.name} ${formFactor}: ${lhr.runtimeError.message}`)
+    }
+    if (new URL(lhr.finalDisplayedUrl).pathname !== page.path) {
       throw new Error(`${page.name}: landed on ${lhr.finalDisplayedUrl}, expected the path ${page.path}`)
+    }
     return lhr
   })
 
 const measurePage = (target: Target, page: Page, formFactor: FormFactor): PageOutcome => {
   const lhrs = measureRuns(target, page, formFactor)
-  const { scores, metrics, perRun } = summarizeRuns(lhrs)
-  const { verdict, problems } = judge(page, { formFactor, performanceBar }, { metrics, perRun })
+  const { metrics, perRun, scores } = summarizeRuns(lhrs)
+  const { problems, verdict } = judge(page, { formFactor, performanceBar }, { metrics, perRun })
   const { medianLhr, medianRun } = keepMedianReport(lhrs, join(OUT, `${page.name}-${formFactor}`))
   return {
+    failingAudits: failingAudits(medianLhr, page.gated),
+    formFactor,
+    medianRun,
+    metrics,
     page: page.name,
     path: page.path,
-    formFactor,
-    runs,
-    verdict,
-    scores,
-    metrics,
-    problems,
-    medianRun,
     perRun,
-    failingAudits: failingAudits(medianLhr, page.gated),
+    problems,
+    runs,
+    scores,
+    verdict,
   }
 }
 
 /** Seeds the posts, signs the author in if a page needs it, warms the server, then measures every page. */
-const measureApp = async (app: RunningApp, chromePath: string): Promise<PageOutcome[]> => {
+const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<PageOutcome>> => {
   const flags = chromeFlags({ edgeCertificateSpki: app.edgeCertificateSpki, http1: protocol === 'h1' })
   const through = direct ? ' (Node server, no edge)' : ` (edge in front of ${app.directUrl}, ${protocol})`
   console.log(`measuring ${app.url}${through}`)
@@ -152,8 +164,10 @@ const measureApp = async (app: RunningApp, chromePath: string): Promise<PageOutc
     ? await signIn(app.url, { email: app.user.email, password: app.user.password })
     : undefined
   // Warm the server so the first measured run does not pay for lazy initialization.
-  for (const page of pages) await fetch(app.url + page.path, { headers: page.auth && cookie ? { cookie } : {} })
-  const target = { url: app.url, cookie, chrome: { path: chromePath, flags } }
+  for (const page of pages) {
+    await fetch(app.url + page.path, { headers: page.auth && cookie ? { cookie } : {} })
+  }
+  const target = { chrome: { flags, path: chromePath }, cookie, url: app.url }
   return pages.flatMap((page) =>
     formFactors.map((formFactor) => {
       const outcome = measurePage(target, page, formFactor)
@@ -164,27 +178,30 @@ const measureApp = async (app: RunningApp, chromePath: string): Promise<PageOutc
 }
 
 const chromePath = await findChromium()
-if (SMALL_SHM)
+if (SMALL_SHM) {
   console.warn(
     `/dev/shm has ${Math.round(SHM_BYTES / 1024 ** 2)} MiB (< 1 GiB): Chrome runs with --disable-dev-shm-usage. ` +
       'In Docker, pass --shm-size=2g.',
   )
-rmSync(OUT, { recursive: true, force: true })
+}
+rmSync(OUT, { force: true, recursive: true })
 mkdirSync(OUT, { recursive: true })
 const databaseUrl = testDatabaseUrl('lighthouse', process.env.LIGHTHOUSE_DATABASE_URL)
-let outcomes: PageOutcome[] = []
+let outcomes: Array<PageOutcome> = []
 let app: RunningApp | undefined
 // startApp creates the database: it is dropped in the finally below even when a server or create-user fails.
 try {
   app = await startApp({
     databaseUrl,
+    edge: direct ? undefined : { logFile: join(OUT, 'edge.log'), tls },
     logFile: join(OUT, 'app-server.log'),
-    ...(direct ? {} : { edge: { logFile: join(OUT, 'edge.log'), tls } }),
   })
   outcomes = await measureApp(app, chromePath)
 } finally {
   await app?.stop()
-  if (!process.env.LIGHTHOUSE_DATABASE_URL) await dropTestDatabase(databaseUrl)
+  if (!process.env.LIGHTHOUSE_DATABASE_URL) {
+    await dropTestDatabase(databaseUrl)
+  }
 }
-writeReport(outcomes, { runs, edge: direct ? false : protocol, shmBytes: SHM_BYTES, outputDir: OUT })
+writeReport(outcomes, { edge: direct ? false : protocol, outputDir: OUT, runs, shmBytes: SHM_BYTES })
 process.exitCode = exitCodeOf(outcomes)

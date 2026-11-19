@@ -23,16 +23,22 @@ export function FlashMessage() {
   const [seen, setSeen] = useState(flash)
   if (flash !== seen) {
     setSeen(flash)
-    if (flash) setMessage(flashMessage(flash))
+    if (flash) {
+      setMessage(flashMessage(flash))
+    }
   }
   useEffect(() => {
-    if (!flash) return
+    if (!flash) {
+      return
+    }
     const { flash: _shown, ...state } = router.history.location.state
     router.history.replace(router.history.location.href, state)
   }, [flash, router])
-  if (!message || pathname !== ownPath) return null
+  if (!message || pathname !== ownPath) {
+    return null
+  }
   return (
-    <p data-flash data-testid="flash" className="rounded-lg border bg-muted/60 px-4 py-3 text-sm">
+    <p className="rounded-lg border bg-muted/60 px-4 py-3 text-sm" data-flash data-testid="flash">
       {message}
     </p>
   )

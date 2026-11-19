@@ -15,10 +15,14 @@ const STAMP = '.output/build-inputs.json'
 /** Path of each input file (relative to the checkout, `/`-separated) to the SHA-256 of its content. */
 type InputHashes = Record<string, string>
 
-const filesOf = (root: string, input: string): string[] => {
+const filesOf = (root: string, input: string): Array<string> => {
   const path = join(root, input)
-  if (!existsSync(path)) return []
-  if (!statSync(path).isDirectory()) return [path]
+  if (!existsSync(path)) {
+    return []
+  }
+  if (!statSync(path).isDirectory()) {
+    return [path]
+  }
   return readdirSync(path, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => join(entry.parentPath, entry.name))
@@ -39,29 +43,39 @@ export const writeBuildStamp = (root = '.'): void => {
 }
 
 /** Input files added, removed or changed between two sets of hashes, sorted. */
-const changedInputs = (built: InputHashes, now: InputHashes): string[] => {
+const changedInputs = (built: InputHashes, now: InputHashes): Array<string> => {
   const paths = new Set([...Object.keys(built), ...Object.keys(now)])
   return [...paths].filter((path) => built[path] !== now[path]).toSorted()
 }
 
 /** The first ten paths, and how many more there are. */
-const listSome = (paths: string[]): string =>
+const listSome = (paths: Array<string>): string =>
   paths.slice(0, 10).join(', ') + (paths.length > 10 ? ` and ${paths.length - 10} more` : '')
+
+const assertBuildExists = (root: string): void => {
+  const output = join(root, '.output')
+  if (!existsSync(join(output, 'server/index.mjs')) || !existsSync(join(output, 'nitro.json'))) {
+    throw new Error(`No build in ${output} (expected server/index.mjs and nitro.json). Run \`pnpm build\` first.`)
+  }
+}
 
 /**
  * Refuses to test a build whose inputs changed since it was built. ALLOW_STALE_BUILD=1 skips the comparison
  * (CI tests the build job's artifact).
  */
 export const assertFreshBuild = (root = '.'): void => {
-  const output = join(root, '.output')
-  if (!existsSync(join(output, 'server/index.mjs')) || !existsSync(join(output, 'nitro.json')))
-    throw new Error(`No build in ${output} (expected server/index.mjs and nitro.json). Run \`pnpm build\` first.`)
-  if (process.env.ALLOW_STALE_BUILD === '1') return
-  if (!existsSync(join(root, STAMP)))
+  assertBuildExists(root)
+  if (process.env.ALLOW_STALE_BUILD === '1') {
+    return
+  }
+  if (!existsSync(join(root, STAMP))) {
     throw new Error(`${STAMP} is missing, so .output was not built by \`pnpm build\`. Run \`pnpm build\` first.`)
+  }
   const built = JSON.parse(readFileSync(join(root, STAMP), 'utf8')) as InputHashes
   const changed = changedInputs(built, hashBuildInputs(root))
-  if (changed.length === 0) return
+  if (changed.length === 0) {
+    return
+  }
   throw new Error(
     `.output is older than its sources: ${listSome(changed)} changed since \`pnpm build\`. Run \`pnpm build\` ` +
       'first (or set ALLOW_STALE_BUILD=1 to test the old build anyway).',

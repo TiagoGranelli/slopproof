@@ -35,14 +35,14 @@ const isValidKey = (key: Key) => {
 const keys = fc
   .record({
     at: fc.date({
-      min: new Date('0001-01-01T00:00:00.000Z'),
       max: new Date('9999-12-31T23:59:59.999Z'),
+      min: new Date('0001-01-01T00:00:00.000Z'),
       noInvalidDate: true,
     }),
-    micros: fc.integer({ min: 0, max: 999 }),
     id: fc.uuid(),
+    micros: fc.integer({ max: 999, min: 0 }),
   })
-  .map(({ at, micros, id }): Key => ({
+  .map(({ at, id, micros }): Key => ({
     createdAt: `${at.toISOString().slice(0, 23)}${String(micros).padStart(3, '0')}Z`,
     id,
   }))
@@ -91,20 +91,20 @@ describe('PageCursor', () => {
       keys.map((key) => withTime(key, `${key.createdAt.slice(0, 26)}0Z`)),
       // Month 00 or 13-99, day 00 or 32-99, hour 24-99, minute or second 60-99.
       fc
-        .tuple(keys, fc.oneof(fc.constant(0), fc.integer({ min: 13, max: 99 })))
+        .tuple(keys, fc.oneof(fc.constant(0), fc.integer({ max: 99, min: 13 })))
         .map(([key, month]) =>
           withTime(key, `${key.createdAt.slice(0, 5)}${String(month).padStart(2, '0')}${key.createdAt.slice(7)}`),
         ),
       fc
-        .tuple(keys, fc.oneof(fc.constant(0), fc.integer({ min: 32, max: 99 })))
+        .tuple(keys, fc.oneof(fc.constant(0), fc.integer({ max: 99, min: 32 })))
         .map(([key, day]) =>
           withTime(key, `${key.createdAt.slice(0, 8)}${String(day).padStart(2, '0')}${key.createdAt.slice(10)}`),
         ),
       fc
-        .tuple(keys, fc.integer({ min: 24, max: 99 }))
+        .tuple(keys, fc.integer({ max: 99, min: 24 }))
         .map(([key, hour]) => withTime(key, `${key.createdAt.slice(0, 11)}${hour}${key.createdAt.slice(13)}`)),
       fc
-        .tuple(keys, fc.integer({ min: 60, max: 99 }), fc.boolean())
+        .tuple(keys, fc.integer({ max: 99, min: 60 }), fc.boolean())
         .map(([key, value, minute]) =>
           withTime(
             key,

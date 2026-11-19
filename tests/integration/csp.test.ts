@@ -45,7 +45,9 @@ describe('content security policy', () => {
     inlineSourceHashes(html)
     const tags = [...openTags(html, 'script'), ...openTags(html, 'style')]
     expect(tags.length).toBeGreaterThan(0)
-    for (const tag of tags) expect(tag).toContain(`nonce="${nonce}"`)
+    for (const tag of tags) {
+      expect(tag).toContain(`nonce="${nonce}"`)
+    }
     const again = (await fetch(appUrl + path)).headers.get('content-security-policy')
     expect(again).not.toContain(nonce!)
   })

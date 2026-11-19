@@ -23,18 +23,27 @@ const LOCK_NOT_AVAILABLE = '55P03'
 const TABLE = 'drizzle.__drizzle_migrations'
 
 const setting = (value: string) => `'${value.replaceAll("'", '')}'`
-const codeOf = (error: unknown): unknown => {
-  const { code, cause } = (error ?? {}) as { code?: unknown; cause?: unknown }
-  return code ?? (cause === undefined ? undefined : codeOf(cause))
+const codeOf = (error: unknown): string | undefined => {
+  const { cause, code } = (error ?? {}) as { cause?: unknown; code?: unknown }
+  if (typeof code === 'string') {
+    return code
+  }
+  return cause === undefined ? undefined : codeOf(cause)
 }
 const firstLine = (error: unknown) => (error instanceof Error ? error.message.split('\n', 1)[0] : String(error))
 
-const log = (level: 'info' | 'error', msg: string, fields: Record<string, unknown> = {}) =>
+const log = (
+  level: 'info' | 'error',
+  msg: string,
+  fields: Readonly<Record<string, string | number | undefined>> = {},
+) =>
   (level === 'error' ? process.stderr : process.stdout).write(
-    `${JSON.stringify({ time: new Date().toISOString(), level, msg, ...fields })}\n`,
+    `${JSON.stringify({ level, msg, time: new Date().toISOString(), ...fields })}\n`,
   )
 
-if (existsSync('.env') && !process.env.MIGRATION_DATABASE_URL && !process.env.DATABASE_URL) process.loadEnvFile('.env')
+if (existsSync('.env') && !process.env.MIGRATION_DATABASE_URL && !process.env.DATABASE_URL) {
+  process.loadEnvFile('.env')
+}
 const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL
 if (!url) {
   log('error', 'MIGRATION_DATABASE_URL or DATABASE_URL is required')
@@ -48,7 +57,7 @@ if (!existsSync(`${migrationsFolder}/meta/_journal.json`)) {
 const migrations = readMigrationFiles({ migrationsFolder })
 
 /** Thrown when another run held the lock for longer than MIGRATE_LOCK_TIMEOUT: not retried. */
-class LockWaitExceeded extends Error {}
+class LockWaitExceededError extends Error {}
 
 type Migration = (typeof migrations)[number]
 type Counts = { applied: number; total: number }
@@ -68,13 +77,13 @@ const takeLock = async (client: Client) => {
   await client.query(`set local lock_timeout = ${setting(LOCK_WAIT)}`)
   await client.query('select pg_advisory_xact_lock($1)', [LOCK_KEY]).catch((error: unknown) => {
     throw codeOf(error) === LOCK_NOT_AVAILABLE
-      ? new LockWaitExceeded(`another migration run held the lock for longer than ${LOCK_WAIT}`, { cause: error })
+      ? new LockWaitExceededError(`another migration run held the lock for longer than ${LOCK_WAIT}`, { cause: error })
       : error
   })
 }
 
 /** A migration is pending when it is newer than the last recorded one, as in Drizzle's migrator. */
-const pendingMigrations = async (client: Client): Promise<Migration[]> => {
+const pendingMigrations = async (client: Client): Promise<Array<Migration>> => {
   const { rows } = await client.query<{ created_at: string | null }>(
     `select created_at from ${TABLE} order by created_at desc limit 1`,
   )
@@ -83,7 +92,9 @@ const pendingMigrations = async (client: Client): Promise<Migration[]> => {
 }
 
 const applyMigration = async (client: Client, migration: Migration) => {
-  for (const statement of migration.sql) await client.query(statement)
+  for (const statement of migration.sql) {
+    await client.query(statement)
+  }
   await client.query(`insert into ${TABLE} (hash, created_at) values ($1, $2)`, [
     migration.hash,
     migration.folderMillis,
@@ -98,7 +109,9 @@ const applyPending = async (client: Client): Promise<Counts> => {
     `create table if not exists ${TABLE} (id serial primary key, hash text not null, created_at bigint)`,
   )
   const pending = await pendingMigrations(client)
-  for (const migration of pending) await applyMigration(client, migration)
+  for (const migration of pending) {
+    await applyMigration(client, migration)
+  }
   const total = (await client.query<{ n: number }>(`select count(*)::int as n from ${TABLE}`)).rows[0]?.n ?? 0
   return { applied: pending.length, total }
 }
@@ -120,7 +133,7 @@ const attempt = async (client: Client): Promise<Counts> => {
 
 /** A table-lock timeout is retried up to DDL_ATTEMPTS times; waiting too long for another run is not. */
 const retriable = (error: unknown, attemptNumber: number) =>
-  !(error instanceof LockWaitExceeded) && codeOf(error) === LOCK_NOT_AVAILABLE && attemptNumber < DDL_ATTEMPTS
+  !(error instanceof LockWaitExceededError) && codeOf(error) === LOCK_NOT_AVAILABLE && attemptNumber < DDL_ATTEMPTS
 
 // All pending migrations share one transaction, so a table-lock timeout rolls back everything and the next
 // attempt starts clean (and waits for the advisory lock again).
@@ -128,7 +141,9 @@ const migrateWithRetries = async (client: Client, attemptNumber = 1): Promise<Co
   try {
     return await attempt(client)
   } catch (error) {
-    if (!retriable(error, attemptNumber)) throw error
+    if (!retriable(error, attemptNumber)) {
+      throw error
+    }
     const lockTimeout = DDL_LOCK_WAIT
     log('info', 'migration waited too long for a table lock, retrying', { attempt: attemptNumber, lockTimeout })
     await new Promise((resolve) => setTimeout(resolve, 1000 * attemptNumber))
@@ -137,8 +152,8 @@ const migrateWithRetries = async (client: Client, attemptNumber = 1): Promise<Co
 }
 
 const client = new Client({
-  connectionString: url,
   application_name: 'app-migrate',
+  connectionString: url,
   connectionTimeoutMillis: 10_000,
 })
 // Postgres NOTICEs ("schema drizzle already exists, skipping") are noise here.
@@ -147,10 +162,10 @@ const started = performance.now()
 try {
   await client.connect()
   const { applied, total } = await migrateWithRetries(client)
-  log('info', 'migrations applied', { applied, total, ms: Math.round(performance.now() - started) })
+  log('info', 'migrations applied', { applied, ms: Math.round(performance.now() - started), total })
 } catch (error) {
   const cause = error instanceof Error && error.cause !== undefined ? firstLine(error.cause) : undefined
-  log('error', 'migration failed', { error: firstLine(error), cause, code: codeOf(error) })
+  log('error', 'migration failed', { cause, code: codeOf(error), error: firstLine(error) })
   process.exitCode = 1
 } finally {
   await client.end().catch(() => {})

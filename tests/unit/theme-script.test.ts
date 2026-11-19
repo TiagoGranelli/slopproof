@@ -9,7 +9,9 @@ const run = (stored: string | null, options: { blocked?: boolean } = {}) => {
   const documentElement = { dataset: {} as Record<string, string> }
   const localStorage = {
     getItem: (key: string) => {
-      if (options.blocked) throw new Error('SecurityError: storage is disabled')
+      if (options.blocked) {
+        throw new Error('SecurityError: storage is disabled')
+      }
       return key === 'theme' ? stored : null
     },
   }

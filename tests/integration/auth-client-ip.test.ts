@@ -9,7 +9,7 @@ const { email, password } = sharedUsers.author
 
 /** The client IP Better Auth stored on the session the cookie belongs to, as the account page lists it. */
 const sessionIp = async (baseUrl: string, cookie: string) => {
-  const { value } = await callAuthFunction('listSessions', { method: 'GET', baseUrl, headers: { cookie } })
+  const { value } = await callAuthFunction('listSessions', { baseUrl, headers: { cookie }, method: 'GET' })
   expect(value?.ok).toBe(true)
   return value?.ok ? value.value.find((session) => session.current)?.ipAddress : undefined
 }
@@ -27,11 +27,12 @@ describe('client IP behind a trusted proxy', () => {
     expect(await sessionIp(appUrl, sessionCookie(res)!)).toBe('2001:db8:64:1::/64')
 
     // Other addresses in the same /64 count against the same bucket (3 sign-ins per 10 s, 1 already used).
-    const statuses: number[] = []
-    for (const address of ['2001:db8:64:1::2', '2001:db8:64:1:ffff::1', '2001:db8:64:1::3'])
+    const statuses: Array<number> = []
+    for (const address of ['2001:db8:64:1::2', '2001:db8:64:1:ffff::1', '2001:db8:64:1::3']) {
       statuses.push(
         (await postSignIn({ email, password: 'wrong-password-123' }, { 'x-forwarded-for': address })).status,
       )
+    }
     expect(statuses).toEqual([401, 401, 429])
   })
 })
@@ -43,9 +44,9 @@ describe('client IP from a peer outside TRUSTED_PROXIES', () => {
   direct.hostname = '127.0.0.1'
   const signIn = (spoofed: string, pass = password) =>
     fetch(`${direct.origin}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: closedAppUrl, 'x-forwarded-for': spoofed },
       body: JSON.stringify({ email, password: pass }),
+      headers: { 'content-type': 'application/json', origin: closedAppUrl, 'x-forwarded-for': spoofed },
+      method: 'POST',
     })
 
   // The only test that signs in on this server: every request lands in the one bucket of 127.0.0.1.
@@ -55,9 +56,10 @@ describe('client IP from a peer outside TRUSTED_PROXIES', () => {
     expect(await sessionIp(direct.origin, sessionCookie(res)!)).toBe('127.0.0.1')
 
     // Each attempt claims another address; all of them count against 127.0.0.1 (3 per 10 s, 1 already used).
-    const statuses: number[] = []
-    for (const spoofed of ['100.64.1.100', '100.64.1.101, 10.0.0.1', '100.64.1.102'])
+    const statuses: Array<number> = []
+    for (const spoofed of ['100.64.1.100', '100.64.1.101, 10.0.0.1', '100.64.1.102']) {
       statuses.push((await signIn(spoofed, 'wrong-password-123')).status)
+    }
     expect(statuses).toEqual([401, 401, 429])
   })
 })

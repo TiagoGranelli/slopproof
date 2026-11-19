@@ -6,7 +6,9 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 const tick = () => {
   now = Date.now()
-  for (const listener of listeners) listener()
+  for (const listener of listeners) {
+    listener()
+  }
 }
 
 /** The time, refreshed once a minute while something shows it: `useSyncExternalStore`'s snapshot. */
@@ -24,6 +26,8 @@ export function subscribeToMinuteClock(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0) clearInterval(timer)
+    if (listeners.size === 0) {
+      clearInterval(timer)
+    }
   }
 }

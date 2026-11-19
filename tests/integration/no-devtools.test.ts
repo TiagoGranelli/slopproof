@@ -9,8 +9,8 @@ import { expect, it } from 'vitest'
 /** Event names only the real client dispatches: strings, so they survive minification. */
 const DEVTOOLS_EVENT_CLIENT = /tanstack-connect-success|tanstack-dispatch-event/
 
-const scriptsUnder = (dir: string): string[] =>
-  readdirSync(dir, { recursive: true, encoding: 'utf8' })
+const scriptsUnder = (dir: string): Array<string> =>
+  readdirSync(dir, { encoding: 'utf8', recursive: true })
     .filter((file) => /\.m?js$/.test(file))
     .map((file) => join(dir, file))
 

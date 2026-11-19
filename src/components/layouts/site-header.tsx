@@ -10,28 +10,30 @@ const navLink =
 /** Who is signed in, as the header shows it: `null` signed out, `undefined` not known (a prerendered page). */
 type HeaderUser = { readonly name: string } | null | undefined
 
-function AccountLinks(props: { user: HeaderUser; signOut: ReactNode }) {
+function AccountLinks(props: { signOut: ReactNode; user: HeaderUser }) {
   const { user } = props
   // A page prerendered at build time cannot know; Dashboard is right either way (its guard sends to sign-in).
-  if (user === undefined)
+  if (user === undefined) {
     return (
-      <Link to="/dashboard" className={navLink}>
+      <Link className={navLink} to="/dashboard">
         Dashboard
       </Link>
     )
-  if (user === null)
+  }
+  if (user === null) {
     return (
-      <Link to="/login" className={navLink}>
+      <Link className={navLink} to="/login">
         Sign in
       </Link>
     )
+  }
   return (
     <>
       <span className="max-w-48 truncate border-r pr-5 font-medium">{user.name}</span>
-      <Link to="/dashboard" className={navLink}>
+      <Link className={navLink} to="/dashboard">
         Dashboard
       </Link>
-      <Link to="/account" className={navLink}>
+      <Link className={navLink} to="/account">
         Account
       </Link>
       {props.signOut}
@@ -43,21 +45,21 @@ function AccountLinks(props: { user: HeaderUser; signOut: ReactNode }) {
  * The header on every page: the main navigation, then the account's links for `user` (see HeaderUser) and its
  * `signOut` control, which the app composes from the auth feature.
  */
-export function SiteHeader(props: { user: HeaderUser; signOut: ReactNode }) {
+export function SiteHeader(props: { signOut: ReactNode; user: HeaderUser }) {
   return (
     <header className="border-b">
       <nav
         aria-label="Main"
         className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-sm"
       >
-        <Link to="/" className="mr-1 rounded-sm font-semibold tracking-tight">
+        <Link className="mr-1 rounded-sm font-semibold tracking-tight" to="/">
           {APP_NAME}
         </Link>
-        <Link to="/about" className={navLink}>
+        <Link className={navLink} to="/about">
           About
         </Link>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
-          <AccountLinks user={props.user} signOut={props.signOut} />
+          <AccountLinks signOut={props.signOut} user={props.user} />
         </div>
       </nav>
     </header>

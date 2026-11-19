@@ -20,7 +20,9 @@ export async function expectAccessible(page: Page, state: string) {
       const running = document
         .getAnimations()
         .filter((a) => a.playState === 'running' && Number.isFinite(Number(a.effect?.getComputedTiming().endTime)))
-      if (running.length === 0) return
+      if (running.length === 0) {
+        return
+      }
       await Promise.allSettled(running.map((a) => a.finished))
     }
   })
@@ -55,12 +57,18 @@ export type TabStop = {
  * Playwright keeps focus on the last control and `document.hasFocus()` stays true, which looks exactly like
  * a trap. Focus that reaches the sentinel has left every control in the page's own order, in every engine.
  */
-export async function tabThrough(page: Page, options: { backwards?: boolean; max?: number } = {}): Promise<TabStop[]> {
+export async function tabThrough(
+  page: Page,
+  options: { backwards?: boolean; max?: number } = {},
+): Promise<Array<TabStop>> {
   const { backwards = false, max = 300 } = options
   await page.evaluate((atStart) => {
-    const sentinel = Object.assign(document.createElement('span'), { tabIndex: 0, id: 'tab-walk-end' })
-    if (atStart) document.body.prepend(sentinel)
-    else document.body.append(sentinel)
+    const sentinel = Object.assign(document.createElement('span'), { id: 'tab-walk-end', tabIndex: 0 })
+    if (atStart) {
+      document.body.prepend(sentinel)
+    } else {
+      document.body.append(sentinel)
+    }
   }, backwards)
   try {
     return await walkToSentinel(page, { backwards, max })
@@ -77,14 +85,20 @@ type WalkState = { tabWalkSeen?: WeakSet<Element> }
 
 /** Presses Tab (or Shift+Tab) until focus reaches the sentinel of `tabThrough`, and returns the stops on the way. */
 const walkToSentinel = async (page: Page, { backwards, max }: { backwards: boolean; max: number }) => {
-  const stops: TabStop[] = []
+  const stops: Array<TabStop> = []
   const walked = () => stops.map((stop) => stop.name).join(' → ')
   for (let i = 0; i < max; i++) {
     await page.keyboard.press(backwards ? 'Shift+Tab' : 'Tab')
     const stop = await focusedStop(page)
-    if (stop === 'lost') throw new Error(`focus was lost to the document after ${walked() || 'no stops'}`)
-    if (stop === 'sentinel') return stops
-    if (stop.again) throw new Error(`focus is trapped: it came back to ${stop.name} after ${walked()}`)
+    if (stop === 'lost') {
+      throw new Error(`focus was lost to the document after ${walked() || 'no stops'}`)
+    }
+    if (stop === 'sentinel') {
+      return stops
+    }
+    if (stop.again) {
+      throw new Error(`focus is trapped: it came back to ${stop.name} after ${walked()}`)
+    }
     stops.push(stop)
   }
   throw new Error(`focus did not get past the page after ${max} key presses: ${walked()}`)
@@ -93,15 +107,21 @@ const walkToSentinel = async (page: Page, { backwards, max }: { backwards: boole
 /** Where focus is now: a control, as a tab stop; the sentinel of `tabThrough`; or nowhere (lost to the document). */
 const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) | 'sentinel' | 'lost'> => {
   const focused = page.locator(':focus')
-  if ((await focused.count()) === 0) return 'lost'
+  if ((await focused.count()) === 0) {
+    return 'lost'
+  }
   const visit = await focused.evaluate((element) => {
-    if (element.id === 'tab-walk-end') return 'sentinel'
+    if (element.id === 'tab-walk-end') {
+      return 'sentinel'
+    }
     const seen = ((globalThis as WalkState).tabWalkSeen ??= new WeakSet())
     const again = seen.has(element)
     seen.add(element)
     return again ? 'again' : 'first'
   })
-  if (visit === 'sentinel') return 'sentinel'
+  if (visit === 'sentinel') {
+    return 'sentinel'
+  }
   const snapshot = await focused.ariaSnapshot()
   // `- button "Sign out"`, or YAML-quoted when the name has a colon: `- 'button "Edit post: First"'`.
   const [, role, label] = /^- '?([\w-]+)(?: "((?:[^"\\]|\\.)*)")?/.exec(snapshot) ?? []
@@ -110,7 +130,7 @@ const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) |
     const outline = style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0
     return element.matches(':focus-visible') && (outline || style.boxShadow !== 'none')
   })
-  return { name: label === undefined ? `${role}` : `${role} "${label}"`, visibleFocus, again: visit === 'again' }
+  return { again: visit === 'again', name: label === undefined ? `${role}` : `${role} "${label}"`, visibleFocus }
 }
 
 /**
@@ -119,7 +139,7 @@ const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) |
  */
 export async function tabOrder(page: Page, max?: number) {
   await page.evaluate(() => {
-    const start = Object.assign(document.createElement('span'), { tabIndex: -1, id: 'tab-order-start' })
+    const start = Object.assign(document.createElement('span'), { id: 'tab-order-start', tabIndex: -1 })
     document.body.prepend(start)
     start.focus()
   })
@@ -136,8 +156,8 @@ export async function tabOrder(page: Page, max?: number) {
  * No stop may be one of `never` (a control that must not be a Tab stop yet), and every stop shows its focus.
  */
 export function expectTabStops(
-  stops: TabStop[],
-  expected: { first: string[]; inOrder: string[]; last: string[]; never?: string[] },
+  stops: Array<TabStop>,
+  expected: { first: Array<string>; inOrder: Array<string>; last: Array<string>; never?: Array<string> },
 ) {
   const names = stops.map((stop) => stop.name)
   const walk = `the walk ${names.join(' → ')}`
@@ -150,26 +170,30 @@ export function expectTabStops(
     `controls that must not be Tab stops`,
   ).toEqual([])
   expect(
-    stops.filter((stop) => !stop.visibleFocus).map((stop) => stop.name),
+    stops.flatMap((stop) => (stop.visibleFocus ? [] : [stop.name])),
     'stops without visible focus',
   ).toEqual([])
 }
 
 /** The part of `wanted` that `names` holds in the same order, others between them allowed: all of it on a match. */
-const inOrderWithin = (names: string[], wanted: string[]) => {
+const inOrderWithin = (names: Array<string>, wanted: Array<string>) => {
   let found = 0
-  for (const name of names) if (name === wanted[found]) found++
+  for (const name of names) {
+    if (name === wanted[found]) {
+      found++
+    }
+  }
   return wanted.slice(0, found)
 }
 
 const ACCOUNT_LINKS = {
-  'signed out': `
-    - link "Sign in"`,
   'signed in': `
     - text: /\\S/
     - link "Dashboard"
     - link "Account"
     - button "Sign out"`,
+  'signed out': `
+    - link "Sign in"`,
 }
 
 /**
