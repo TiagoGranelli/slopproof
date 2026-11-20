@@ -1,0 +1,277 @@
+[
+  {
+    "apiOperations": ["me.get"],
+    "id": "auth-sign-in-up",
+    "paths": [
+      "src/routes/login.tsx",
+      "src/routes/sign-up.tsx",
+      "src/routes/_authed.tsx",
+      "src/routes/api/auth/$.ts",
+      "src/features/auth/api/auth-action.ts",
+      "src/features/auth/api/get-session.ts",
+      "src/features/auth/api/sign-in.ts",
+      "src/features/auth/api/sign-out.ts",
+      "src/features/auth/api/sign-up.ts",
+      "src/features/auth/components/auth-form.tsx",
+      "src/features/auth/components/auth-status.tsx",
+      "src/features/auth/components/login-form.tsx",
+      "src/features/auth/components/sign-out-button.tsx",
+      "src/features/auth/components/sign-up-form.tsx",
+      "src/features/auth/utils/describe-auth-failure.ts",
+      "src/features/auth/utils/safe-redirect.ts",
+      "src/contract/me.ts",
+      "src/contract/middleware.ts",
+      "src/server/api/middleware.ts",
+      "src/server/api/session-lookup.ts",
+      "src/server/auth.ts",
+      "src/server/http/auth-endpoints.ts",
+      "src/server/http/auth-handler.ts",
+      "src/server/http/request-session.ts",
+      "src/lib/auth.functions.ts",
+      "src/lib/session.functions.ts",
+      "src/lib/account-input.ts"
+    ],
+    "purpose": "Sign-up, sign-in, sign-out, session lookup, and the authenticated route guard.",
+    "routes": ["/login", "/sign-up"],
+    "tests": [
+      "tests/unit/account-input.test.ts",
+      "tests/unit/describe-auth-failure.test.ts",
+      "tests/unit/safe-redirect.test.ts",
+      "tests/api/me.test.ts",
+      "tests/api/middleware.test.ts",
+      "tests/api/sign-up-policy.test.ts",
+      "tests/component/auth.test.tsx",
+      "tests/db/ssr-session.test.ts",
+      "tests/integration/auth-sign-up.test.ts",
+      "tests/integration/auth-session-refresh.test.ts",
+      "tests/integration/login-form-post.test.ts",
+      "tests/e2e/auth-closed.spec.ts",
+      "tests/e2e/login-without-js.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component account-input describe-auth-failure safe-redirect me middleware sign-up-policy auth.test"
+  },
+  {
+    "apiOperations": [],
+    "id": "email-verification",
+    "paths": [
+      "src/routes/verify-email.tsx",
+      "src/features/auth/api/verify-email.ts",
+      "src/features/auth/api/resend-verification.ts",
+      "src/features/auth/components/verify-email-form.tsx",
+      "src/features/auth/components/resend-verification-form.tsx",
+      "src/features/auth/utils/token-search.ts",
+      "src/server/mail/auth-mail.ts",
+      "src/server/mail/auth-messages.ts"
+    ],
+    "purpose": "Email address verification from token links and resending verification emails.",
+    "routes": ["/verify-email"],
+    "tests": [
+      "tests/unit/auth-messages.test.ts",
+      "tests/component/account-recovery.test.tsx",
+      "tests/e2e/auth-lifecycle.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component auth-messages account-recovery"
+  },
+  {
+    "apiOperations": [],
+    "id": "password-reset",
+    "paths": [
+      "src/routes/forgot-password.tsx",
+      "src/routes/reset-password.tsx",
+      "src/features/auth/api/request-password-reset.ts",
+      "src/features/auth/api/reset-password.ts",
+      "src/features/auth/components/forgot-password-form.tsx",
+      "src/features/auth/components/reset-password-form.tsx",
+      "src/features/auth/utils/token-search.ts",
+      "src/server/mail/auth-mail.ts",
+      "src/server/mail/auth-messages.ts"
+    ],
+    "purpose": "Requesting a password reset email and setting a new password with a reset token.",
+    "routes": ["/forgot-password", "/reset-password"],
+    "tests": [
+      "tests/unit/auth-messages.test.ts",
+      "tests/component/account-recovery.test.tsx",
+      "tests/e2e/auth-lifecycle.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component auth-messages account-recovery"
+  },
+  {
+    "apiOperations": [],
+    "id": "account-management",
+    "paths": [
+      "src/routes/_authed/account.tsx",
+      "src/features/auth/api/change-password.ts",
+      "src/features/auth/api/delete-account.ts",
+      "src/features/auth/api/get-sessions.ts",
+      "src/features/auth/api/revoke-session.ts",
+      "src/features/auth/api/revoke-other-sessions.ts",
+      "src/features/auth/api/sign-out-everywhere.ts",
+      "src/features/auth/components/change-password-form.tsx",
+      "src/features/auth/components/delete-account-form.tsx",
+      "src/features/auth/components/session-list.tsx",
+      "src/features/auth/utils/describe-session.ts",
+      "src/server/auth-cleanup.ts"
+    ],
+    "purpose": "Changing password, listing and revoking active sessions, and deleting an account.",
+    "routes": ["/account"],
+    "tests": [
+      "tests/unit/describe-session.test.ts",
+      "tests/component/change-password-form.test.tsx",
+      "tests/component/delete-account-form.test.tsx",
+      "tests/component/session-list.test.tsx",
+      "tests/db/auth-cleanup.test.ts",
+      "tests/integration/auth-account.test.ts",
+      "tests/e2e/auth-lifecycle.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component describe-session change-password-form delete-account-form session-list"
+  },
+  {
+    "apiOperations": ["publicPosts.list"],
+    "id": "public-posts",
+    "paths": [
+      "src/routes/index.tsx",
+      "src/features/posts/api/get-public-posts.ts",
+      "src/features/posts/components/post-card.tsx",
+      "src/features/posts/components/post-list.tsx",
+      "src/contract/pages.ts",
+      "src/contract/posts.ts",
+      "src/lib/infinite-pages.ts",
+      "src/server/db/keyset.ts",
+      "src/server/posts/repo.ts"
+    ],
+    "purpose": "Anonymous public posts feed with keyset cursor pagination on the home page.",
+    "routes": ["/"],
+    "tests": [
+      "tests/unit/page-cursor.test.ts",
+      "tests/api/posts.test.ts",
+      "tests/api/public-operations.test.ts",
+      "tests/component/post-list.test.tsx",
+      "tests/db/keyset.test.ts",
+      "tests/db/posts-query-budget.test.ts",
+      "tests/integration/posts-pagination.test.ts",
+      "tests/e2e/posts-pagination.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component page-cursor posts.test public-operations post-list"
+  },
+  {
+    "apiOperations": ["myPosts.list", "myPosts.create", "myPosts.update", "myPosts.remove"],
+    "id": "posts-crud",
+    "paths": [
+      "src/routes/_authed/dashboard.tsx",
+      "src/features/posts/api/create-post.ts",
+      "src/features/posts/api/delete-post.ts",
+      "src/features/posts/api/get-my-posts.ts",
+      "src/features/posts/api/posts-cache.ts",
+      "src/features/posts/api/update-post.ts",
+      "src/features/posts/components/edit-post-form.tsx",
+      "src/features/posts/components/my-post-list.tsx",
+      "src/features/posts/components/my-post.tsx",
+      "src/features/posts/components/post-composer.tsx",
+      "src/features/posts/utils/post-draft-schema.ts",
+      "src/features/posts/utils/post-draft.ts",
+      "src/contract/ids.ts",
+      "src/contract/limits.ts",
+      "src/contract/post-input.ts",
+      "src/contract/posts.ts",
+      "src/contract/stored-text.ts",
+      "src/server/posts/repo.ts",
+      "src/server/db/schema/posts.ts"
+    ],
+    "purpose": "Signed-in author dashboard for creating, listing, editing, and deleting posts.",
+    "routes": ["/dashboard"],
+    "tests": [
+      "tests/unit/id-brands.test.ts",
+      "tests/unit/stored-text.test.ts",
+      "tests/api/posts.test.ts",
+      "tests/api/posts-validation.test.ts",
+      "tests/component/post-composer.test.tsx",
+      "tests/component/my-post.test.tsx",
+      "tests/component/delete-post.test.tsx",
+      "tests/db/post-schema.test.ts",
+      "tests/db/posts-query-budget.test.ts",
+      "tests/integration/posts.test.ts",
+      "tests/e2e/flows.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands stored-text posts.test posts-validation post-composer my-post delete-post"
+  },
+  {
+    "apiOperations": [],
+    "id": "rate-limiting",
+    "paths": [
+      "src/server/api/rate-limit.ts",
+      "src/server/auth-rate-limit.ts",
+      "src/server/db/schema/rate-limit.ts",
+      "src/server/http/client-address.ts",
+      "src/server/http/forwarded-for.ts"
+    ],
+    "purpose": "Per-user API write rate limiting and per-IP/account Better Auth rate limiting.",
+    "routes": [],
+    "tests": [
+      "tests/unit/client-address.test.ts",
+      "tests/unit/forwarded-for.test.ts",
+      "tests/db/auth-rate-limit.test.ts",
+      "tests/integration/auth-client-ip.test.ts",
+      "tests/integration/auth-rate-limit.test.ts",
+      "tests/integration/posts-rate-limit.test.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component client-address forwarded-for"
+  },
+  {
+    "apiOperations": [],
+    "id": "security-headers-csp",
+    "paths": [
+      "src/routes/__root.tsx",
+      "src/routes/about.tsx",
+      "src/lib/content-security-policy.ts",
+      "src/lib/theme.ts",
+      "src/server/nitro/http.ts",
+      "src/server/nitro/prerender-csp.ts",
+      "src/start.ts"
+    ],
+    "purpose": "Nonce-based and prerendered Content Security Policy, origin checks, theme script, and root shell.",
+    "routes": ["/about"],
+    "tests": [
+      "tests/unit/content-security-policy.test.ts",
+      "tests/unit/prerender-csp.test.ts",
+      "tests/unit/theme-script.test.ts",
+      "tests/integration/csp.test.ts",
+      "tests/integration/security.test.ts",
+      "tests/e2e/csp.spec.ts",
+      "tests/e2e/appearance.spec.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component content-security-policy prerender-csp theme-script"
+  },
+  {
+    "apiOperations": ["system.health", "system.ready"],
+    "id": "health-ready",
+    "paths": [
+      "src/routes/api/$.ts",
+      "src/contract/api.ts",
+      "src/contract/errors.ts",
+      "src/contract/json.ts",
+      "src/contract/system.ts",
+      "src/server/api/handlers.ts",
+      "src/server/api/in-process-client.ts",
+      "src/server/api/web-handler.ts",
+      "src/server/db/health.ts",
+      "src/server/lifecycle.ts",
+      "src/server/nitro/startup.ts",
+      "src/lib/api-client.ts",
+      "src/lib/api-error.ts"
+    ],
+    "purpose": "Liveness and database-readiness probes, graceful shutdown, and core Effect HTTP API wiring.",
+    "routes": [],
+    "tests": [
+      "tests/unit/api-error.test.ts",
+      "tests/unit/lifecycle.test.ts",
+      "tests/unit/openapi-rules.test.ts",
+      "tests/api/system.test.ts",
+      "tests/api/database-down.test.ts",
+      "tests/api/ssr-requests.test.ts",
+      "tests/integration/api.test.ts",
+      "tests/integration/db-failure.test.ts",
+      "tests/integration/shutdown.test.ts"
+    ],
+    "verify": "pnpm exec vitest run --project unit --project api --project component api-error lifecycle openapi-rules system.test database-down ssr-requests"
+  }
+]

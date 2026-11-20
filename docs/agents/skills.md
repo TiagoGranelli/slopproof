@@ -19,6 +19,7 @@ description, then load the whole file.
 | `add-feature` | A capability spans database, contract, server and UI (the ordered checklist, pointing to the other skills) |
 | `auth-change` | An account action, a Better Auth config change, or creating users |
 | `add-page` | A page, form or UI state is added, with its axe, landmark, tab-order and Lighthouse obligations |
+| `feature-map` | Starting any feature, bug-fix, route, API, or test task: maps features to files and targeted tests via `docs/agents/features.json` and `scripts/features.ts` |
 | `upgrade-prerelease-deps` | Any dependency bump, above all the pinned pre-release packages; holds the version policy |
 
 Rules for editing them:

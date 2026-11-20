@@ -41,6 +41,7 @@
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
     "auth:check": "auth check schema --config src/server/auth.ts",
     "user:create": "node --env-file-if-exists=.env scripts/create-user.ts",
+    "features": "node scripts/features.ts",
     "openapi:generate": "node scripts/openapi.ts",
     "sdk:generate": "openapi-ts",
     "codegen": "pnpm openapi:generate && pnpm sdk:generate",
