@@ -2,7 +2,7 @@ import { revalidateLogic } from '@tanstack/react-form'
 import { useAppForm } from '#/components/form/app-form.ts'
 import { lazyFormSchema } from '#/components/form/lazy-schema.ts'
 import { useResendVerification } from '#/features/auth/api/resend-verification.ts'
-import { AuthForm } from '#/features/auth/components/auth-form.tsx'
+import { AuthForm, useAuthFormController } from '#/features/auth/components/auth-form.tsx'
 import { AuthStatus } from '#/features/auth/components/auth-status.tsx'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.EmailInput))
@@ -10,13 +10,15 @@ const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((modul
 /** Asks for a new confirmation link. The answer does not reveal whether the address has an account. */
 export function ResendVerificationForm() {
   const resend = useResendVerification()
+  const controller = useAuthFormController({ fieldCodes: { INVALID_EMAIL: 'email' } })
   const form = useAppForm({
     defaultValues: { email: '' },
-    onSubmit: ({ value }) => resend.mutate(schema.decode(value)),
+    onSubmit: ({ value }) => controller.submitAction(() => resend.mutateAsync(schema.decode(value))),
+    onSubmitInvalid: controller.onSubmitInvalid,
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
   })
-  if (resend.isSuccess) {
+  if (controller.state.status === 'succeeded' && resend.variables) {
     return (
       <AuthStatus title="Check your inbox">
         If <strong>{resend.variables.email}</strong> has an account waiting for confirmation, we sent it a new link.
@@ -25,11 +27,9 @@ export function ResendVerificationForm() {
   }
   return (
     <AuthForm
-      error={resend.error}
-      fieldCodes={{ INVALID_EMAIL: 'email' }}
+      controller={controller}
       form={form}
       id="resend-verification"
-      pending={resend.isPending}
       schema={schema}
       submitLabel="Send a new link"
     >

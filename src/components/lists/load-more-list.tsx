@@ -1,18 +1,23 @@
 import type { InfiniteData, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { useReducer, type ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
+import {
+  initialLoadMoreState,
+  reconcileLoadMoreState,
+  transitionLoadMore,
+} from '#/components/lists/load-more-machine.ts'
 import { Button } from '#/components/ui/button.tsx'
 
 /** The part of a suspense infinite query over `{ items, nextCursor }` pages that the list reads. */
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  'data' | 'error' | 'fetchNextPage' | 'hasNextPage' | 'isFetchNextPageError' | 'isFetchingNextPage'
+  'data' | 'fetchNextPage' | 'hasNextPage'
 >
 
 /**
- * A paged list with a "Load more" button (not infinite scroll: the footer stays reachable and the list only grows
- * when asked). After a page loads, focus moves to its first item, so keyboard and screen reader users continue
- * reading where the new items start instead of staying on a button below them.
+ * A paged list with a "Load more" button driven by `load-more-machine` (`idle`, `loading`, `error`, `exhausted`).
+ * After a page loads, focus moves to its first new item via ref callback once committed, so keyboard and screen
+ * reader users continue reading where the new items start instead of staying on a button below them.
  */
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
   empty: string
@@ -24,28 +29,34 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
 }) {
   const { noun, pages } = props
   const items = pages.data.pages.flatMap((page) => page.items)
-  // Index of the first item the last "Load more" added; its <li> takes focus via ref callback once committed.
-  const [focusIndex, setFocusIndex] = useState<number | null>(null)
+  const snapshot = { hasNextPage: pages.hasNextPage, itemCount: items.length }
+  const [machine, dispatch] = useReducer(transitionLoadMore, snapshot, initialLoadMoreState)
+  const view = reconcileLoadMoreState(machine, snapshot)
 
   const focusLoadedItem = (node: HTMLLIElement | null) => {
     if (!node) {
       return
     }
     node.focus()
-    setFocusIndex(null)
+    dispatch({ type: 'FOCUS_APPLIED' })
   }
 
   const loadMore = async () => {
     // aria-disabled rather than disabled while loading: a disabled button would drop keyboard focus.
-    if (pages.isFetchingNextPage) {
+    if (view.status === 'loading' || view.status === 'exhausted') {
       return
     }
-    const nextIndex = items.length
+    dispatch({ type: 'LOAD_MORE' })
     const fetched = await pages.fetchNextPage()
-    // Nothing new rendered (an error, or the next page emptied meanwhile): focus stays on the button.
-    if (!fetched.isError && (fetched.data?.pages.at(-1)?.items.length ?? 0) > 0) {
-      setFocusIndex(nextIndex)
+    if (fetched.isError) {
+      dispatch({ error: fetched.error, type: 'LOAD_FAILED' })
+      return
     }
+    dispatch({
+      addedCount: fetched.data?.pages.at(-1)?.items.length ?? 0,
+      hasNextPage: fetched.hasNextPage,
+      type: 'LOAD_SUCCEEDED',
+    })
   }
 
   if (items.length === 0) {
@@ -55,6 +66,10 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
       </p>
     )
   }
+
+  const focusIndex = view.status === 'idle' || view.status === 'exhausted' ? view.focusIndex : null
+  const loading = view.status === 'loading'
+
   return (
     <div className="grid gap-3">
       <ul className="grid gap-3" data-testid={props.testId}>
@@ -69,18 +84,18 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
           </li>
         ))}
       </ul>
-      {pages.hasNextPage ? (
+      {view.status !== 'exhausted' ? (
         <Button
-          aria-disabled={pages.isFetchingNextPage || undefined}
+          aria-disabled={loading || undefined}
           className="justify-self-center"
           onClick={() => void loadMore()}
           type="button"
           variant="outline"
         >
-          {pages.isFetchingNextPage ? `Loading more ${noun}…` : `Load more ${noun}`}
+          {loading ? `Loading more ${noun}…` : `Load more ${noun}`}
         </Button>
       ) : null}
-      {pages.isFetchNextPageError ? <ApiErrorAlert action={`load more ${noun}`} error={pages.error} /> : null}
+      {view.status === 'error' ? <ApiErrorAlert action={`load more ${noun}`} error={view.error} /> : null}
     </div>
   )
 }

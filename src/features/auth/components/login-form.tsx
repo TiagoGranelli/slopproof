@@ -4,7 +4,7 @@ import { useAppForm } from '#/components/form/app-form.ts'
 import { lazyFormSchema } from '#/components/form/lazy-schema.ts'
 import { AuthActionError } from '#/features/auth/api/auth-action.ts'
 import { useSignIn } from '#/features/auth/api/sign-in.ts'
-import { AuthForm } from '#/features/auth/components/auth-form.tsx'
+import { AuthForm, useAuthFormController } from '#/features/auth/components/auth-form.tsx'
 import { safeRedirect } from '#/features/auth/utils/safe-redirect.ts'
 import { type AuthFailure, signInFromForm } from '#/lib/auth.functions.ts'
 
@@ -20,21 +20,22 @@ export function LoginForm(props: { failure?: AuthFailure; redirectTo?: string })
   const signIn = useSignIn({
     mutationConfig: { onSuccess: () => navigate({ href: safeRedirect(props.redirectTo), replace: true }) },
   })
+  const controller = useAuthFormController({
+    initialError: props.failure ? new AuthActionError(props.failure) : null,
+  })
   const form = useAppForm({
     defaultValues: { email: '', password: '' },
-    onSubmit: ({ value }) => signIn.mutate(schema.decode(value)),
+    onSubmit: ({ value }) => controller.submitAction(() => signIn.mutateAsync(schema.decode(value))),
+    onSubmitInvalid: controller.onSubmitInvalid,
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
   })
-  // The failure of a post without JavaScript, until the script's own first attempt.
-  const postedFailure = signIn.isIdle && props.failure ? new AuthActionError(props.failure) : null
   return (
     <AuthForm
       action={signInFromForm.url}
-      error={signIn.error ?? postedFailure}
+      controller={controller}
       form={form}
       id="sign-in"
-      pending={signIn.isPending}
       schema={schema}
       submitLabel="Sign in"
     >

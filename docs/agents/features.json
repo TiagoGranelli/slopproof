@@ -17,6 +17,7 @@
       "src/features/auth/components/login-form.tsx",
       "src/features/auth/components/sign-out-button.tsx",
       "src/features/auth/components/sign-up-form.tsx",
+      "src/features/auth/utils/auth-form-machine.ts",
       "src/features/auth/utils/describe-auth-failure.ts",
       "src/features/auth/utils/safe-redirect.ts",
       "src/contract/me.ts",
@@ -35,20 +36,23 @@
     "routes": ["/login", "/sign-up"],
     "tests": [
       "tests/unit/account-input.test.ts",
+      "tests/unit/auth-form-machine.test.ts",
       "tests/unit/describe-auth-failure.test.ts",
       "tests/unit/safe-redirect.test.ts",
       "tests/api/me.test.ts",
       "tests/api/middleware.test.ts",
       "tests/api/sign-up-policy.test.ts",
       "tests/component/auth.test.tsx",
+      "tests/component/auth-form-properties.test.tsx",
       "tests/db/ssr-session.test.ts",
       "tests/integration/auth-sign-up.test.ts",
       "tests/integration/auth-session-refresh.test.ts",
       "tests/integration/login-form-post.test.ts",
       "tests/e2e/auth-closed.spec.ts",
-      "tests/e2e/login-without-js.spec.ts"
+      "tests/e2e/login-without-js.spec.ts",
+      "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component account-input describe-auth-failure safe-redirect me middleware sign-up-policy auth.test"
+    "verify": "pnpm exec vitest run --project unit --project api --project component account-input auth-form-machine describe-auth-failure safe-redirect me middleware sign-up-policy auth.test auth-form-properties"
   },
   {
     "apiOperations": [],
@@ -133,6 +137,8 @@
       "src/features/posts/api/get-public-posts.ts",
       "src/features/posts/components/post-card.tsx",
       "src/features/posts/components/post-list.tsx",
+      "src/components/lists/load-more-list.tsx",
+      "src/components/lists/load-more-machine.ts",
       "src/contract/pages.ts",
       "src/contract/posts.ts",
       "src/lib/infinite-pages.ts",
@@ -142,16 +148,21 @@
     "purpose": "Anonymous public posts feed with keyset cursor pagination on the home page.",
     "routes": ["/"],
     "tests": [
+      "tests/unit/load-more-machine.test.ts",
       "tests/unit/page-cursor.test.ts",
       "tests/api/posts.test.ts",
       "tests/api/public-operations.test.ts",
       "tests/component/post-list.test.tsx",
+      "tests/component/load-more-list.test.tsx",
+      "tests/component/load-more-properties.test.tsx",
       "tests/db/keyset.test.ts",
       "tests/db/posts-query-budget.test.ts",
       "tests/integration/posts-pagination.test.ts",
-      "tests/e2e/posts-pagination.spec.ts"
+      "tests/e2e/posts-pagination.spec.ts",
+      "specs/KeysetPagination.tla",
+      "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component page-cursor posts.test public-operations post-list"
+    "verify": "pnpm exec vitest run --project unit --project api --project component load-more-machine page-cursor posts.test public-operations post-list load-more-list load-more-properties"
   },
   {
     "apiOperations": ["myPosts.list", "myPosts.create", "myPosts.update", "myPosts.remove"],
@@ -169,6 +180,7 @@
       "src/features/posts/components/post-composer.tsx",
       "src/features/posts/utils/post-draft-schema.ts",
       "src/features/posts/utils/post-draft.ts",
+      "src/features/posts/utils/post-editor-machine.ts",
       "src/contract/ids.ts",
       "src/contract/limits.ts",
       "src/contract/post-input.ts",
@@ -181,18 +193,22 @@
     "routes": ["/dashboard"],
     "tests": [
       "tests/unit/id-brands.test.ts",
+      "tests/unit/post-editor-machine.test.ts",
       "tests/unit/stored-text.test.ts",
       "tests/api/posts.test.ts",
       "tests/api/posts-validation.test.ts",
       "tests/component/post-composer.test.tsx",
       "tests/component/my-post.test.tsx",
+      "tests/component/post-editor-properties.test.tsx",
       "tests/component/delete-post.test.tsx",
       "tests/db/post-schema.test.ts",
       "tests/db/posts-query-budget.test.ts",
       "tests/integration/posts.test.ts",
-      "tests/e2e/flows.spec.ts"
+      "tests/e2e/flows.spec.ts",
+      "specs/KeysetPagination.tla",
+      "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands stored-text posts.test posts-validation post-composer my-post delete-post"
+    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands post-editor-machine stored-text posts.test posts-validation post-composer my-post post-editor-properties delete-post"
   },
   {
     "apiOperations": [],
@@ -212,7 +228,8 @@
       "tests/db/auth-rate-limit.test.ts",
       "tests/integration/auth-client-ip.test.ts",
       "tests/integration/auth-rate-limit.test.ts",
-      "tests/integration/posts-rate-limit.test.ts"
+      "tests/integration/posts-rate-limit.test.ts",
+      "specs/RateLimit.tla"
     ],
     "verify": "pnpm exec vitest run --project unit --project api --project component client-address forwarded-for"
   },
@@ -237,7 +254,8 @@
       "tests/integration/csp.test.ts",
       "tests/integration/security.test.ts",
       "tests/e2e/csp.spec.ts",
-      "tests/e2e/appearance.spec.ts"
+      "tests/e2e/appearance.spec.ts",
+      "tests/bombadil/app.ts"
     ],
     "verify": "pnpm exec vitest run --project unit --project api --project component content-security-policy prerender-csp theme-script"
   },

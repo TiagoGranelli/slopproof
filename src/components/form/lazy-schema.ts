@@ -112,7 +112,7 @@ const focusInvalidOnCommit = (onDone: () => void) => (element: HTMLFormElement |
 }
 
 /** What a form says when its schema could not be loaded, for example a chunk request lost on a bad connection. */
-const SCHEMA_LOAD_FAILED = "Couldn't load the form. Check your connection and try again."
+export const SCHEMA_LOAD_FAILED = "Couldn't load the form. Check your connection and try again."
 
 /**
  * The submit of a form with a lazy schema. `submit()` loads the schema, then submits; attach `formRef` to the

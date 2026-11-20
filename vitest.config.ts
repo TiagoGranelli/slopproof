@@ -48,6 +48,10 @@ const COVERAGE_GATE = [
   'src/server/env.ts',
   // The Content-Security-Policy of every HTML document.
   'src/lib/content-security-policy.ts',
+  // Explicit UI state machines (ADR 0018).
+  'src/features/posts/utils/post-editor-machine.ts',
+  'src/features/auth/utils/auth-form-machine.ts',
+  'src/components/lists/load-more-machine.ts',
 ]
 /**
  * Whole-project floor, a little under the measured coverage of `pnpm test:fast`: it only stops a regression, such
@@ -143,6 +147,7 @@ export default defineConfig({
             'radix-ui',
             'msw',
             'msw/browser',
+            'fast-check',
             'vitest-browser-react',
           ],
         },

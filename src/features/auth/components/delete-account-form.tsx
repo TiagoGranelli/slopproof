@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useAppForm } from '#/components/form/app-form.ts'
 import { lazyFormSchema } from '#/components/form/lazy-schema.ts'
 import { useDeleteAccount } from '#/features/auth/api/delete-account.ts'
-import { AuthForm } from '#/features/auth/components/auth-form.tsx'
+import { AuthForm, useAuthFormController } from '#/features/auth/components/auth-form.tsx'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.DeleteAccountFields))
 
@@ -16,19 +16,19 @@ export function DeleteAccountForm() {
   const remove = useDeleteAccount({
     mutationConfig: { onSuccess: () => navigate({ replace: true, state: { flash: 'account-deleted' }, to: '/' }) },
   })
+  const controller = useAuthFormController({ fieldCodes: { INVALID_PASSWORD: 'password' } })
   const form = useAppForm({
     defaultValues: { confirm: false, password: '' },
-    onSubmit: ({ value }) => remove.mutate({ password: value.password }),
+    onSubmit: ({ value }) => controller.submitAction(() => remove.mutateAsync({ password: value.password })),
+    onSubmitInvalid: controller.onSubmitInvalid,
     validationLogic: revalidateLogic(),
     validators: { onDynamic: schema.validator },
   })
   return (
     <AuthForm
-      error={remove.error}
-      fieldCodes={{ INVALID_PASSWORD: 'password' }}
+      controller={controller}
       form={form}
       id="delete-account"
-      pending={remove.isPending}
       schema={schema}
       submitLabel="Delete account"
       submitVariant="destructive"

@@ -1,9 +1,10 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
+import type { Dispatch } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { CharacterCount, isTooLong } from '#/components/form/character-count.tsx'
 import { FieldError } from '#/components/form/field-error.tsx'
-import { describedBy, fieldErrorMessage } from '#/components/form/field-messages.ts'
-import { loadOnInteraction, useSchemaSubmit } from '#/components/form/lazy-schema.ts'
+import { describedBy, fieldErrorMessage, focusFirstInvalid } from '#/components/form/field-messages.ts'
+import { loadOnInteraction, SCHEMA_LOAD_FAILED } from '#/components/form/lazy-schema.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -11,32 +12,42 @@ import { POST_MAX_LENGTH } from '#/contract/limits.ts'
 import { useUpdatePost } from '#/features/posts/api/update-post.ts'
 import { PostCard } from '#/features/posts/components/post-card.tsx'
 import { postDraftSchema } from '#/features/posts/utils/post-draft-schema.ts'
-import { fieldIssue } from '#/lib/api-error.ts'
+import {
+  classifyPostSaveError,
+  type OpenPostEditorState,
+  type PostEditorEvent,
+} from '#/features/posts/utils/post-editor-machine.ts'
 import type { Post } from '#/sdk/types.gen.ts'
 
 interface EditPostProps {
-  readonly onClose: () => void
+  readonly dispatch: Dispatch<PostEditorEvent>
   readonly onUpdated: (() => void) | undefined
   readonly post: Post
+  readonly state: OpenPostEditorState
 }
 
-/** The update mutation and the form it submits: a save closes the form, then tells the list. */
+/** Wires TanStack Form and the update mutation directly into the post editor state machine. */
 function useEditPost(props: EditPostProps) {
-  const update = useUpdatePost({
-    mutationConfig: {
-      onSuccess: () => {
-        props.onClose()
-        props.onUpdated?.()
-      },
-    },
-  })
+  const update = useUpdatePost()
   const form = useForm({
-    defaultValues: { body: props.post.body },
-    onSubmit: ({ value }) => update.mutate({ body: postDraftSchema.decode(value), path: { id: props.post.id } }),
+    defaultValues: { body: props.state.draft },
+    onSubmit: ({ value }) => {
+      update.mutate(
+        { body: postDraftSchema.decode(value), path: { id: props.post.id } },
+        {
+          onError: (error) => props.dispatch({ error: classifyPostSaveError(error), type: 'SAVE_FAILED' }),
+          onSuccess: (updated) => {
+            props.dispatch({ body: updated.body, type: 'SAVE_SUCCEEDED' })
+            props.onUpdated?.()
+          },
+        },
+      )
+    },
+    onSubmitInvalid: () => props.dispatch({ type: 'VALIDATION_FAILED' }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
   })
-  return { form, update }
+  return form
 }
 
 /** The editor's row under the textarea: the character count, Cancel and Save. */
@@ -64,33 +75,67 @@ const focusAtEnd = (field: HTMLTextAreaElement | null) => {
   field.setSelectionRange(field.value.length, field.value.length)
 }
 
+const editorErrors = (state: OpenPostEditorState) => {
+  if (state.status !== 'save-failed') {
+    return { formError: null, schemaError: undefined, serverIssue: undefined }
+  }
+  return {
+    formError: state.error.kind === 'form' ? state.error.error : null,
+    schemaError: state.error.kind === 'schema' ? state.error.message : undefined,
+    serverIssue: state.error.kind === 'field' ? state.error.message : undefined,
+  }
+}
+
+const focusInvalidField = (dispatch: Dispatch<PostEditorEvent>) => (element: HTMLFormElement | null) => {
+  if (!element) {
+    return
+  }
+  focusFirstInvalid(element)
+  dispatch({ type: 'FOCUS_RETURNED' })
+}
+
+const submitEditForm = async (
+  dispatch: Dispatch<PostEditorEvent>,
+  form: { handleSubmit: () => Promise<void> },
+  saving: boolean,
+) => {
+  if (saving) {
+    return
+  }
+  dispatch({ type: 'SUBMIT' })
+  const loaded = await postDraftSchema
+    .load()
+    .then(() => true)
+    .catch(() => false)
+  if (!loaded) {
+    dispatch({ error: { kind: 'schema', message: SCHEMA_LOAD_FAILED }, type: 'SAVE_FAILED' })
+    return
+  }
+  await form.handleSubmit()
+}
+
 /**
- * The form that replaces a post's body while it is edited. It starts from the saved body with the caret at
- * its end; Save, Cancel and Escape close it through `onClose`. Each opening mounts it afresh, so a cancelled
- * draft or a failed save never shows up again. Checked like the composer: in the browser with the API's rules,
- * a ValidationError next to the field, any other failure under the form.
+ * The form that replaces a post's body while it is edited. Its lifecycle lives in `post-editor-machine`
+ * (`editing`, `saving`, `save-failed`, `cancelled`): Save, Cancel and Escape transition the machine directly.
  */
 export function EditPostForm(props: EditPostProps) {
-  const { post } = props
-  const { form, update } = useEditPost(props)
+  const { dispatch, post, state } = props
+  const form = useEditPost(props)
   const fieldId = `edit-post-${post.id}`
-  const { formRef, schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
-  const serverIssue = fieldIssue(update.error, 'body')
-  const formError = update.isError && serverIssue === undefined ? update.error : null
+  const saving = state.status === 'saving'
+  const { formError, schemaError, serverIssue } = editorErrors(state)
+
   return (
     <PostCard post={post}>
       <form
-        aria-busy={update.isPending}
+        aria-busy={saving}
         className="grid gap-2"
         noValidate
         onSubmit={(event) => {
           event.preventDefault()
-          if (update.isPending) {
-            return
-          }
-          submit()
+          void submitEditForm(dispatch, form, saving)
         }}
-        ref={formRef}
+        ref={state.status === 'editing' && state.focusInvalid ? focusInvalidField(dispatch) : undefined}
         {...loadOnInteraction(postDraftSchema)}
       >
         <form.Field name="body">
@@ -104,20 +149,24 @@ export function EditPostForm(props: EditPostProps) {
                   aria-describedby={describedBy(
                     `${fieldId}-count`,
                     error && `${fieldId}-error`,
-                    formError && `${fieldId}-alert`,
+                    formError !== null && `${fieldId}-alert`,
                     schemaError && `${fieldId}-schema-error`,
                   )}
                   aria-invalid={isTooLong(draft, POST_MAX_LENGTH) || Boolean(error) || undefined}
                   id={fieldId}
                   name={field.name}
                   onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                  onChange={(event) => {
+                    const nextDraft = event.target.value
+                    field.handleChange(nextDraft)
+                    dispatch({ draft: nextDraft, type: 'DRAFT_CHANGED' })
+                  }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Escape') {
                       return
                     }
                     event.preventDefault()
-                    props.onClose()
+                    dispatch({ type: 'CANCEL' })
                   }}
                   ref={focusAtEnd}
                   required
@@ -126,15 +175,15 @@ export function EditPostForm(props: EditPostProps) {
                 <EditPostActions
                   countId={`${fieldId}-count`}
                   draft={draft}
-                  onCancel={props.onClose}
-                  saving={update.isPending}
+                  onCancel={() => dispatch({ type: 'CANCEL' })}
+                  saving={saving}
                 />
                 <FieldError id={`${fieldId}-error`} message={error} />
               </>
             )
           }}
         </form.Field>
-        {formError ? <ApiErrorAlert action="save the post" error={formError} id={`${fieldId}-alert`} /> : null}
+        {formError !== null ? <ApiErrorAlert action="save the post" error={formError} id={`${fieldId}-alert`} /> : null}
         <FieldError id={`${fieldId}-schema-error`} message={schemaError} />
       </form>
     </PostCard>

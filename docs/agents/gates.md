@@ -146,6 +146,8 @@ production (needs Docker); see [ADR 0011](../decisions/0011-lighthouse-over-http
 
 | Command | Covers |
 | --- | --- |
+| `pnpm verify:tla [spec ...]` | TLC model checker (`tla2tools.jar` `v1.7.4`, SHA-256 verified, cached in `~/.cache/tla2tools`) over every `.tla`/`.cfg` pair in `specs/` (`RateLimit` and `KeysetPagination`). Uses native `java` or a pinned JRE container via Docker. Deterministic (~3 s); see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
+| `pnpm verify:ui-properties` | Bombadil (`@antithesishq/bombadil` `0.7.10`) autonomous browser property exploration (`tests/bombadil/app.ts`) against the built app (public and signed-in sessions): zero uncaught/console errors, single `h1` and `main` landmark, no focus drop to `document.body`, zero 5xx responses, zero CSP violations. Needs `pnpm build`, Postgres, and Playwright's Chromium (`BOMBADIL_TIME_LIMIT` defaults to `15s` per pass); see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
 | `pnpm audit:check` | `pnpm audit --audit-level high` over production and development packages: fails on a high or critical advisory not in `auditConfig.ignoreGhsas` (`pnpm-workspace.yaml`). Needs the npm registry; CI job `supply-chain` |
 | `pnpm sbom:release` | `pnpm sbom`: a CycloneDX 1.7 SBOM of the production npm dependencies, with licenses, in `sbom/npm.cdx.json`, for a release. Needs `node_modules`. Not a gate |
 | `pnpm ci:local [job ...]` | The CI jobs (`workflows secrets static supply-chain drift build verify lighthouse docker`, default all) as `pnpm ci:<job>` scripts in the Playwright Ubuntu container next to Postgres and Mailpit, all five browser projects included. Needs Docker. See [docs/operations.md](../operations.md#ci-and-local-ci) |

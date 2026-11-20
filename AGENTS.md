@@ -112,7 +112,7 @@ in and how each layer's harness works.
 | `pnpm build && pnpm lighthouse [--page=<name>]` | The Lighthouse gate behind the Caddy edge (needs Docker) |
 | `pnpm ci:local [job ...]` | The CI jobs in the Playwright Ubuntu container (needs Docker) |
 
-Failure messages say how to fix them; gate details, exceptions, Lighthouse policy, and `audit:check`/`sbom:release`
+Failure messages say how to fix them; gate details, exceptions, Lighthouse, `verify:tla`, `verify:ui-properties` and `audit:check`/`sbom:release`
 are in [docs/agents/gates.md](docs/agents/gates.md).
 
 ## Memory safety

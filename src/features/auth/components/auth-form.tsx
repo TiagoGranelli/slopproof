@@ -1,44 +1,63 @@
 import { useHydrated } from '@tanstack/react-router'
-import { type ReactNode, useRef } from 'react'
-import { FieldError } from '#/components/form/field-error.tsx'
+import { type Dispatch, type ReactNode, useReducer } from 'react'
 import { describedBy, focusFirstInvalid } from '#/components/form/field-messages.ts'
-import { loadOnInteraction, useSchemaSubmit } from '#/components/form/lazy-schema.ts'
+import { loadOnInteraction, SCHEMA_LOAD_FAILED } from '#/components/form/lazy-schema.ts'
 import { ServerIssues } from '#/components/form/server-issues.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
-  type AuthFieldCodes,
-  authFieldIssues,
-  describeAuthFailure,
-} from '#/features/auth/utils/describe-auth-failure.ts'
+  type AuthFormEvent,
+  type AuthFormState,
+  initialAuthFormState,
+  isAuthFormBusy,
+  transitionAuthForm,
+} from '#/features/auth/utils/auth-form-machine.ts'
+import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
-/**
- * The server's failure, split: the part about one field goes next to that field, which then takes focus via the
- * form's ref callback once committed so the user can fix it; anything else is the form's alert.
- */
-function useFailure(error: Error | null, fieldCodes: AuthFieldCodes = {}) {
-  const lastFocusedError = useRef<Error | null>(null)
-  const issues = authFieldIssues(error, fieldCodes)
-  const onField = Object.keys(issues).length > 0
-  // Again for every failed attempt (a new `error`), even when it is the same field as the last time.
-  const focusFieldError = (element: HTMLFormElement | null) => {
-    if (!element || error === null || !onField || lastFocusedError.current === error) {
-      return
-    }
-    lastFocusedError.current = error
-    focusFirstInvalid(element)
-  }
-  return { focusFieldError, formError: onField ? null : error, issues }
+/** State machine handle shared between an account form and the AuthForm shell. */
+export interface AuthFormController {
+  readonly dispatch: Dispatch<AuthFormEvent>
+  readonly onSubmitInvalid: () => void
+  readonly state: AuthFormState
+  readonly submitAction: <Outcome>(run: () => Promise<Outcome>) => Promise<void>
 }
 
+const toAuthError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error('Authentication action failed')
+
 /**
- * The shell of an account form made with useAppForm: its fields are the children, validated in the browser with
- * the action's Effect Schema (src/lib/account-input.ts), loaded on the first interaction (lazyFormSchema); a failed
- * submit moves focus to the first invalid field.
- * Without an `action` the button stays disabled until hydration: a native submit before that would post the fields
- * (passwords included) to the page itself. While the action is pending the button is only `aria-disabled` and further submits
- * are ignored: a disabled button loses focus, so a keyboard user who pressed it would be dropped to <body> when the
- * attempt fails. A failure the server reports, or a schema that could not be loaded, is shown in an alert under
- * the button, unless `fieldCodes` pins it on a field.
+ * Owns the explicit state machine (`auth-form-machine`) for an account form:
+ * `idle -> validating -> submitting -> succeeded | field-error | form-error`.
+ */
+export function useAuthFormController(
+  options: { readonly fieldCodes?: AuthFieldCodes; readonly initialError?: Error | null } = {},
+): AuthFormController {
+  const [state, dispatch] = useReducer(transitionAuthForm, options.initialError ?? null, (initialError) =>
+    initialAuthFormState(initialError, options.fieldCodes),
+  )
+  const submitAction = async <Outcome,>(run: () => Promise<Outcome>) => {
+    dispatch({ type: 'VALIDATION_PASSED' })
+    try {
+      await run()
+      dispatch({ type: 'SUBMIT_SUCCEEDED' })
+    } catch (error: unknown) {
+      dispatch({ error: toAuthError(error), fieldCodes: options.fieldCodes, type: 'SUBMIT_FAILED' })
+    }
+  }
+  return { dispatch, onSubmitInvalid: () => dispatch({ type: 'VALIDATION_FAILED' }), state, submitAction }
+}
+
+const loadSchemaIfNeeded = async (schema: { load: () => Promise<void> } | undefined): Promise<boolean> =>
+  schema
+    ? schema
+        .load()
+        .then(() => true)
+        .catch(() => false)
+    : true
+
+/**
+ * The shell of an account form made with useAppForm and driven by `auth-form-machine` (`useAuthFormController`).
+ * Without an `action` the button stays disabled until hydration; while validating or submitting the button is
+ * `aria-disabled` so keyboard focus stays on it and further submits are ignored.
  */
 export function AuthForm(props: {
   /**
@@ -47,51 +66,64 @@ export function AuthForm(props: {
    */
   action?: string
   children?: ReactNode
-  /** The action's error, if the last attempt failed. */
-  error: Error | null
-  /** The failure codes this form shows next to a field, and which (a wrong password: `{ INVALID_PASSWORD: 'password' }`). */
-  fieldCodes?: AuthFieldCodes
-  /** The form from useAppForm; its onSubmit starts the action. */
+  /** State machine controller from useAuthFormController. */
+  controller: AuthFormController
+  /** The form from useAppForm; its onSubmit invokes controller.submitAction. */
   form: { handleSubmit: () => Promise<void> }
   /** Prefix for the ids this form gives its alert. */
   id: string
-  pending: boolean
   /** The fields' schema (lazyFormSchema): loaded on the first focus or input, and awaited by a submit. */
   schema?: { load: () => Promise<void> }
   submitLabel: string
   submitVariant?: 'default' | 'destructive'
 }) {
   const hydrated = useHydrated()
-  const { formRef, schemaError, submit } = useSchemaSubmit(props.form, props.schema)
-  const { focusFieldError, formError, issues } = useFailure(props.error, props.fieldCodes)
+  const { dispatch, state } = props.controller
+  const busy = isAuthFormBusy(state)
+  const issues = state.status === 'field-error' ? state.issues : {}
+  const formErrorMessage = state.status === 'form-error' ? state.message : null
   const errorId = `${props.id}-error`
-  const schemaErrorId = `${props.id}-schema-error`
+
+  const focusInvalid = (element: HTMLFormElement | null) => {
+    if (!element) {
+      return
+    }
+    focusFirstInvalid(element)
+    dispatch({ type: 'FOCUS_APPLIED' })
+  }
+
+  const runSubmit = async () => {
+    if (busy) {
+      return
+    }
+    dispatch({ type: 'SUBMIT_REQUESTED' })
+    if (!(await loadSchemaIfNeeded(props.schema))) {
+      dispatch({ message: SCHEMA_LOAD_FAILED, type: 'SCHEMA_LOAD_FAILED' })
+      return
+    }
+    await props.form.handleSubmit()
+  }
+
   return (
     <form
       action={props.action}
-      aria-busy={props.pending}
-      aria-describedby={describedBy(formError && errorId, schemaError && schemaErrorId)}
+      aria-busy={busy}
+      aria-describedby={describedBy(formErrorMessage && errorId)}
       className="grid gap-3"
       method="post"
       // Once hydrated the fields show the schema's messages; before that, only the browser's own checks run.
       noValidate={hydrated}
       onSubmit={(event) => {
         event.preventDefault()
-        if (props.pending) {
-          return
-        }
-        submit()
+        void runSubmit()
       }}
-      ref={(element) => {
-        formRef?.(element)
-        focusFieldError(element)
-      }}
+      ref={state.status === 'field-error' && state.focusFirstInvalid ? focusInvalid : undefined}
       {...(props.schema ? loadOnInteraction(props.schema) : {})}
     >
       <ServerIssues value={issues}>{props.children}</ServerIssues>
       <div>
         <Button
-          aria-disabled={props.pending || undefined}
+          aria-disabled={busy || undefined}
           disabled={!hydrated && props.action === undefined}
           type="submit"
           variant={props.submitVariant}
@@ -99,12 +131,11 @@ export function AuthForm(props: {
           {props.submitLabel}
         </Button>
       </div>
-      {formError ? (
+      {formErrorMessage ? (
         <p className="text-sm text-destructive" id={errorId} role="alert">
-          {describeAuthFailure(formError)}
+          {formErrorMessage}
         </p>
       ) : null}
-      <FieldError id={schemaErrorId} message={schemaError} />
     </form>
   )
 }
