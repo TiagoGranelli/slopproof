@@ -37,8 +37,8 @@ layer. Imports flow one way: `components` → `features` → app (`routes/`).
   primitives go in `components/ui/` through `pnpm exec shadcn add`.
 - Route files hold the route definition and a small page component that composes features (skill `add-page`).
 - Naming: files and folders are kebab-case (Oxlint `unicorn/filename-case`; folders by
-  `tests/unit/repo-policy.test.ts`). TanStack route names keep their prefixes (`__root.tsx`, `_authed.tsx`,
-  `$.ts`, `-private/`, `(group)/`). `src/sdk/` is generated and exempt.
+  `tests/unit/repo-policy.test.ts`). TanStack route prefixes (`__root.tsx`, `_authed.tsx`, `$.ts`, `-private/`,
+  `(group)/`) stay; `src/sdk/` is exempt.
 - Import the file that defines a symbol. Barrel files (`index.ts` re-exporting a folder) fail Oxlint
   `oxc/no-barrel-file`; the only one is `src/server/db/schema/index.ts`, Drizzle's schema entry.
 
@@ -50,8 +50,8 @@ failure says what was wrong. Oxlint (`oxlint.config.ts`) enforces the numbers; t
 
 - **Size.** Functions up to 20 lines, components (`.tsx`) up to 80, files up to 300, blank and comment lines not
   counted (`max-lines-per-function`, `max-lines`). Over a limit, split by responsibility, not by moving lines:
-  a component extracts a child component, a Layer moves its methods into functions that take the service
-  (`listPublic(db, page)`), a switch that maps codes to text becomes a table.
+  extract a child component, move Layer methods to functions taking the service (`listPublic(db, page)`), or turn
+  code-to-text switches into tables.
 - **Nesting.** At most two nested blocks per function (`max-depth`), three nested callbacks
   (`max-nested-callbacks`), JSX four elements deep (`react/jsx-max-depth`), three parameters, more go in an
   options object (`max-params`). Return early; no nested ternaries (`no-nested-ternary`).
@@ -65,15 +65,19 @@ failure says what was wrong. Oxlint (`oxlint.config.ts`) enforces the numbers; t
   (`explicit-module-boundary-types`); components and hooks infer theirs.
 - **Errors.** A message names the offending value and the shape expected:
   `` `${name} must be an integer between ${min} and ${max} (got "${raw}")` `` (`unicorn/error-message` only
-  rejects an empty one). Never echo a secret, a password or user content: give its length, scheme or path (`env` holds credentials as
-  `Redacted`, which print as `<redacted>`). Across
-  a trust boundary the client gets a generic message and `log` gets the cause (`src/lib/server-function-errors.ts`).
+  rejects an empty one). Never echo secrets, passwords or user content: log length, scheme or path (`env` uses
+  `Redacted`). Across trust boundaries clients get a generic message and `log` gets the cause
+  (`src/lib/server-function-errors.ts`).
 - **Comments.** Say why, not what. Keep them when you refactor, update them when the reason changes. A line that
   exists because of an upstream bug or limit links the issue (`better-auth#9920`) and says when to remove it.
   Exports of `src/server`, `src/lib` and `features/*/{api,utils}` get a JSDoc sentence on intent, plus a
   one-line example when the types do not make the call obvious.
 - **Logging.** Server code logs through `log` (`src/server/log.ts`), one JSON object per line; `console` is for
   scripts (`no-console`).
+- **No effects or timers.** `src/` bans `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `setTimeout`,
+  `setInterval`, `requestAnimationFrame`, and `requestIdleCallback` ([ADR 0017](docs/decisions/0017-no-effects-or-timers.md)).
+  Derive during render, act in event handlers, use ref callbacks for commit-time DOM work, and
+  `useSyncExternalStore` for subscriptions.
 
 ## Workflows
 
@@ -98,7 +102,7 @@ in and how each layer's harness works.
 
 | Command | Covers |
 | --- | --- |
-| `pnpm check` | Every gate that needs no database and no build (format, type-aware lint, typecheck, Effect diagnostics, dead code, complexity, duplication, security sinks, unit/api/component tests with coverage, drift, migration lint, licenses), about 16 s. Run it before every hand-off; the lefthook pre-commit hook runs the jobs your staged files touch |
+| `pnpm check` | All no-DB, no-build gates (format, type-aware lint, typecheck, Effect diagnostics, dead code, complexity, dupes, security sinks, unit/api/component tests + coverage, drift, migration lint, licenses), ~16 s. Run before hand-off; pre-commit runs matching jobs |
 | `pnpm test:unit\|test:api\|test:component [filter ...]` | One fast layer; `pnpm test:fast` runs all three with coverage |
 | `pnpm test:db [filter ...]` | The `db` layer on a throwaway Postgres database. Needs Postgres, no build |
 | `pnpm format`, `pnpm lint:fix` | Autofixes |
@@ -108,19 +112,16 @@ in and how each layer's harness works.
 | `pnpm build && pnpm lighthouse [--page=<name>]` | The Lighthouse gate behind the Caddy edge (needs Docker) |
 | `pnpm ci:local [job ...]` | The CI jobs in the Playwright Ubuntu container (needs Docker) |
 
-Every gate's failure message says how to fix it. What each gate covers, how to make a reviewed exception, the
-Lighthouse policy and the less common commands (`audit:check`, `sbom:release`) are in
-[docs/agents/gates.md](docs/agents/gates.md).
+Failure messages say how to fix them; gate details, exceptions, Lighthouse policy, and `audit:check`/`sbom:release`
+are in [docs/agents/gates.md](docs/agents/gates.md).
 
 ## Memory safety
 
 A misconfigured lint once used 17 GB of memory.
 
 - To check a few files, pass explicit paths: `pnpm lint src/x.ts`, `pnpm exec oxfmt --check src/x.ts`.
-- Keep `node_modules/**`, `.output/**`, and `.repos/**` out of every tool's scope. `oxlint.config.ts` and
-  `.oxfmtrc.json` list all three in `ignorePatterns`, `tsconfig.json` includes only `src`, `scripts`,
-  `tests`, `*.config.ts`, and `.config/**/*.ts` (and excludes all three), and `.fallowrc.json` lists all
-  three in `ignorePatterns`. A new tool or config needs the same exclusions.
+- Exclude `node_modules/**`, `.output/**`, and `.repos/**` from every tool (`oxlint.config.ts`, `.oxfmtrc.json`,
+  `.fallowrc.json`, `tsconfig.json`). Any new tool or config needs the same exclusions.
 - Run heavy commands one at a time (`pnpm build`, type-aware lint, `verify:app`, `lighthouse`); on Linux
   under a memory cap, see [docs/operations.md](docs/operations.md#linux-memory-caps).
 - Read upstream code with `gh api` or a sparse clone of the listed paths into `.repos/`

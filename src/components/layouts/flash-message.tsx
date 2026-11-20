@@ -1,5 +1,5 @@
 import { useLocation, useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { flashMessage } from '#/lib/flash.ts'
 
 /**
@@ -27,18 +27,18 @@ export function FlashMessage() {
       setMessage(flashMessage(flash))
     }
   }
-  useEffect(() => {
-    if (!flash) {
+  const dropFlash = (node: HTMLParagraphElement | null) => {
+    if (!node || !flash) {
       return
     }
     const { flash: _shown, ...state } = router.history.location.state
     router.history.replace(router.history.location.href, state)
-  }, [flash, router])
+  }
   if (!message || pathname !== ownPath) {
     return null
   }
   return (
-    <p className="rounded-lg border bg-muted/60 px-4 py-3 text-sm" data-flash data-testid="flash">
+    <p className="rounded-lg border bg-muted/60 px-4 py-3 text-sm" data-flash data-testid="flash" ref={dropFlash}>
       {message}
     </p>
   )

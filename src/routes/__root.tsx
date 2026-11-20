@@ -61,7 +61,7 @@ function RootDocument() {
       <head>
         <HeadContent />
       </head>
-      {/* data-hydrated, for E2E tests, is set by the page once its content has hydrated (Page, MarkHydrated). */}
+      {/* data-hydrated, for E2E tests, is set by Page once its content has hydrated. */}
       <body className="flex min-h-dvh flex-col bg-background text-foreground antialiased">
         <SkipLink />
         <SiteHeader signOut={<SignOutButton />} user={user} />

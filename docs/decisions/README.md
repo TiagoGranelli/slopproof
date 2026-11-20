@@ -22,3 +22,4 @@ later decision supersedes it.
 | [0014](0014-uuidv7-ids-keyset-on-created-at.md) | Post ids from Postgres 18 `uuidv7()`; lists keep the `(created_at, id)` keyset, on ascending indexes | Accepted |
 | [0015](0015-login-without-javascript.md) | The login form posts itself to a FormData server function before hydration and without JavaScript | Accepted |
 | [0016](0016-tsrs-typecheck-and-lint.md) | Type checking and type-aware lint through tsrs (TypeScript 7.1 beta), on `@nkzw/oxlint-config` 3 | Accepted |
+| [0017](0017-no-effects-or-timers.md) | No React effect hooks or imperative timers in product code | Accepted |

@@ -1,5 +1,5 @@
 import { type QueryClient, queryOptions, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import { getSession, isPrerendering, type SignedInSession } from '#/lib/session.functions.ts'
 
 // Kept for the tab's life: sign-in, sign-out and account deletion clear the whole cache (`clearsCache`), and the
@@ -30,6 +30,23 @@ export async function loadSession(queryClient: QueryClient): Promise<void> {
   await queryClient.query(sessionQueryOptions()).catch(() => undefined)
 }
 
+const sessionSubscribers = new WeakMap<QueryClient, (onChange: () => void) => () => void>()
+
+/** Stable store subscriber per QueryClient: runs only after hydration, filling a prerendered page's cache once. */
+const subscribeToSession = (queryClient: QueryClient) => {
+  const existing = sessionSubscribers.get(queryClient)
+  if (existing) {
+    return existing
+  }
+  const subscribe = (onChange: () => void) => {
+    const unsubscribe = queryClient.getQueryCache().subscribe(onChange)
+    void loadSession(queryClient)
+    return unsubscribe
+  }
+  sessionSubscribers.set(queryClient, subscribe)
+  return subscribe
+}
+
 /**
  * Who is signed in, from the cache: the user, `null` when signed out, or `undefined` while not known (a read that
  * failed, just after the cache was cleared, or a prerendered page before it asked). It follows the cache itself
@@ -39,12 +56,9 @@ export async function loadSession(queryClient: QueryClient): Promise<void> {
  */
 export function useSessionUser() {
   const queryClient = useQueryClient()
-  useEffect(() => {
-    void loadSession(queryClient)
-  }, [queryClient])
   const { queryKey } = sessionQueryOptions()
   const read = () => queryClient.getQueryData(queryKey)
-  const session = useSyncExternalStore((onChange) => queryClient.getQueryCache().subscribe(onChange), read, read)
+  const session = useSyncExternalStore(subscribeToSession(queryClient), read, read)
   if (session === undefined) {
     return undefined
   }

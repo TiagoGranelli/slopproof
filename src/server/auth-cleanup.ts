@@ -42,6 +42,9 @@ export const scheduleAuthCleanup = (): void => {
   if (timer) {
     return
   }
+  // Periodic server maintenance started when auth.ts loads (including CLI scripts): Effect's Clock.sleep does not
+  // unref its timer, so a Schedule fiber would keep CLI processes alive. Shutdown clears it via onShutdown.
+  // oxlint-disable-next-line no-restricted-globals
   timer = setInterval(() => runInBackground(cleanUp()), INTERVAL_MS).unref()
   onShutdown('auth-cleanup', () => {
     clearInterval(timer)

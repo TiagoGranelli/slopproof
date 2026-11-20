@@ -19,8 +19,9 @@ export const describedBy = (...ids: ReadonlyArray<string | false | null | undefi
   ids.filter((id) => typeof id === 'string' && id !== '').join(' ') || undefined
 
 /**
- * After a submit, moves focus to the first field the form marked invalid, so a keyboard or screen reader user lands
- * on the problem and hears its message. Waits a frame: the invalid state renders after the submit handler returns.
+ * Moves focus to the first field the form marked invalid, so a keyboard or screen reader user lands on the
+ * problem and hears its message. Call from a ref callback after React commits the invalid state.
  */
-export const focusFirstInvalid = (form: HTMLFormElement) =>
-  requestAnimationFrame(() => form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())
+export const focusFirstInvalid = (form: HTMLFormElement) => {
+  form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+}

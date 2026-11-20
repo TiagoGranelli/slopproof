@@ -1,5 +1,5 @@
 import type { InfiniteData, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 
@@ -24,29 +24,27 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
 }) {
   const { noun, pages } = props
   const items = pages.data.pages.flatMap((page) => page.items)
-  const list = useRef<HTMLUListElement>(null)
-  // Index of the first item the pending "Load more" adds; focused once it renders.
-  const focusOnLoad = useRef<number | null>(null)
+  // Index of the first item the last "Load more" added; its <li> takes focus via ref callback once committed.
+  const [focusIndex, setFocusIndex] = useState<number | null>(null)
 
-  useEffect(() => {
-    const index = focusOnLoad.current
-    if (index === null || items.length <= index) {
+  const focusLoadedItem = (node: HTMLLIElement | null) => {
+    if (!node) {
       return
     }
-    focusOnLoad.current = null
-    list.current?.querySelectorAll<HTMLElement>(':scope > li')[index]?.focus()
-  }, [items.length])
+    node.focus()
+    setFocusIndex(null)
+  }
 
   const loadMore = async () => {
     // aria-disabled rather than disabled while loading: a disabled button would drop keyboard focus.
     if (pages.isFetchingNextPage) {
       return
     }
-    focusOnLoad.current = items.length
+    const nextIndex = items.length
     const fetched = await pages.fetchNextPage()
     // Nothing new rendered (an error, or the next page emptied meanwhile): focus stays on the button.
-    if (fetched.isError || (fetched.data?.pages.at(-1)?.items.length ?? 0) === 0) {
-      focusOnLoad.current = null
+    if (!fetched.isError && (fetched.data?.pages.at(-1)?.items.length ?? 0) > 0) {
+      setFocusIndex(nextIndex)
     }
   }
 
@@ -59,9 +57,14 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   }
   return (
     <div className="grid gap-3">
-      <ul className="grid gap-3" data-testid={props.testId} ref={list}>
-        {items.map((entry) => (
-          <li className="rounded-xl" key={entry.id} tabIndex={-1}>
+      <ul className="grid gap-3" data-testid={props.testId}>
+        {items.map((entry, index) => (
+          <li
+            className="rounded-xl"
+            key={entry.id}
+            ref={index === focusIndex ? focusLoadedItem : undefined}
+            tabIndex={-1}
+          >
             {props.renderItem(entry)}
           </li>
         ))}

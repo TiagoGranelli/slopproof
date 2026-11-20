@@ -204,6 +204,19 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
   '@tanstack/query/stable-query-client': 'error',
   '@tanstack/router/create-route-property-order': 'error',
 
+  // React effects: every rule from eslint-plugin-react-you-might-not-need-an-effect's strict config (ADR 0017).
+  // Product code (src/**) bans useEffect/useLayoutEffect/useInsertionEffect outright in boundaries.ts; these rules
+  // also guard tests and explain the React replacement for any effect pattern.
+  'react-you-might-not-need-an-effect/no-adjust-state-on-prop-change': 'error',
+  'react-you-might-not-need-an-effect/no-chain-state-updates': 'error',
+  'react-you-might-not-need-an-effect/no-derived-state': 'error',
+  'react-you-might-not-need-an-effect/no-event-handler': 'error',
+  'react-you-might-not-need-an-effect/no-external-store-subscription': 'error',
+  'react-you-might-not-need-an-effect/no-initialize-state': 'error',
+  'react-you-might-not-need-an-effect/no-pass-data-to-parent': 'error',
+  'react-you-might-not-need-an-effect/no-pass-live-state-to-parent': 'error',
+  'react-you-might-not-need-an-effect/no-reset-all-state-on-prop-change': 'error',
+
   'shadcn/no-arbitrary-values': 'error',
   'shadcn/no-inline-styles': 'error',
   'shadcn/no-raw-colors': 'error',

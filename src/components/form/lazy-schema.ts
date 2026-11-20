@@ -91,32 +91,45 @@ export const loadOnInteraction = (schema: LoadableSchema) => ({
 type SubmittableForm = { handleSubmit: () => Promise<void> }
 
 /**
- * Submits a TanStack form once its schema has loaded (a submit may come before the chunk arrives), then moves
- * focus to the first field the form marked invalid. Resolves false, without submitting, when the schema could
- * not be loaded.
+ * Submits a TanStack form once its schema has loaded (a submit may come before the chunk arrives). Resolves
+ * false, without submitting, when the schema could not be loaded.
  */
-const submitForm = async (element: HTMLFormElement, form: SubmittableForm, schema?: LoadableSchema) => {
+const submitForm = async (form: SubmittableForm, schema?: LoadableSchema) => {
   const loaded = await (schema?.load() ?? Promise.resolve()).then(() => true).catch(() => false)
   if (!loaded) {
     return false
   }
   await form.handleSubmit()
-  focusFirstInvalid(element)
   return true
+}
+
+const focusInvalidOnCommit = (onDone: () => void) => (element: HTMLFormElement | null) => {
+  if (!element) {
+    return
+  }
+  focusFirstInvalid(element)
+  onDone()
 }
 
 /** What a form says when its schema could not be loaded, for example a chunk request lost on a bad connection. */
 const SCHEMA_LOAD_FAILED = "Couldn't load the form. Check your connection and try again."
 
 /**
- * The submit of a form with a lazy schema. `submit(form element)` loads the schema, then submits; if the schema
+ * The submit of a form with a lazy schema. `submit()` loads the schema, then submits; attach `formRef` to the
+ * `<form>` so focus moves to the first invalid field once React commits the validation state. If the schema
  * cannot be loaded, `schemaError` holds SCHEMA_LOAD_FAILED for the form to show in an alert, and the form stays
  * usable: the next submit loads again and clears it.
  */
 export const useSchemaSubmit = (form: SubmittableForm, schema?: LoadableSchema) => {
   const [loadFailed, setLoadFailed] = useState(false)
-  const submit = (element: HTMLFormElement) => {
-    void submitForm(element, form, schema).then((loaded) => setLoadFailed(!loaded))
+  const [pendingFocus, setPendingFocus] = useState(false)
+  const run = async () => {
+    const loaded = await submitForm(form, schema)
+    setLoadFailed(!loaded)
+    if (loaded) {
+      setPendingFocus(true)
+    }
   }
-  return { schemaError: loadFailed ? SCHEMA_LOAD_FAILED : undefined, submit }
+  const formRef = pendingFocus ? focusInvalidOnCommit(() => setPendingFocus(false)) : undefined
+  return { formRef, schemaError: loadFailed ? SCHEMA_LOAD_FAILED : undefined, submit: () => void run() }
 }

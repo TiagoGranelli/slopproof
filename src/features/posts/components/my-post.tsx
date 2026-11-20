@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { ConfirmDeleteButton } from '#/components/confirm-delete/confirm-delete-button.tsx'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -23,16 +23,16 @@ const preloadEditor = () => {
 export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; post: Post }) {
   const { post } = props
   const [editing, setEditing] = useState(false)
-  const editButton = useRef<HTMLButtonElement>(null)
   const returnFocus = useRef(false)
   const remove = useDeletePost({ mutationConfig: { onSuccess: () => props.onDeleted?.() } })
 
-  useEffect(() => {
-    if (!editing && returnFocus.current) {
-      returnFocus.current = false
-      editButton.current?.focus()
+  const focusEditButton = (button: HTMLButtonElement | null) => {
+    if (!button || !returnFocus.current) {
+      return
     }
-  }, [editing])
+    returnFocus.current = false
+    button.focus()
+  }
 
   if (editing) {
     return (
@@ -62,7 +62,7 @@ export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; 
             }}
             onFocus={preloadEditor}
             onPointerEnter={preloadEditor}
-            ref={editButton}
+            ref={focusEditButton}
             size="sm"
             type="button"
             variant="ghost"

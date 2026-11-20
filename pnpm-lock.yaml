@@ -297,6 +297,9 @@ importers:
       eslint-plugin-playwright:
         specifier: 2.12.1
         version: 2.12.1(eslint@10.11.0(jiti@2.7.0))
+      eslint-plugin-react-you-might-not-need-an-effect:
+        specifier: 1.2.0
+        version: 1.2.0(eslint@10.11.0(jiti@2.7.0))
       fallow:
         specifier: 3.34.0
         version: 3.34.0
@@ -4409,6 +4412,12 @@ packages:
   eslint-plugin-playwright@2.12.1:
     resolution: {integrity: sha512-JhavNuYBIq7SE/Zg9Esf9RGHkXoDbzrEKS383cowzMyvZ4JMbmdNCN6CoW+RU1Cjzwcoea1tou0je58uXmT/9A==}
     engines: {node: '>=16.9.0'}
+    peerDependencies:
+      eslint: '>=8.40.0'
+
+  eslint-plugin-react-you-might-not-need-an-effect@1.2.0:
+    resolution: {integrity: sha512-ieSAjWnVO92c2kyDPYgGJplcX1Fs4dhCmbEVgM9PMJ3Kg0mE9BBacT7HQRyKqrhaxVyneiIlA8BsY7vzF+bQ4A==}
+    engines: {node: '>=14.0.0'}
     peerDependencies:
       eslint: '>=8.40.0'
 
@@ -10240,6 +10249,10 @@ snapshots:
     dependencies:
       eslint: 10.11.0(jiti@2.7.0)
       globals: 17.12.0
+
+  eslint-plugin-react-you-might-not-need-an-effect@1.2.0(eslint@10.11.0(jiti@2.7.0)):
+    dependencies:
+      eslint: 10.11.0(jiti@2.7.0)
 
   eslint-scope@9.1.2:
     dependencies:

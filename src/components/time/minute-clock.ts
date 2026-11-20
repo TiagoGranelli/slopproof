@@ -1,33 +1,37 @@
-const TICK = 60_000
-
 let now = Date.now()
 const listeners = new Set<() => void>()
-let timer: ReturnType<typeof setInterval> | undefined
 
-const tick = () => {
+const refresh = () => {
+  if (document.visibilityState === 'hidden') {
+    return
+  }
   now = Date.now()
   for (const listener of listeners) {
     listener()
   }
 }
 
-/** The time, refreshed once a minute while something shows it: `useSyncExternalStore`'s snapshot. */
+/** The browser's current time, refreshed on mount and when the tab regains focus: `useSyncExternalStore`'s snapshot. */
 export const readMinuteClock = (): number => now
 
 /**
- * For `useSyncExternalStore`: `listener` runs once a minute, so relative times ("5 minutes ago") keep up. The
- * timer runs only while there are listeners, and the first one refreshes the time (React reads it again).
+ * For `useSyncExternalStore`: refreshes relative times ("5 minutes ago") when the first subscriber mounts and
+ * whenever the tab becomes visible, regains focus or returns from bfcache, without background timers.
  */
 export function subscribeToMinuteClock(listener: () => void): () => void {
   if (listeners.size === 0) {
     now = Date.now()
-    timer = setInterval(tick, TICK)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('pageshow', refresh)
   }
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
     if (listeners.size === 0) {
-      clearInterval(timer)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('pageshow', refresh)
     }
   }
 }

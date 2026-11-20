@@ -1,5 +1,4 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
-import { useEffect, useRef } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { CharacterCount, isTooLong } from '#/components/form/character-count.tsx'
 import { FieldError } from '#/components/form/field-error.tsx'
@@ -57,6 +56,14 @@ function EditPostActions(props: { countId: string; draft: string; onCancel: () =
   )
 }
 
+const focusAtEnd = (field: HTMLTextAreaElement | null) => {
+  if (!field) {
+    return
+  }
+  field.focus()
+  field.setSelectionRange(field.value.length, field.value.length)
+}
+
 /**
  * The form that replaces a post's body while it is edited. It starts from the saved body with the caret at
  * its end; Save, Cancel and Escape close it through `onClose`. Each opening mounts it afresh, so a cancelled
@@ -65,17 +72,9 @@ function EditPostActions(props: { countId: string; draft: string; onCancel: () =
  */
 export function EditPostForm(props: EditPostProps) {
   const { post } = props
-  const textarea = useRef<HTMLTextAreaElement>(null)
   const { form, update } = useEditPost(props)
-
-  useEffect(() => {
-    const field = textarea.current
-    field?.focus()
-    field?.setSelectionRange(field.value.length, field.value.length)
-  }, [])
-
   const fieldId = `edit-post-${post.id}`
-  const { schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
+  const { formRef, schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
   const serverIssue = fieldIssue(update.error, 'body')
   const formError = update.isError && serverIssue === undefined ? update.error : null
   return (
@@ -89,8 +88,9 @@ export function EditPostForm(props: EditPostProps) {
           if (update.isPending) {
             return
           }
-          submit(event.currentTarget)
+          submit()
         }}
+        ref={formRef}
         {...loadOnInteraction(postDraftSchema)}
       >
         <form.Field name="body">
@@ -119,7 +119,7 @@ export function EditPostForm(props: EditPostProps) {
                     event.preventDefault()
                     props.onClose()
                   }}
-                  ref={textarea}
+                  ref={focusAtEnd}
                   required
                   value={draft}
                 />

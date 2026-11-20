@@ -30,6 +30,7 @@ export default defineConfig({
     '@tanstack/eslint-plugin-query',
     '@tanstack/eslint-plugin-router',
     'eslint-plugin-playwright',
+    'eslint-plugin-react-you-might-not-need-an-effect',
     // ESLint's core rules, for `no-restricted-syntax`, which oxlint has no native version of. The object form,
     // because the plain specifier resolves the wrong plugin name (oxc#23695).
     { name: 'eslint-js', specifier: 'oxlint-plugin-eslint' },

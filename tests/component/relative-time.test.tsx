@@ -1,6 +1,6 @@
 // RelativeTime: the same UTC date from the server and during hydration (no mismatch), then the browser's relative,
 // local reading, with the exact time kept in `datetime` and on hover.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RelativeTime } from '#/components/time/relative-time.tsx'
 import { renderInApp, serverRendered } from './test-utils.tsx'
 
@@ -27,5 +27,20 @@ describe('RelativeTime', () => {
     const time = container.querySelector('time')!
     expect(time.textContent).toBe('5 minutes ago')
     expect(time.getAttribute('datetime')).toBe(iso)
+  })
+
+  it('refreshes relative text when the window regains focus', async () => {
+    const start = Date.parse('2026-09-27T12:05:00.000Z')
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start)
+    try {
+      const { container } = await renderInApp(<RelativeTime iso="2026-09-27T12:00:00.000Z" />)
+      const time = container.querySelector('time')!
+      expect(time.textContent).toBe('5 minutes ago')
+      now.mockReturnValue(start + 2 * 60_000)
+      window.dispatchEvent(new Event('focus'))
+      await expect.poll(() => time.textContent).toBe('7 minutes ago')
+    } finally {
+      now.mockRestore()
+    }
   })
 })

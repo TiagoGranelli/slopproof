@@ -1,6 +1,5 @@
 import { useQueryErrorResetBoundary } from '@tanstack/react-query'
 import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
-import { useEffect } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Page } from '#/components/layouts/page.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -18,13 +17,15 @@ export function RouteError({
   const router = useRouter()
   const queryErrorResetBoundary = useQueryErrorResetBoundary()
   // Lets useSuspenseQuery retry instead of rethrowing the cached error when the route renders again.
-  useEffect(() => {
-    queryErrorResetBoundary.reset()
-  }, [queryErrorResetBoundary])
+  const resetQueryBoundary = (node: HTMLDivElement | null) => {
+    if (node) {
+      queryErrorResetBoundary.reset()
+    }
+  }
   return (
     <Page title={title}>
       <ApiErrorAlert action={action} error={error} />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" ref={resetQueryBoundary}>
         <Button
           onClick={async () => {
             reset()

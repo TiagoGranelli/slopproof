@@ -1,5 +1,5 @@
 import { useHydrated } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useRef } from 'react'
 import { FieldError } from '#/components/form/field-error.tsx'
 import { describedBy, focusFirstInvalid } from '#/components/form/field-messages.ts'
 import { loadOnInteraction, useSchemaSubmit } from '#/components/form/lazy-schema.ts'
@@ -12,20 +12,22 @@ import {
 } from '#/features/auth/utils/describe-auth-failure.ts'
 
 /**
- * The server's failure, split: the part about one field goes next to that field, which then takes focus so the
- * user can fix it; anything else is the form's alert.
+ * The server's failure, split: the part about one field goes next to that field, which then takes focus via the
+ * form's ref callback once committed so the user can fix it; anything else is the form's alert.
  */
 function useFailure(error: Error | null, fieldCodes: AuthFieldCodes = {}) {
-  const form = useRef<HTMLFormElement>(null)
+  const lastFocusedError = useRef<Error | null>(null)
   const issues = authFieldIssues(error, fieldCodes)
   const onField = Object.keys(issues).length > 0
   // Again for every failed attempt (a new `error`), even when it is the same field as the last time.
-  useEffect(() => {
-    if (error !== null && onField && form.current) {
-      focusFirstInvalid(form.current)
+  const focusFieldError = (element: HTMLFormElement | null) => {
+    if (!element || error === null || !onField || lastFocusedError.current === error) {
+      return
     }
-  }, [error, onField])
-  return { form, formError: onField ? null : error, issues }
+    lastFocusedError.current = error
+    focusFirstInvalid(element)
+  }
+  return { focusFieldError, formError: onField ? null : error, issues }
 }
 
 /**
@@ -60,8 +62,8 @@ export function AuthForm(props: {
   submitVariant?: 'default' | 'destructive'
 }) {
   const hydrated = useHydrated()
-  const { schemaError, submit } = useSchemaSubmit(props.form, props.schema)
-  const { form, formError, issues } = useFailure(props.error, props.fieldCodes)
+  const { formRef, schemaError, submit } = useSchemaSubmit(props.form, props.schema)
+  const { focusFieldError, formError, issues } = useFailure(props.error, props.fieldCodes)
   const errorId = `${props.id}-error`
   const schemaErrorId = `${props.id}-schema-error`
   return (
@@ -78,9 +80,12 @@ export function AuthForm(props: {
         if (props.pending) {
           return
         }
-        submit(event.currentTarget)
+        submit()
       }}
-      ref={form}
+      ref={(element) => {
+        formRef?.(element)
+        focusFieldError(element)
+      }}
       {...(props.schema ? loadOnInteraction(props.schema) : {})}
     >
       <ServerIssues value={issues}>{props.children}</ServerIssues>

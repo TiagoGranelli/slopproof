@@ -1,5 +1,10 @@
-import { useRouter } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { type AnyRouter, useRouter } from '@tanstack/react-router'
+import { useSyncExternalStore } from 'react'
+
+type Announcement = { readonly id: number; readonly text: string }
+
+const QUIET: Announcement = { id: 0, text: '' }
+const latest = new WeakMap<AnyRouter, Announcement>()
 
 /** Where focus goes on a new page: its heading, or the main region of a page without one. */
 const focusNewPage = () => {
@@ -7,6 +12,23 @@ const focusNewPage = () => {
   // Scroll restoration has already placed the page; focusing must not scroll it again.
   target?.focus({ preventScroll: true })
 }
+
+const subscribeToNavigations = (router: AnyRouter, onChange: () => void) =>
+  router.subscribe('onRendered', (event) => {
+    if (!event.pathChanged) {
+      return
+    }
+    focusNewPage()
+    // The flash message on screen (FlashMessage), read from the page: by now it may be gone from the location.
+    const flash = document.querySelector('main [data-flash]')?.textContent
+    const text = [document.title, flash].filter(Boolean).join('. ')
+    const previous = latest.get(router) ?? QUIET
+    // `id` changes on every navigation: two pages with the same title are still two announcements.
+    latest.set(router, { id: previous.id + 1, text })
+    onChange()
+  })
+
+const noAnnouncementOnServer = () => QUIET
 
 /**
  * Does for a client-side navigation what a full page load does for assistive technology: focus moves to the new
@@ -17,21 +39,10 @@ const focusNewPage = () => {
  */
 export function RouteAnnouncer() {
   const router = useRouter()
-  // `id` changes on every navigation: two pages with the same title are still two announcements.
-  const [announcement, setAnnouncement] = useState({ id: 0, text: '' })
-  useEffect(
-    () =>
-      router.subscribe('onRendered', (event) => {
-        if (!event.pathChanged) {
-          return
-        }
-        focusNewPage()
-        // The flash message on screen (FlashMessage), read from the page: by now it may be gone from the location.
-        const flash = document.querySelector('main [data-flash]')?.textContent
-        const text = [document.title, flash].filter(Boolean).join('. ')
-        setAnnouncement((previous) => ({ id: previous.id + 1, text }))
-      }),
-    [router],
+  const announcement = useSyncExternalStore(
+    (onChange) => subscribeToNavigations(router, onChange),
+    () => latest.get(router) ?? QUIET,
+    noAnnouncementOnServer,
   )
   return (
     <div aria-atomic="true" aria-live="polite" className="sr-only">

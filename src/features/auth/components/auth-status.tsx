@@ -1,4 +1,8 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
+
+const focusOnMount = (element: HTMLOutputElement | null) => {
+  element?.focus()
+}
 
 /**
  * What an account form shows once it succeeded, in place of (or next to) the form. The submit button the user
@@ -7,12 +11,10 @@ import { useEffect, useId, useRef, type ReactNode } from 'react'
  * heading, so a screen reader announces the heading on focus and reads the text after it.
  */
 export function AuthStatus(props: { children: ReactNode; headingLevel?: 2 | 3; title: string }) {
-  const ref = useRef<HTMLOutputElement>(null)
   const titleId = useId()
   const Heading = props.headingLevel === 3 ? 'h3' : 'h2'
-  useEffect(() => ref.current?.focus(), [])
   return (
-    <output aria-labelledby={titleId} className="grid gap-1 outline-none" ref={ref} tabIndex={-1}>
+    <output aria-labelledby={titleId} className="grid gap-1 outline-none" ref={focusOnMount} tabIndex={-1}>
       <Heading className="font-semibold" id={titleId}>
         {props.title}
       </Heading>

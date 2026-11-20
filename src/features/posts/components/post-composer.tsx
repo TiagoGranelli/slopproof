@@ -37,7 +37,7 @@ export function PostComposer(props: { onPublished?: () => void }) {
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
   })
-  const { schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
+  const { formRef, schemaError, submit } = useSchemaSubmit(form, postDraftSchema)
   const serverIssue = fieldIssue(create.error, 'body')
   const formError = create.isError && serverIssue === undefined ? create.error : null
   return (
@@ -51,8 +51,9 @@ export function PostComposer(props: { onPublished?: () => void }) {
         if (create.isPending) {
           return
         }
-        submit(event.currentTarget)
+        submit()
       }}
+      ref={formRef}
       {...loadOnInteraction(postDraftSchema)}
     >
       <form.Field name="body">

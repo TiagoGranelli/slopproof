@@ -1,5 +1,28 @@
 import type { OxlintOverride } from 'oxlint'
 
+const TIMER_GLOBALS = [
+  {
+    message:
+      'Imperative setTimeout hides timing behind mutable timers that outlive renders and leak across unmounts. Handle work in the event handler, use CSS transitions/animations, or use Effect Clock/Schedule on the server.',
+    name: 'setTimeout',
+  },
+  {
+    message:
+      'Imperative setInterval drifts, overlaps slow work, and leaks when cleanup is missed. Subscribe to push events with useSyncExternalStore, or use Effect Schedule on the server.',
+    name: 'setInterval',
+  },
+  {
+    message:
+      'requestAnimationFrame guesses when the next frame commits and races with React rendering. Run DOM work in a ref callback (synchronous on commit) or use CSS transitions.',
+    name: 'requestAnimationFrame',
+  },
+  {
+    message:
+      'requestIdleCallback defers work with unpredictable browser-dependent timing and lacks universal support. Load chunks on user interaction (loadOnInteraction) or run work in the event handler.',
+    name: 'requestIdleCallback',
+  },
+] as const
+
 /** Per-path exceptions and additions: the contract's wire order, UI primitives, server code, tests and scripts. */
 export const overrides: Array<OxlintOverride> = [
   {
@@ -95,6 +118,14 @@ export const overrides: Array<OxlintOverride> = [
     },
   },
   {
+    // Product code bans imperative timers (ADR 0017). The UI override below repeats TIMER_GLOBALS alongside `fetch`
+    // because a later override replaces the whole rule list.
+    files: ['src/**'],
+    rules: {
+      'no-restricted-globals': ['error', ...TIMER_GLOBALS],
+    },
+  },
+  {
     // UI code and page routes: data only through the SDK or a server function (AGENTS.md, "Architecture map").
     files: ['src/components/**', 'src/features/**', 'src/routes/**/*.tsx'],
     plugins: ['node'],
@@ -106,6 +137,7 @@ export const overrides: Array<OxlintOverride> = [
             'UI code calls the API through the generated SDK (#/sdk) or a server function (#/lib/*.functions.ts), never raw fetch.',
           name: 'fetch',
         },
+        ...TIMER_GLOBALS,
       ],
       'no-restricted-imports': [
         'error',
