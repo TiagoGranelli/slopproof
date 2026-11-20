@@ -26,7 +26,12 @@ const getSsrOptions = createIsomorphicFn().server(() => {
  * own QueryClient and no cached query (such as another user's data) can leak between requests.
  */
 export function getRouter() {
-  const queryClient = createQueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } })
+  const queryClient = createQueryClient(
+    { defaultOptions: { queries: { staleTime: 30_000 } } },
+    // Clearing TanStack Query on sign-out / sign-in must also drop TanStack Router's cached route matches,
+    // or a revisited route skips awaiting its loader and suspends its useSuspenseQuery inside Suspense.
+    { onClear: () => router.clearCache() },
+  )
   const router = createRouter({
     routeTree,
     context: { queryClient },

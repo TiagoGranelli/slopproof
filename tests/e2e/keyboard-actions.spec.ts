@@ -1,6 +1,7 @@
 // Keyboard use of the actions on a page: editing works from the keyboard and puts focus back; publishing, saving and
 // deleting are announced; alerts and status messages appear where the design says. The Tab order of every page is
 // in keyboard.spec.ts. Pointer-free, so skipped on touch projects.
+import { randomUUID } from 'node:crypto'
 import { dashboardWithMyPost, expect, failServerFunctionPosts, signIn, test, visit } from './support/app.ts'
 
 test.skip(({ isMobile }) => isMobile, 'keyboard navigation is a desktop concern')
@@ -114,4 +115,60 @@ test('Sign out on the home page moves focus to the page heading, not to <body>',
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
+})
+
+test('a post with a supplementary Unicode character at index 39 keeps well-formed button labels', async ({
+  author,
+  page,
+}) => {
+  await signIn(page, author)
+  await visit(page, '/dashboard')
+  const body = `${'a'.repeat(39)}🀀 ${randomUUID()}`
+  await page.getByLabel('New post').fill(body)
+  await page.getByRole('button', { name: 'Publish' }).click()
+  const post = page.getByTestId('my-posts').locator(':scope > li').filter({ hasText: body })
+  await expect(post).toBeVisible()
+  const labels = await post.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.textContent))
+  expect(labels.length).toBeGreaterThanOrEqual(2)
+  for (const label of labels) {
+    expect(label.isWellFormed()).toBe(true)
+  }
+})
+
+test('clicking the dimmed backdrop of the delete dialog keeps focus inside the dialog', async ({ author, page }) => {
+  const { post } = await dashboardWithMyPost(page, author)
+  await post.getByRole('button', { name: /^Delete post:/ }).click()
+  const dialog = page.getByRole('alertdialog', { name: 'Delete this post?' })
+  await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused()
+  await page.mouse.click(10, 10)
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused()
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false)
+})
+
+test('Sign out from /about after visiting / keeps a single h1 and never drops focus to <body>', async ({
+  author,
+  page,
+}) => {
+  await signIn(page, author)
+  await visit(page, '/')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name: 'About' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'About' })).toBeVisible()
+  const started = Promise.withResolvers<undefined>()
+  const gate = Promise.withResolvers<undefined>()
+  await page.route('**/api/posts**', async (route) => {
+    started.resolve(undefined)
+    await gate.promise
+    await route.continue()
+  })
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await started.promise
+  const stateDuringLoad = await page.evaluate(() => ({
+    activeTag: document.activeElement?.tagName.toLowerCase(),
+    h1Count: document.querySelectorAll('h1').length,
+  }))
+  gate.resolve(undefined)
+  expect(stateDuringLoad.h1Count).toBe(1)
+  expect(stateDuringLoad.activeTag).not.toBe('body')
+  await expect(page.getByRole('heading', { level: 1, name: 'Latest posts' })).toBeFocused()
 })

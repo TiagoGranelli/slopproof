@@ -10,6 +10,7 @@ import {
   shouldReturnFocusToEdit,
   transitionPostEditor,
 } from '#/features/posts/utils/post-editor-machine.ts'
+import { truncateCodePoints } from '#/lib/truncate-text.ts'
 import type { Post } from '#/sdk/types.gen.ts'
 
 // The editor loads on the first hover or focus of an Edit button, not with the dashboard, whose first paint on a
@@ -62,7 +63,7 @@ export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; 
                 type="button"
                 variant="ghost"
               >
-                Edit<span className="sr-only"> post: {post.body.slice(0, 40)}</span>
+                Edit<span className="sr-only"> post: {truncateCodePoints(post.body, 40)}</span>
               </Button>
               <ConfirmDeleteButton
                 onConfirm={() => remove.mutate({ path: { id: post.id } })}

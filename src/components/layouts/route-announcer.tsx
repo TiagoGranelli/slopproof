@@ -7,9 +7,11 @@ type Announcement = { readonly id: number; readonly text: string }
 const QUIET: Announcement = { id: 0, text: '' }
 const latest = new WeakMap<AnyRouter, Announcement>()
 
-/** Where focus goes on a new page: its heading, or the main region of a page without one. */
+/** Where focus goes on a new page: its visible heading, or the main region of a page without one. */
 const focusNewPage = () => {
-  const target = document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('main')
+  const headings = document.querySelectorAll<HTMLElement>('main h1')
+  const visibleHeading = Array.from(headings).find((heading) => heading.getClientRects().length > 0)
+  const target = visibleHeading ?? document.querySelector<HTMLElement>('main')
   // Scroll restoration has already placed the page; focusing must not scroll it again.
   target?.focus({ preventScroll: true })
 }

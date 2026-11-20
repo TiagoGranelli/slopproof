@@ -11,7 +11,14 @@ import { useSignOut } from '#/features/auth/api/sign-out.ts'
 export function SignOutButton() {
   const navigate = useNavigate()
   const signOut = useSignOut({
-    mutationConfig: { onSuccess: () => navigate({ state: { flash: 'signed-out' }, to: '/' }) },
+    mutationConfig: {
+      onSuccess: () => {
+        // Clearing the session cache unmounts this button before the home route's loader finishes; move focus
+        // to <main> first so it never drops to <body> while the navigation loads.
+        document.querySelector<HTMLElement>('main')?.focus({ preventScroll: true })
+        return navigate({ state: { flash: 'signed-out' }, to: '/' })
+      },
+    },
   })
   return (
     <>

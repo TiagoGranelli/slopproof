@@ -48,31 +48,38 @@ const invalidate = (queryClient: QueryClient, invalidations: ReadonlyArray<Inval
     }),
   )
 
+const createMutationCache = (getClient: () => QueryClient, onClear?: () => void) =>
+  new MutationCache({
+    // TanStack Query passes the mutation last, after data, variables and context: its signature, not ours.
+    // oxlint-disable-next-line eslint/max-params
+    onSettled: (_data, error, _variables, _context, mutation) => {
+      const meta = mutation.meta
+      const stale = error === null || (meta?.invalidatesOnError?.(error) ?? false)
+      return stale && meta?.invalidates ? invalidate(getClient(), meta.invalidates) : undefined
+    },
+    // Same: TanStack Query's positional signature, with the mutation last.
+    // oxlint-disable-next-line eslint/max-params
+    onSuccess: (_data, _variables, _context, mutation) => {
+      if (mutation.meta?.clearsCache) {
+        getClient().clear()
+        onClear?.()
+      }
+    },
+  })
+
 /**
  * The app's QueryClient (src/router.tsx, and the component tests). Mutations never invalidate by hand: they
  * declare `meta.clearsCache` and `meta.invalidates`, and this cache performs them. TanStack Query awaits the
  * cache's `onSuccess` before the mutation's own and its `onSettled` after, which gives the order the UI needs:
  * clear, then the caller's `onSuccess` (reset a form, navigate), then the refetch.
  */
-export function createQueryClient(config: QueryClientConfig = {}): QueryClient {
+export function createQueryClient(
+  config: QueryClientConfig = {},
+  options: { readonly onClear?: () => void } = {},
+): QueryClient {
   const queryClient: QueryClient = new QueryClient({
     ...config,
-    mutationCache: new MutationCache({
-      // TanStack Query passes the mutation last, after data, variables and context: its signature, not ours.
-      // oxlint-disable-next-line eslint/max-params
-      onSuccess: (_data, _variables, _context, mutation) => {
-        if (mutation.meta?.clearsCache) {
-          queryClient.clear()
-        }
-      },
-      // Same: TanStack Query's positional signature, with the error second and the mutation last.
-      // oxlint-disable-next-line eslint/max-params
-      onSettled: (_data, error, _variables, _context, mutation) => {
-        const meta = mutation.meta
-        const stale = error === null || (meta?.invalidatesOnError?.(error) ?? false)
-        return stale && meta?.invalidates ? invalidate(queryClient, meta.invalidates) : undefined
-      },
-    }),
+    mutationCache: createMutationCache(() => queryClient, options.onClear),
   })
   return queryClient
 }

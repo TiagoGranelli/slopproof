@@ -49,6 +49,7 @@
       "tests/integration/auth-session-refresh.test.ts",
       "tests/integration/login-form-post.test.ts",
       "tests/e2e/auth-closed.spec.ts",
+      "tests/e2e/keyboard-actions.spec.ts",
       "tests/e2e/login-without-js.spec.ts",
       "tests/bombadil/app.ts"
     ],
@@ -186,6 +187,7 @@
       "src/contract/post-input.ts",
       "src/contract/posts.ts",
       "src/contract/stored-text.ts",
+      "src/lib/truncate-text.ts",
       "src/server/posts/repo.ts",
       "src/server/db/schema/posts.ts"
     ],
@@ -195,6 +197,7 @@
       "tests/unit/id-brands.test.ts",
       "tests/unit/post-editor-machine.test.ts",
       "tests/unit/stored-text.test.ts",
+      "tests/unit/truncate-text.test.ts",
       "tests/api/posts.test.ts",
       "tests/api/posts-validation.test.ts",
       "tests/component/post-composer.test.tsx",
@@ -205,10 +208,11 @@
       "tests/db/posts-query-budget.test.ts",
       "tests/integration/posts.test.ts",
       "tests/e2e/flows.spec.ts",
+      "tests/e2e/keyboard-actions.spec.ts",
       "specs/KeysetPagination.tla",
       "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands post-editor-machine stored-text posts.test posts-validation post-composer my-post post-editor-properties delete-post"
+    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands post-editor-machine stored-text truncate-text posts.test posts-validation post-composer my-post post-editor-properties delete-post"
   },
   {
     "apiOperations": [],

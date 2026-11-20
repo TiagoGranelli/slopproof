@@ -27,11 +27,17 @@ function AlertDialogPortal({ ...props }: ComponentProps<typeof AlertDialogPrimit
   return <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
 }
 
-function AlertDialogOverlay({ className, ...props }: ComponentProps<typeof AlertDialogPrimitive.Overlay>) {
+function AlertDialogOverlay({ className, onMouseDown, ...props }: ComponentProps<typeof AlertDialogPrimitive.Overlay>) {
   return (
     <AlertDialogPrimitive.Overlay
-      className={cn('fixed inset-0 z-50 bg-black/40', className)}
+      className={cn('pointer-events-auto fixed inset-0 z-50 bg-black/40', className)}
       data-slot="alert-dialog-overlay"
+      onMouseDown={(event) => {
+        onMouseDown?.(event)
+        // Alert dialogs ignore outside clicks; preventing default keeps mousedown on the dimmed backdrop
+        // from blurring the focused dialog control onto document.body.
+        event.preventDefault()
+      }}
       {...props}
     />
   )

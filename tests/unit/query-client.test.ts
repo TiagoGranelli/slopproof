@@ -82,18 +82,22 @@ describe('createQueryClient', () => {
     unsubscribe()
   })
 
-  it('clears the cache before the caller onSuccess, and leaves it alone without meta', async () => {
-    const { pages, queryClient, unsubscribe } = await setup()
+  it('clears the cache before the caller onSuccess, runs onClear, and leaves it alone without meta', async () => {
+    const { events, pages, queryClient, unsubscribe } = await setup()
     await new MutationObserver(queryClient, { mutationFn: () => Promise.resolve(null) }).mutate(undefined)
     expect(pages('mine')).toHaveLength(3)
 
+    let cleared = 0
+    const tracked = createQueryClient({}, { onClear: () => (cleared += 1) })
+    tracked.setQueryData(['mine'], 'kept')
     const seen: Array<unknown> = []
-    await new MutationObserver(queryClient, {
+    await new MutationObserver(tracked, {
       meta: { clearsCache: true },
       mutationFn: () => Promise.resolve(null),
-      onSuccess: () => void seen.push(pages('mine')),
+      onSuccess: () => void seen.push([tracked.getQueryData(['mine']), cleared]),
     }).mutate(undefined)
-    expect(seen).toEqual([undefined])
+    expect(seen).toEqual([[undefined, 1]])
+    expect(events).toEqual([])
     unsubscribe()
   })
 })

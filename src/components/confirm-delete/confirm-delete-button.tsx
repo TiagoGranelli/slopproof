@@ -1,6 +1,7 @@
 import { lazy, Suspense, useRef, useState } from 'react'
 import type { DeletedItem } from '#/components/confirm-delete/confirm-delete-dialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { truncateCodePoints } from '#/lib/truncate-text.ts'
 
 // The dialog and Radix's dialog code load on the first hover or focus of a Delete button, not with the page:
 // preloaded with the dashboard, they delayed its first paint on a throttled phone (Lighthouse FCP).
@@ -43,7 +44,7 @@ export function ConfirmDeleteButton(props: { onConfirm: () => void; pending: boo
         type="button"
         variant="ghost"
       >
-        Delete<span className="sr-only"> {`${props.target.noun}: ${props.target.text.slice(0, 40)}`}</span>
+        Delete<span className="sr-only"> {`${props.target.noun}: ${truncateCodePoints(props.target.text, 40)}`}</span>
       </Button>
       {asked ? (
         <Suspense fallback={null}>
