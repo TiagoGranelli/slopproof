@@ -105,3 +105,13 @@ test.describe('announcements', () => {
     await expect(page).toHaveURL(/\/$/)
   })
 })
+
+test('Sign out on the home page moves focus to the page heading, not to <body>', async ({ author, page }) => {
+  await signIn(page, author)
+  await visit(page, '/')
+  const signOut = page.getByRole('button', { name: 'Sign out' })
+  await signOut.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
+})

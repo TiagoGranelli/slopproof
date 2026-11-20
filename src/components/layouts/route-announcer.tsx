@@ -1,5 +1,6 @@
 import { type AnyRouter, useRouter } from '@tanstack/react-router'
 import { useSyncExternalStore } from 'react'
+import { flashMessage } from '#/lib/flash.ts'
 
 type Announcement = { readonly id: number; readonly text: string }
 
@@ -13,9 +14,21 @@ const focusNewPage = () => {
   target?.focus({ preventScroll: true })
 }
 
-const subscribeToNavigations = (router: AnyRouter, onChange: () => void) =>
-  router.subscribe('onRendered', (event) => {
-    if (!event.pathChanged) {
+// Routers whose current navigation carries a flash: an action that lands on the page it started from (Sign out on
+// /) changes no path, and its button may be gone, so the page counts as new. Read when the navigation starts,
+// because FlashMessage then drops the flash with a navigation that replaces this one.
+const landing = new WeakSet<AnyRouter>()
+
+const subscribeToNavigations = (router: AnyRouter, onChange: () => void) => {
+  const stopWatchingActions = router.subscribe('onBeforeNavigate', (event) => {
+    if (flashMessage(event.toLocation.state.flash)) {
+      landing.add(router)
+    }
+  })
+  const stopAnnouncing = router.subscribe('onRendered', (event) => {
+    const actionLanded = landing.has(router)
+    landing.delete(router)
+    if (!event.pathChanged && !actionLanded) {
       return
     }
     focusNewPage()
@@ -27,6 +40,11 @@ const subscribeToNavigations = (router: AnyRouter, onChange: () => void) =>
     latest.set(router, { id: previous.id + 1, text })
     onChange()
   })
+  return () => {
+    stopWatchingActions()
+    stopAnnouncing()
+  }
+}
 
 const noAnnouncementOnServer = () => QUIET
 

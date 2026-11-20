@@ -29,6 +29,27 @@ const noDevtoolsInProduction: Plugin = {
   name: 'no-devtools-in-production',
 }
 
+/**
+ * Replaces `react-style-singleton`'s `<style>`-tag injector with Constructable Stylesheets
+ * (`src/lib/adopted-stylesheet-singleton.ts`) so Radix dialogs lock scroll without violating strict
+ * hash-based CSP (`style-src 'self'`, no nonce) after navigating from a prerendered page (ADR 0010).
+ */
+const adoptedStylesheetSingleton: Plugin = {
+  enforce: 'pre',
+  name: 'adopted-stylesheet-singleton',
+  resolveId(source, importer) {
+    if ((source === './singleton' || source === './singleton.js') && importer?.includes('react-style-singleton')) {
+      // The stand-in matches the `./singleton` module of react-style-singleton 2.2.3: another version may change
+      // what it exports, so the build stops until the stand-in is checked against it.
+      if (!importer.includes('react-style-singleton@2.2.3')) {
+        throw new Error(`adopted-stylesheet-singleton was written for react-style-singleton 2.2.3, got ${importer}`)
+      }
+      return fileURLToPath(new URL('src/lib/adopted-stylesheet-singleton.ts', import.meta.url))
+    }
+    return null
+  },
+}
+
 export default defineConfig({
   build: {
     rolldownOptions: {
@@ -79,6 +100,7 @@ export default defineConfig({
     }),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
+    adoptedStylesheetSingleton,
     noDevtoolsInProduction,
   ],
   server: {

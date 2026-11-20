@@ -54,11 +54,15 @@ blocked. SSR pages cannot be cached by shared caches (the nonce is per response)
 Two inline pieces the UI needs follow the same rules. The theme script (`src/lib/theme.ts`) goes through the
 root route's `head()`: SSR pages give it the nonce, and the prerender hook hashes it like any inline script
 (`tests/e2e/appearance.spec.ts` runs it with the app's modules blocked on both kinds of page). Radix dialogs lock
-page scroll with a `<style>` element they inject at runtime (react-remove-scroll-bar); `src/components/ui/alert-dialog.tsx`
-hands it the page's nonce through `get-nonce`. A document that began as a prerendered page has no nonce, so if
-the visitor navigates from it to the dashboard and opens a dialog, that one style is blocked and reported: the
-dialog works, the page behind it can still scroll. Revisit if a second runtime style appears, or by loading
-pages reached from a prerendered one as documents of their own.
+page scroll at runtime (`react-remove-scroll-bar` → `react-style-singleton`). Upstream injects an inline `<style>`
+tag via `get-nonce`, which worked on SSR pages (`src/components/ui/alert-dialog.tsx`) but was blocked as a
+`style-src-elem:inline` violation if the visitor arrived from a prerendered page (`/about`, whose hash policy has
+no nonce) and later opened a dialog on `/dashboard` (caught by Bombadil's `noCspViolations` property). The
+`adoptedStylesheetSingleton` plugin in `vite.config.ts` replaces `react-style-singleton`'s `./singleton` module
+with `src/lib/adopted-stylesheet-singleton.ts`, which mounts those rules via Constructable Stylesheets
+(`CSSStyleSheet` + `document.adoptedStyleSheets`, CSSOM rather than inline `<style>` injection) and falls back to
+a nonced `<style>` tag only when Constructable Stylesheets are unavailable. Prerendered pages also omit the
+build-time nonce in `src/router.tsx` (`isPrerendering()`), so they never ship a dead `<meta property="csp-nonce">`.
 
 ## Revisit when
 

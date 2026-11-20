@@ -4,7 +4,7 @@
 // /about.
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
-import { expect, signIn, test, visit } from './support/app.ts'
+import { dashboardWithMyPost, expect, expectHydrated, signIn, test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
@@ -67,4 +67,26 @@ test('the prerendered page runs under its hash policy and navigates on', async (
   await expectHome(page)
   await navLink(page, 'About').click()
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
+})
+
+test('opening a delete dialog after returning from a reloaded prerendered page triggers no CSP violation', async ({
+  author,
+  page,
+}) => {
+  const { post } = await dashboardWithMyPost(page, author)
+  // Visiting /about and reloading switches the document to /about's hash-based CSP (style-src 'self', no nonce).
+  await navLink(page, 'About').click()
+  await expect(page.getByRole('heading', { level: 1, name: 'About' })).toBeVisible()
+  await page.reload()
+  await expectHydrated(page)
+  // Going back returns to /dashboard inside that same hash-CSP document; Radix AlertDialog's scroll lock
+  // must still apply without injecting an inline <style> element that CSP blocks.
+  await page.goBack()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await post.getByRole('button', { name: /^Delete post:/ }).click()
+  const dialog = page.getByRole('alertdialog', { name: 'Delete this post?' })
+  await expect(dialog).toBeVisible()
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
+  await dialog.getByRole('button', { name: 'Keep it' }).click()
+  await expect(dialog).toHaveCount(0)
 })

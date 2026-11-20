@@ -239,6 +239,7 @@
     "paths": [
       "src/routes/__root.tsx",
       "src/routes/about.tsx",
+      "src/lib/adopted-stylesheet-singleton.ts",
       "src/lib/content-security-policy.ts",
       "src/lib/theme.ts",
       "src/server/nitro/http.ts",
@@ -248,6 +249,7 @@
     "purpose": "Nonce-based and prerendered Content Security Policy, origin checks, theme script, and root shell.",
     "routes": ["/about"],
     "tests": [
+      "tests/unit/adopted-stylesheet-singleton.test.ts",
       "tests/unit/content-security-policy.test.ts",
       "tests/unit/prerender-csp.test.ts",
       "tests/unit/theme-script.test.ts",
@@ -257,7 +259,7 @@
       "tests/e2e/appearance.spec.ts",
       "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component content-security-policy prerender-csp theme-script"
+    "verify": "pnpm exec vitest run --project unit --project api --project component adopted-stylesheet-singleton content-security-policy prerender-csp theme-script"
   },
   {
     "apiOperations": ["system.health", "system.ready"],

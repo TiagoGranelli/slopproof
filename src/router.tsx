@@ -5,13 +5,18 @@ import { RouteError } from '#/components/errors/route-error.tsx'
 import { RouteNotFound } from '#/components/errors/route-not-found.tsx'
 import { RoutePending } from '#/components/layouts/route-pending.tsx'
 import { createQueryClient } from '#/lib/query-client.ts'
+import { isPrerendering } from '#/lib/session.functions.ts'
 import { routeTree } from './routeTree.gen.ts'
 
 // A fresh CSP nonce per request (Start's documented pattern, TanStack/router e2e/react-start/csp). The router
 // stamps it on every script, style and preload it renders, and the root route's `headers` puts it into the
 // Content-Security-Policy. In the browser the router reads it back from the <meta property="csp-nonce"> tag
-// that HeadContent renders, and Vite's preload helper copies it onto the chunks it preloads.
+// that HeadContent renders, and Vite's preload helper copies it onto the chunks it preloads. Prerendered pages
+// use sha256 hashes instead of a per-request nonce (vite.config.ts, ADR 0010), so they emit no nonce meta tag.
 const getSsrOptions = createIsomorphicFn().server(() => {
+  if (isPrerendering()) {
+    return undefined
+  }
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   return { nonce: Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('') }
 })

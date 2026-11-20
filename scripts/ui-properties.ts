@@ -1,12 +1,14 @@
 // Runs Bombadil property-based browser testing against the built app (public and signed-in sessions).
 // Starts the built app via scripts/app-server.ts on a throwaway Postgres database, launches Playwright's
 // headless Chromium with remote debugging, runs `bombadil browser test-external`, and asserts zero 5xx logs.
-// Usage: pnpm build && pnpm verify:ui-properties
+// Usage:
+//   pnpm build && pnpm verify:ui-properties
+//   pnpm verify:ui-properties -- --reproduce=test-results/bombadil/authenticated --pass=authenticated
 import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { chromium } from 'playwright'
 import { xSync } from 'tinyexec'
 import { LOOPBACK, type RunningApp, startApp } from './app-server.ts'
@@ -19,6 +21,13 @@ const LOG_FILE = 'test-results/app-server-bombadil.log'
 // Short path under ~/.cache so Chromium's SingletonSocket stays under Linux's 108-byte sun_path limit.
 const CHROME_CACHE_DIR = join(homedir(), '.cache', 'b-cdp')
 
+type PassName = 'authenticated' | 'public'
+
+interface RunConfig {
+  readonly passes: ReadonlyArray<PassName>
+  readonly reproduce?: string
+}
+
 interface BrowserHandle {
   readonly debuggerUrl: string
   readonly stop: () => Promise<void>
@@ -27,14 +36,63 @@ interface BrowserHandle {
 interface PassOptions {
   readonly cookies?: ReadonlyArray<string>
   readonly debuggerUrl: string
-  readonly name: string
+  readonly name: PassName
   readonly originUrl: string
+  readonly reproduce?: string
 }
 
 interface PassOutcome {
   readonly durationSeconds: string
-  readonly name: string
+  readonly name: PassName
   readonly ok: boolean
+  readonly outputDir: string
+}
+
+const flagValue = (argv: ReadonlyArray<string>, flag: string): string | undefined => {
+  const prefix = `${flag}=`
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index]
+    if (token?.startsWith(prefix)) {
+      return token.slice(prefix.length)
+    }
+    if (token === flag) {
+      return argv[index + 1]
+    }
+  }
+  return undefined
+}
+
+const parsePassName = (raw: string): PassName => {
+  if (raw === 'public' || raw === 'authenticated') {
+    return raw
+  }
+  throw new Error(`--pass must be "public" or "authenticated" (got "${raw}")`)
+}
+
+const inferPassFromTrace = (tracePath: string): PassName => {
+  const hasPublic = /(?:^|[/\\])public(?:[/\\]|$)/.test(tracePath)
+  const hasAuthenticated = /(?:^|[/\\])authenticated(?:[/\\]|$)/.test(tracePath)
+  if (hasAuthenticated && !hasPublic) {
+    return 'authenticated'
+  }
+  if (hasPublic && !hasAuthenticated) {
+    return 'public'
+  }
+  throw new Error(`Cannot infer pass from trace "${tracePath}"; specify --pass=public or --pass=authenticated`)
+}
+
+const normalizeTraceDir = (tracePath: string): string =>
+  basename(tracePath) === 'trace.jsonl' ? dirname(tracePath) : tracePath
+
+const parseRunConfig = (argv: ReadonlyArray<string>): RunConfig => {
+  const rawReproduce = flagValue(argv, '--reproduce') ?? process.env.BOMBADIL_REPRODUCE
+  const rawPass = flagValue(argv, '--pass') ?? process.env.BOMBADIL_PASS
+  if (rawReproduce) {
+    const reproduce = normalizeTraceDir(rawReproduce)
+    const pass = rawPass ? parsePassName(rawPass) : inferPassFromTrace(reproduce)
+    return { passes: [pass], reproduce }
+  }
+  return { passes: rawPass ? [parsePassName(rawPass)] : ['public', 'authenticated'] }
 }
 
 const freePort = (): Promise<number> =>
@@ -121,6 +179,12 @@ const seedPosts = async (app: RunningApp, cookies: ReadonlyArray<string>): Promi
   }
 }
 
+const passOutputDir = (options: PassOptions): string =>
+  join(OUTPUT_ROOT, options.reproduce ? `reproduce-${options.name}` : options.name)
+
+const modeArgs = (reproduce: string | undefined): Array<string> =>
+  reproduce ? ['--reproduce', reproduce] : ['--time-limit', TIME_LIMIT, '--exit-on-violation']
+
 const bombadilArgs = (options: PassOptions): Array<string> => [
   'browser',
   'test-external',
@@ -129,11 +193,9 @@ const bombadilArgs = (options: PassOptions): Array<string> => [
   '--create-target',
   '--instrument-javascript',
   '',
-  '--time-limit',
-  TIME_LIMIT,
-  '--exit-on-violation',
+  ...modeArgs(options.reproduce),
   '--output-path',
-  join(OUTPUT_ROOT, options.name),
+  passOutputDir(options),
   '--output-path-overwrite',
   ...(options.cookies ?? []).flatMap((cookie) => ['--cookie', cookie]),
   options.originUrl,
@@ -141,10 +203,11 @@ const bombadilArgs = (options: PassOptions): Array<string> => [
 ]
 
 const runBombadilPass = (options: PassOptions): PassOutcome => {
+  const outputDir = passOutputDir(options)
   const started = performance.now()
   const run = xSync('bombadil', bombadilArgs(options), { nodeOptions: { stdio: 'inherit' } })
   const durationSeconds = ((performance.now() - started) / 1000).toFixed(1)
-  return { durationSeconds, name: options.name, ok: run.exitCode === 0 }
+  return { durationSeconds, name: options.name, ok: run.exitCode === 0, outputDir }
 }
 
 const findServer5xx = (logFile: string): Array<string> =>
@@ -154,7 +217,13 @@ const findServer5xx = (logFile: string): Array<string> =>
 
 const reportOutcomes = (outcomes: ReadonlyArray<PassOutcome>, serverErrors: ReadonlyArray<string>): number => {
   for (const outcome of outcomes) {
-    console.log(`${outcome.ok ? 'ok  ' : 'FAIL'}  bombadil:${outcome.name.padEnd(14)} ${outcome.durationSeconds}s`)
+    const suffix = outcome.ok ? '' : `  trace: ${outcome.outputDir}`
+    console.log(
+      `${outcome.ok ? 'ok  ' : 'FAIL'}  bombadil:${outcome.name.padEnd(14)} ${outcome.durationSeconds}s${suffix}`,
+    )
+    if (!outcome.ok) {
+      console.log(`      replay: pnpm verify:ui-properties -- --reproduce=${outcome.outputDir} --pass=${outcome.name}`)
+    }
   }
   if (serverErrors.length > 0) {
     console.error(
@@ -164,22 +233,34 @@ const reportOutcomes = (outcomes: ReadonlyArray<PassOutcome>, serverErrors: Read
   return outcomes.every((outcome) => outcome.ok) && serverErrors.length === 0 ? 0 : 1
 }
 
-const runSuite = async (app: RunningApp, browser: BrowserHandle): Promise<number> => {
+interface SuiteContext {
+  readonly app: RunningApp
+  readonly cookies: ReadonlyArray<string>
+  readonly debuggerUrl: string
+  readonly reproduce?: string
+}
+
+const passOptionsFor = (name: PassName, suite: SuiteContext): PassOptions =>
+  name === 'public'
+    ? { debuggerUrl: suite.debuggerUrl, name, originUrl: `${suite.app.url}/`, reproduce: suite.reproduce }
+    : {
+        cookies: suite.cookies,
+        debuggerUrl: suite.debuggerUrl,
+        name,
+        originUrl: `${suite.app.url}/dashboard`,
+        reproduce: suite.reproduce,
+      }
+
+const runSuite = async (app: RunningApp, browser: BrowserHandle, config: RunConfig): Promise<number> => {
   const cookies = await signInCookies(app)
   await seedPosts(app, cookies)
-  const outcomes = [
-    runBombadilPass({ debuggerUrl: browser.debuggerUrl, name: 'public', originUrl: `${app.url}/` }),
-    runBombadilPass({
-      cookies,
-      debuggerUrl: browser.debuggerUrl,
-      name: 'authenticated',
-      originUrl: `${app.url}/dashboard`,
-    }),
-  ]
+  const suite: SuiteContext = { app, cookies, debuggerUrl: browser.debuggerUrl, reproduce: config.reproduce }
+  const outcomes = config.passes.map((name) => runBombadilPass(passOptionsFor(name, suite)))
   return reportOutcomes(outcomes, findServer5xx(LOG_FILE))
 }
 
 const main = async (): Promise<void> => {
+  const config = parseRunConfig(process.argv.slice(2))
   mkdirSync(OUTPUT_ROOT, { recursive: true })
   const databaseUrl = testDatabaseUrl('bombadil')
   const app = await startApp({
@@ -190,13 +271,11 @@ const main = async (): Promise<void> => {
   })
   const browser = await startHeadlessChrome()
   try {
-    process.exitCode = await runSuite(app, browser)
+    process.exitCode = await runSuite(app, browser, config)
   } finally {
     await browser.stop()
     await app.stop()
-    if (process.env.KEEP_TEST_DB !== '1') {
-      await dropTestDatabase(databaseUrl)
-    }
+    await (process.env.KEEP_TEST_DB === '1' ? Promise.resolve() : dropTestDatabase(databaseUrl))
   }
 }
 

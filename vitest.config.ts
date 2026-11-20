@@ -48,6 +48,8 @@ const COVERAGE_GATE = [
   'src/server/env.ts',
   // The Content-Security-Policy of every HTML document.
   'src/lib/content-security-policy.ts',
+  // Constructable Stylesheet singleton replacing react-style-singleton's <style> injection (ADR 0010).
+  'src/lib/adopted-stylesheet-singleton.ts',
   // Explicit UI state machines (ADR 0018).
   'src/features/posts/utils/post-editor-machine.ts',
   'src/features/auth/utils/auth-form-machine.ts',
