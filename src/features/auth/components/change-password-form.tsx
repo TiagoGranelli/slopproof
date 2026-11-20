@@ -14,7 +14,6 @@ const FIELD_CODES = {
   PASSWORD_TOO_SHORT: 'newPassword',
 } as const
 
-/** Changes the password. Every other session of the account is signed out; this one continues. */
 export function ChangePasswordForm() {
   const change = useChangePassword({ mutationConfig: { onSuccess: () => form.reset() } })
   const controller = useAuthFormController({ fieldCodes: FIELD_CODES })
@@ -54,7 +53,6 @@ export function ChangePasswordForm() {
           )}
         </form.AppField>
       </AuthForm>
-      {/* The emptied form keeps no focus of its own, so the message takes it. */}
       {controller.state.status === 'succeeded' ? (
         <AuthStatus headingLevel={3} title="Password changed">
           Your other sessions were signed out.

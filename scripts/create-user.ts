@@ -1,10 +1,3 @@
-// Creates an email/password account with a verified address: the operator vouches for it, so the account can
-// sign in at once and no confirmation mail is sent. Works whether public sign-up is open or closed.
-// Usage: pnpm user:create <email> <name>
-//        node .output/create-user.mjs <email> <name>   (the Docker image: a bundle, scripts/bundle-cli.ts)
-// The password comes from CREATE_USER_PASSWORD, else from stdin: typed at a hidden prompt (asked twice)
-// in a terminal, or read whole from a pipe (`printf %s "$pw" | pnpm user:create ...`).
-// Needs the server's DATABASE_URL, APP_URL and BETTER_AUTH_SECRET (src/server/env.ts validates them).
 import { stdin, stderr } from 'node:process'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
@@ -13,7 +6,6 @@ import { auth } from '#/server/auth.ts'
 import { db, pool } from '#/server/db/client.ts'
 import { user } from '#/server/db/schema/index.ts'
 
-/** A stream to stderr that `mute` silences: readline writes the question, then the echo of what is typed, to it. */
 const mutableEcho = () => {
   let muted = false
   const output = new Writable({
@@ -27,7 +19,6 @@ const mutableEcho = () => {
   return { mute: () => (muted = true), output }
 }
 
-/** Asks on the terminal without echoing what is typed. */
 const askHidden = (question: string) =>
   new Promise<string>((resolve, reject) => {
     const echo = mutableEcho()
@@ -64,7 +55,6 @@ const readPassword = async () => {
 }
 
 const [rawEmail, rawName] = process.argv.slice(2)
-// Better Auth stores emails lowercased; the existence check and the sign-up must use the same value.
 const email = rawEmail?.trim().toLowerCase()
 const name = rawName?.trim()
 if (!email || !name) {
@@ -77,7 +67,6 @@ if (!email || !name) {
 
 try {
   const password = await readPassword()
-  // Checked here so the message can name the limits; Better Auth only says "Password too short".
   const { maxPasswordLength, minPasswordLength } = auth.options.emailAndPassword
   if (password.length < minPasswordLength) {
     throw new Error(`password too short (${password.length} characters): use at least ${minPasswordLength}`)
@@ -89,7 +78,6 @@ try {
   if (existing) {
     throw new Error(`a user with email ${email} already exists`)
   }
-  // What sign-up does, minus the verification mail: Better Auth's password hash, user and credential account.
   const context = await auth.$context
   const hash = await context.password.hash(password)
   const created = await context.internalAdapter.createUser(

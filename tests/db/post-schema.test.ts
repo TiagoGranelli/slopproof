@@ -1,7 +1,4 @@
 import { isDate } from 'node:util/types'
-// The post table on real Postgres: the plans behind the keyset lists, the body CHECK constraint (a backstop that
-// never rejects what the API accepts) and updated_at from the database clock. Seeded rows are dated in 2000, so
-// they sit below every post the other db files create "now" in the public feed.
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Effect, Exit, Layer, Schema } from 'effect'
 import * as fc from 'fast-check'
@@ -24,7 +21,6 @@ const recordingDb = drizzle({
   schema,
 })
 const repoLayer = PostsRepo.layer.pipe(Layer.provide(Layer.succeed(Database, recordingDb)))
-/** The statement one repository call sends. */
 const statementOf = async <A>(call: (repo: typeof PostsRepo.Service) => Effect.Effect<A, unknown>) => {
   logged.length = 0
   const returned = await Effect.runPromise(
@@ -49,8 +45,6 @@ const planOf = async (statement: { params: Array<unknown>; query: string }) => {
 let author: { id: UserId; name: string }
 beforeAll(async () => {
   author = await createAccount('schema')
-  // 10,000 posts one second apart by 100 authors (`author` is the first), so the planner sees a table and an
-  // author worth an index.
   const run = crypto.randomUUID()
   await pool.query(
     `insert into "user" (id, name, email, email_verified)
@@ -91,7 +85,6 @@ describe('keyset list plans', () => {
         summary,
       ).toMatchObject({ 'Scan Direction': 'Backward' })
     }
-    // The author's posts are every hundredth; the deep public page starts right below their second page.
     expect(deep.returned.items.map((post) => post.body).slice(0, 2)).toEqual(['seeded 8000', 'seeded 7900'])
     expect(publicDeep.returned.items[0]?.body).toBe('seeded 6099')
   })
@@ -121,7 +114,6 @@ describe('post_body_check', () => {
 
   it(`admits ${POST_MAX_LENGTH} characters, counted in code points: an emoji is one`, async () => {
     expect(await sqlState('a'.repeat(POST_MAX_LENGTH))).toBe('ok')
-    // The API counts UTF-16 units and stops at 140 of these; the database would take 280.
     expect(await sqlState('😀'.repeat(POST_MAX_LENGTH))).toBe('ok')
     expect(await sqlState('😀'.repeat(POST_MAX_LENGTH + 1))).toBe('23514')
   })
@@ -133,7 +125,6 @@ describe('post_body_check', () => {
         fc.string({ maxLength: 150, unit: 'grapheme' }),
         fc.string({ maxLength: 290, unit: fc.constantFrom(' ', '\t', '\n', ' ', ' ', 'a', '😀') }),
       )
-      // Postgres text cannot hold NUL (22021), whatever the constraint says.
       .map((body) => body.replaceAll('\u0000', ''))
       .filter((body) => acceptedByApi(body))
     await fc.assert(

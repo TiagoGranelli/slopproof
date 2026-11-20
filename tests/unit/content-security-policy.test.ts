@@ -1,6 +1,3 @@
-// The Content-Security-Policy of every HTML document (src/lib/content-security-policy.ts, ADR 0010). The
-// E2E suite proves browsers load the app under it (tests/e2e/csp.spec.ts); this pins each directive, so a
-// loosened one (an 'unsafe-inline', a wildcard, a dropped frame-ancestors) is a failing diff here.
 import { describe, expect, it } from 'vitest'
 import { documentHeaders, nonceSources } from '#/lib/content-security-policy.ts'
 

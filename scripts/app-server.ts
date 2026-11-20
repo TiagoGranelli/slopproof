@@ -1,8 +1,3 @@
-// Boots the built app (.output) against a fresh, migrated test database with two author accounts. Shared by the
-// test runners' global setups (startTestServers, scripts/test-servers.ts), the integration tests that need a
-// server of their own, and scripts/lighthouse.ts. Server output goes to a log file.
-// With `edge`, the app sits behind the reference edge (deploy/Caddyfile, scripts/edge.ts) as in production:
-// the returned url and APP_URL are the edge's, and the Node server trusts X-Forwarded-For only from the edge.
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -19,21 +14,16 @@ type User = { email: string; name: string; password: string }
 
 export type RunningApp = {
   databaseUrl: string
-  /** The Node server itself, bypassing the edge. */
   directUrl: string
-  /** With `edge.tls`: the SPKI hash of the edge's certificate, for Chrome (see scripts/edge.ts). */
   edgeCertificateSpki?: string
   env: NodeJS.ProcessEnv
   logFile: string
   otherUser: User
-  /** Stops the edge, then the server (ServerProcess.stop), and says how the server exited. */
   stop: ServerProcess['stop']
-  /** The public origin (APP_URL): the edge's when there is one, otherwise the Node server's. */
   url: string
   user: User
 }
 
-/** Where the test runners connect from when no edge sits in front. */
 export const LOOPBACK = '127.0.0.1/32,::1/128'
 
 const password = () => `pw-${crypto.randomUUID()}`
@@ -47,7 +37,6 @@ const freePort = () =>
     })
   })
 
-/** Runs a command with its output captured; the output is printed only if it fails. */
 const runQuiet = (command: string, args: Array<string>, env: NodeJS.ProcessEnv) =>
   new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -64,38 +53,24 @@ const runQuiet = (command: string, args: Array<string>, env: NodeJS.ProcessEnv) 
 
 type EdgeOptions = {
   logFile: string
-  /** HTTPS with HTTP/2 and HTTP/3, as in production (Caddy's internal CA; see scripts/edge.ts). */
   tls?: boolean
   trustedProxies?: string
 }
 
 type StartAppOptions = {
-  /** Share this running app's database, accounts and secret instead of resetting the database. */
   alongside?: RunningApp
   databaseUrl: string
-  /**
-   * Put the reference edge in front. `trustedProxies` becomes the edge's EDGE_TRUSTED_PROXIES: the test
-   * runners send their own X-Forwarded-For per suite, so they pass `private_ranges`. The edge replaces
-   * X-Forwarded-For with the client IP it resolved, and the server trusts only the edge (`edgePeers`).
-   */
   edge?: EdgeOptions
   logFile: string
-  /** More server settings, such as AUTH_SIGN_UP, SMTP_URL and MAIL_FROM. */
   settings?: NodeJS.ProcessEnv
-  /**
-   * TRUSTED_PROXIES for the server: trusting loopback lets each test suite pick its client IP (X-Forwarded-For).
-   * Ignored with `edge`: the server then trusts only the edge (`edgePeers`, scripts/edge.ts).
-   */
   trustedProxies?: string
 }
 
-/** The two authors, new ones with random passwords unless the app shares another one's accounts. */
 const accounts = (alongside: RunningApp | undefined) => ({
   otherUser: alongside?.otherUser ?? { email: 'other@example.test', name: 'Other Author', password: password() },
   user: alongside?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
 })
 
-/** Resets the test database (migrations included) and creates the accounts, verified. */
 const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: Array<User>) => {
   await resetTestDatabase(databaseUrl)
   await Promise.all(
@@ -105,7 +80,6 @@ const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: 
   )
 }
 
-/** Where the app listens, and where its users reach it: the edge's port when there is one. */
 type Ports = { app: string; directUrl: string; edge?: string; url: string }
 
 const choosePorts = async (edge: EdgeOptions | undefined): Promise<Ports> => {
@@ -118,7 +92,6 @@ const choosePorts = async (edge: EdgeOptions | undefined): Promise<Ports> => {
   return { app, directUrl, edge: port, url: `${edge.tls ? 'https' : 'http'}://localhost:${port}` }
 }
 
-/** The server's environment: this process's, the app's origin and database, and `settings` last. */
 const serverEnv = (options: StartAppOptions, ports: Ports): NodeJS.ProcessEnv => ({
   ...process.env,
   APP_URL: ports.url,
@@ -131,7 +104,6 @@ const serverEnv = (options: StartAppOptions, ports: Ports): NodeJS.ProcessEnv =>
   ...options.settings,
 })
 
-/** Starts the edge on `ports.edge` in front of the app, once the app is ready. */
 const startEdgeInFront = async (edge: EdgeOptions, ports: Ports & { edge: string }): Promise<RunningEdge> =>
   startEdge({
     logFile: edge.logFile,
@@ -141,7 +113,6 @@ const startEdgeInFront = async (edge: EdgeOptions, ports: Ports & { edge: string
     upstreamPort: ports.app,
   })
 
-/** Waits for the server, then starts the edge if asked; stops whatever started if either fails. */
 const startServing = async (options: StartAppOptions, ports: Ports, server: ServerProcess) => {
   let edge: RunningEdge | undefined
   const stop = async () => {
@@ -160,12 +131,6 @@ const startServing = async (options: StartAppOptions, ports: Ports, server: Serv
   return { edgeCertificateSpki: edge?.certificateSpki, stop }
 }
 
-/**
- * Starts the built server on a free port against `databaseUrl`, which must name a *_test database: it is
- * dropped and recreated. Two accounts are created: `user` (the author the tests act as) and `otherUser`
- * (a second author for isolation checks). With `alongside`, the server shares that one's database, accounts
- * and secret instead, so a run can test two configurations (for example both sign-up policies) at once.
- */
 export const startApp = async (options: StartAppOptions): Promise<RunningApp> => {
   assertFreshBuild()
   const ports = await choosePorts(options.edge)

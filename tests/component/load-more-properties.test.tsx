@@ -1,4 +1,3 @@
-// Model-based browser property test (`fc.commands` / `fc.asyncModelRun`) driving the rendered LoadMoreList.
 import { infiniteQueryOptions, useSuspenseInfiniteQuery } from '@tanstack/react-query'
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'

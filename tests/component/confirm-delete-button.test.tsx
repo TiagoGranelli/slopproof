@@ -1,6 +1,3 @@
-// ConfirmDeleteButton: Delete asks first in an alert dialog, focus comes back to Delete, and only a confirmation starts
-// the deletion, once focus is back. How a feature's delete request behaves is tested with the feature
-// (delete-post.test.tsx).
 import { describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import { ConfirmDeleteButton } from '#/components/confirm-delete/confirm-delete-button.tsx'
@@ -12,7 +9,6 @@ const dialog = () => page.getByRole('alertdialog', { name: 'Delete this note?' }
 const keepIt = () => dialog().getByRole('button', { name: 'Keep it' })
 const confirmDelete = () => dialog().getByRole('button', { exact: true, name: 'Delete' })
 
-/** Renders the button with a confirmation that records where focus was when it ran. */
 const renderButton = async (pending = false) => {
   const focusedOnConfirm: Array<Element | null> = []
   const onConfirm = vi.fn<() => void>(() => void focusedOnConfirm.push(document.activeElement))

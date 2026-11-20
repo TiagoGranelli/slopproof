@@ -1,4 +1,3 @@
-// The closed server (CLOSED_APP_URL) runs the default AUTH_SIGN_UP=closed: no way to create an account over HTTP.
 import { expect, expectHydrated, test } from './support/app.ts'
 
 const closedAppUrl = process.env.CLOSED_APP_URL!

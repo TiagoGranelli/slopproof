@@ -1,6 +1,3 @@
-// lazyFormSchema (src/components/form/lazy-schema.ts): a form's Effect Schema loaded on the first interaction. It
-// loads once, validates and decodes with the real schema once loaded, refuses to answer before, and retries a
-// load that failed (a chunk request that did not arrive).
 import { Schema } from 'effect'
 import { describe, expect, it, vi } from 'vitest'
 import { lazyFormSchema } from '#/components/form/lazy-schema.ts'

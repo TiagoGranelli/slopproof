@@ -1,7 +1,3 @@
-// Query budgets against real Postgres: each repository method, and each server path that reads a list of
-// rows, issues a fixed number of SQL statements whatever the data size. An N+1 (a query per row) fails here
-// with the method's name and the statements it sent. A new repository method gets a budget here, or in a file
-// of its own next to this one.
 import { Effect, Layer } from 'effect'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { Json } from '#/contract/json.ts'
@@ -23,10 +19,8 @@ describe('DatabaseHealth', () => {
   })
 })
 
-/** One of Better Auth's endpoints, by method and path under /api/auth: `POST /revoke-sessions`. */
 type Endpoint = `${'GET' | 'POST'} /${string}`
 
-/** A request to Better Auth's router as a signed-in browser of this app would send it. */
 const request = (endpoint: Endpoint, cookie: string, body: Json = {}) => {
   const [method, path] = endpoint.split(' ') as ['GET' | 'POST', string]
   return auth.handler(
@@ -41,7 +35,6 @@ const request = (endpoint: Endpoint, cookie: string, body: Json = {}) => {
   )
 }
 
-/** An account signed in once (the cookie's session), plus `others` more sessions. */
 const signedIn = async (others: number) => {
   const account = await createAccount(`sessions-${others}`)
   const response = await auth.handler(
@@ -63,24 +56,12 @@ const signedIn = async (others: number) => {
   return { cookie, password: account.password }
 }
 
-/**
- * Better Auth's session endpoints behind the account page (listSessions, revokeSession and the sign-out
- * actions in src/lib/auth.functions.ts, which map the listed rows in memory), called through its router like
- * callAuthEndpoint does. Counted at pg's Client, which Better Auth's Drizzle adapter uses.
- */
 describe('session endpoints', () => {
-  /**
-   * Statements each endpoint may send for an account with the cookie's session plus `others` more. Better Auth
-   * 1.7.6 revokes other sessions one by one (a lookup and a delete per session, `Promise.all` over
-   * `internalAdapter.deleteSession` in its /revoke-other-sessions): a known upstream N+1 (better-auth#11433),
-   * budgeted as it is so that it cannot grow unnoticed and a fix upstream shows up here. The others are constant.
-   */
   const BUDGETS = {
     'GET /list-sessions': () => 3,
+    'POST /change-password': () => 7,
     'POST /revoke-other-sessions': (others: number) => 3 + 2 * others,
     'POST /revoke-sessions': () => 4,
-    // changePassword in src/lib/auth.functions.ts always signs the other sessions out with it.
-    'POST /change-password': () => 7,
   }
   const bodies: Partial<Record<keyof typeof BUDGETS, (password: string) => Json>> = {
     'POST /change-password': (password) => ({

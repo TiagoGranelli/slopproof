@@ -1,4 +1,3 @@
-// Router defaults (src/router.tsx): the error, not-found and pending states every route falls back to.
 import type { ErrorComponentProps } from '@tanstack/react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { page } from 'vitest/browser'

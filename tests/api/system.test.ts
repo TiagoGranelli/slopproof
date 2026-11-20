@@ -1,4 +1,3 @@
-// Liveness and readiness handlers over the in-memory repository (tests/api/harness.ts).
 import { assert, describe, it } from '@effect/vitest'
 import { Effect } from 'effect'
 import { afterEach } from 'vitest'

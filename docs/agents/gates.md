@@ -12,7 +12,7 @@ covers and how to make an exception.
 | --- | --- |
 | `secrets` | Betterleaks on the staged changes, only when a `betterleaks` 2 binary is on the `PATH` (CI's `secrets` job always runs). Until 2.0.0 is released Homebrew installs version 1, which the job skips: take 2.0.0-rc.1 from the [release](https://github.com/betterleaks/betterleaks/releases/tag/v2.0.0-rc.1) |
 | `format` | `oxfmt --check` |
-| `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 3 with sorting, the `pedantic` category, TanStack Query/Router, Playwright, `eslint-plugin-react-you-might-not-need-an-effect` (`strict`) and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
+| `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 3 with sorting, the `pedantic` category, TanStack Query/Router, Playwright, `eslint-plugin-react-you-might-not-need-an-effect` (`strict`), `repo/no-comments` (ADR 0019), and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
 | `typecheck` | `tsrs --noEmit` (TypeScript 7.1 beta, the same checker the type-aware lint uses: ADR 0016) |
 | `effect` | Effect language-service diagnostics (`effect-tsgo diagnostics --strict`); every rule whose default is a suggestion is promoted to a warning in `tsconfig.json`, so it fails too |
 | `deadcode` | Fallow with `--fail-on-issues`: unused files, exports, types and dependencies, zones |
@@ -42,10 +42,11 @@ Fix what a gate reports; every failure message says how. `git commit --no-verify
 same gates anyway. An exception is always a visible edit next to its reason, and `.github/CODEOWNERS` routes the
 gate files to review:
 
-- **Lint:** a rule that is wrong for one line takes `// oxlint-disable-next-line <rule>` under a comment line
+- **Lint:** a rule that is wrong for one line takes `// oxlint-disable-next-line <rule>` under a single comment line
   saying why (`tests/unit/repo-policy.test.ts` rejects one without; a stale directive fails). `@ts-expect-error`
-  needs a reason of 10 or more characters; `@ts-ignore` and `@ts-nocheck` are banned. Turned-off rules are
-  commented in `.config/oxlint/`.
+  needs a reason of 10 or more characters; `@ts-ignore` and `@ts-nocheck` are banned. `repo/no-comments`
+  (`.config/oxlint/no-comments-plugin.ts`, ADR 0019) rejects every other comment in JS/TS files, so every surviving
+  comment is anchored to a machine-checked directive. Turned-off rules are documented in ADRs and here.
 - **Repository syntax rules** (`eslint-js/no-restricted-syntax` selectors and `no-restricted-globals` in `.config/oxlint/`, each message says
   what to do instead): in `src/`, `useEffect`/`useLayoutEffect`/`useInsertionEffect`, imperative timers
   (`setTimeout`, `setInterval`, `requestAnimationFrame`, `requestIdleCallback`; ADR 0017), `as unknown as`, a

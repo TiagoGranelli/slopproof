@@ -1,5 +1,3 @@
-// describeApiError turns whatever the SDK threw into the sentence the UI shows. It must never show raw
-// server output, and every contract error tag has its own message. Pure function: no app needed.
 import { describe, expect, it } from 'vitest'
 import { apiErrorTag, describeApiError, fieldIssue } from '#/lib/api-error.ts'
 
@@ -13,7 +11,6 @@ describe('describeApiError', () => {
     })
   })
 
-  // Non-JSON bodies (CSRF "Forbidden", a proxy's HTML 502 page), empty bodies and other shapes.
   const untagged: Array<[string, unknown]> = [
     ['a plain-text body', 'Forbidden'],
     ['an HTML error page', '<html><body>502 Bad Gateway: upstream 10.0.0.7</body></html>'],

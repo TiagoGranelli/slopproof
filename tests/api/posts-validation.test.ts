@@ -1,8 +1,3 @@
-// The posts endpoints' input rules through RequestValidation (tests/api/middleware.test.ts): each invalid body,
-// cursor and limit becomes the documented 400 ValidationError. The typed client refuses to encode an invalid
-// payload, so these requests go through webHandler (raw Requests into the same handlers). The integration suite
-// only checks the tag against the running app; this pins the message and the issue paths (issues name the rule,
-// never the rejected value).
 import { describe, expect, it, onTestFinished } from '@effect/vitest'
 import * as fc from 'fast-check'
 import { POST_MAX_LENGTH, POSTS_PAGE_MAX } from '#/contract/limits.ts'
@@ -26,7 +21,6 @@ const send = async (method: string, path: string, body?: string) => {
 
 describe('payload validation', () => {
   const invalid: Array<[string, string, string]> = [
-    // The contract's own messages (src/contract/post-input.ts), which the post forms show too.
     ['empty', JSON.stringify({ body: '' }), 'Write something to post.'],
     ['untrimmed', JSON.stringify({ body: ' hi ' }), 'Remove the spaces before and after the text.'],
     [
@@ -34,7 +28,6 @@ describe('payload validation', () => {
       JSON.stringify({ body: 'x'.repeat(POST_MAX_LENGTH + 1) }),
       `Use at most ${POST_MAX_LENGTH} characters.`,
     ],
-    // Postgres text cannot store U+0000; unchecked, the real repository answers 500 (src/contract/stored-text.ts).
     ['NUL-carrying', JSON.stringify({ body: 'before\u0000after' }), NUL_MESSAGE],
     ['not a string', JSON.stringify({ body: 42 }), 'Expected string'],
     ['missing', JSON.stringify({}), 'Missing key'],
@@ -66,7 +59,6 @@ describe('payload validation', () => {
   })
 })
 
-/** Encodes a cursor key the way the server does: base64url JSON. */
 const cursor = (key: unknown) => Buffer.from(JSON.stringify(key)).toString('base64url')
 
 describe('list query validation', () => {
@@ -78,7 +70,6 @@ describe('list query validation', () => {
     ['a cursor with a non-UUID id', `cursor=${cursor({ ...valid, id: 'post-1' })}`],
     ['a cursor at millisecond precision', `cursor=${cursor({ ...valid, createdAt: '2026-01-01T00:00:01.000Z' })}`],
     ['a cursor on February 30', `cursor=${cursor({ ...valid, createdAt: '2026-02-30T00:00:00.000000Z' })}`],
-    // Postgres would read past the Z (`::timestamptz`) and fail the query: a 500 instead of a 400.
     ['a cursor with text after its Z', `cursor=${cursor({ ...valid, createdAt: `${valid.createdAt}junk` })}`],
     ['a limit of 0', 'limit=0'],
     ['a limit over the maximum', `limit=${POSTS_PAGE_MAX + 1}`],

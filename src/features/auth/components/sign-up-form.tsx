@@ -8,13 +8,8 @@ import { AuthStatus } from '#/features/auth/components/auth-status.tsx'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.SignUpInput))
 
-// An address that already has an account is not a failure here (no enumeration, see signUp), so it has no field.
 const FIELD_CODES = { INVALID_EMAIL: 'email', PASSWORD_TOO_LONG: 'password', PASSWORD_TOO_SHORT: 'password' } as const
 
-/**
- * Creates an account. The answer is the same whether or not the address already has one (no enumeration):
- * either way the next step is in the inbox.
- */
 export function SignUpForm() {
   const signUp = useSignUp()
   const controller = useAuthFormController({ fieldCodes: FIELD_CODES })

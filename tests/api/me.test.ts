@@ -1,4 +1,3 @@
-// GET /api/me through the typed client (tests/api/harness.ts): the session's user, or 401.
 import { assert, describe, it } from '@effect/vitest'
 import { Effect } from 'effect'
 import { apiLayer, authors, clientAs } from './harness.ts'

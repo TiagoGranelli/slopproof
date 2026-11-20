@@ -1,4 +1,3 @@
-// Query budgets of the example's repository (see query-budget.test.ts): a list sends one statement for 1 row or 50.
 import { Effect, Layer } from 'effect'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostId, type UserId } from '#/contract/ids.ts'
@@ -14,7 +13,6 @@ afterAll(() => pool.end())
 const repoLayer = PostsRepo.layer.pipe(Layer.provide(recordingDatabase))
 
 type Repo = typeof PostsRepo.Service
-/** Runs one repository call and checks it sent exactly `budget` statements. */
 const withBudget = <A, E>(what: string, n: number, call: (repo: Repo) => Effect.Effect<A, E>) =>
   budget(
     what,
@@ -51,11 +49,8 @@ describe('PostsRepo', () => {
     )
     expect(next.items).toHaveLength(20)
 
-    // The public list joins the author's name in the same statement, however many authors a page holds.
     const small = await withBudget('listPublic (limit 1)', 1, (repo) => repo.listPublic({ limit: 1 }))
     expect(small.items).toHaveLength(1)
-    // From below the author with 50 posts' second page: their last 10, then older posts, the other author's
-    // among them. Not from the top of the list, where other files' newer posts may fill a whole page by one author.
     const large = await withBudget('listPublic (limit 50)', 1, (repo) =>
       repo.listPublic({ cursor: lastKey(next), limit: 50 }),
     )
@@ -64,14 +59,11 @@ describe('PostsRepo', () => {
 
   it('creates, edits and deletes in one statement each, and edits move updatedAt', async () => {
     const created = await withBudget('create', 1, (repo) => repo.create(few, 'budgeted'))
-    // Postgres generated a time-ordered id (the column default, uuidv7()).
     expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     const updated = await withBudget('update', 1, (repo) => repo.update(few, created.id, 'budgeted, edited'))
     expect(updated?.createdAt).toBe(created.createdAt)
     expect(Date.parse(updated!.updatedAt)).toBeGreaterThan(Date.parse(created.updatedAt))
-    // Another author's post: the same single statement finds nothing.
     expect(await withBudget('update (not the owner)', 1, (repo) => repo.update(many, created.id, 'x'))).toBeUndefined()
-    // A malformed id never reaches Postgres.
     expect(
       await withBudget('update (malformed id)', 0, (repo) => repo.update(few, PostId.make('not-a-uuid'), 'x')),
     ).toBeUndefined()

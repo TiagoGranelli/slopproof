@@ -4,7 +4,6 @@ import {
   describeAuthFailure,
 } from '#/features/auth/utils/describe-auth-failure.ts'
 
-/** Explicit states of an account form across validation, submission, errors and completion. */
 export type AuthFormState =
   | { readonly status: 'idle' }
   | { readonly status: 'validating' }
@@ -17,7 +16,6 @@ export type AuthFormState =
   | { readonly message: string; readonly status: 'form-error' }
   | { readonly status: 'succeeded' }
 
-/** Every event the auth form state chart handles. */
 export type AuthFormEvent =
   | { readonly type: 'SUBMIT_REQUESTED' }
   | { readonly message: string; readonly type: 'SCHEMA_LOAD_FAILED' }
@@ -28,7 +26,6 @@ export type AuthFormEvent =
   | { readonly type: 'FOCUS_APPLIED' }
   | { readonly type: 'RESET' }
 
-/** Classifies a failed auth submission into either field-level issues or a form-level alert. */
 const authFailureState = (error: Error, fieldCodes: AuthFieldCodes = {}): AuthFormState => {
   const issues = authFieldIssues(error, fieldCodes)
   if (Object.keys(issues).length > 0) {
@@ -37,11 +34,9 @@ const authFailureState = (error: Error, fieldCodes: AuthFieldCodes = {}): AuthFo
   return { message: describeAuthFailure(error), status: 'form-error' }
 }
 
-/** Initial state of an auth form, seeding any failure returned by a non-JS FormData post. */
 export const initialAuthFormState = (initialError: Error | null = null, fieldCodes?: AuthFieldCodes): AuthFormState =>
   initialError ? authFailureState(initialError, fieldCodes) : { status: 'idle' }
 
-/** True while the form is loading its schema, validating, or waiting on the server. */
 export const isAuthFormBusy = (state: AuthFormState): boolean =>
   state.status === 'validating' || state.status === 'submitting'
 
@@ -122,7 +117,6 @@ const transitionFieldError = (
   }
 }
 
-/** Pure state transition function for every AuthForm lifecycle. */
 export const transitionAuthForm = (state: AuthFormState, event: AuthFormEvent): AuthFormState => {
   switch (state.status) {
     case 'idle':

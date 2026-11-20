@@ -1,4 +1,3 @@
-// PostComposer: states the E2E suite cannot reach cheaply (pending, every error branch, the exact limit).
 import { HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -11,7 +10,6 @@ import { pressAndKeepFocus, renderInApp } from './test-utils.tsx'
 const field = () => page.getByLabelText('New post')
 const publish = () => page.getByRole('button', { name: 'Publish' })
 const count = () => page.getByText(/^\d+\/280/)
-/** The form has no accessible name (so no `form` role): reach it from its field. */
 const form = () => page.elementLocator(field().element().closest('form')!)
 
 const publishDraft = async (draft: string) => {
@@ -48,7 +46,6 @@ describe('PostComposer', () => {
       .toHaveAccessibleDescription(
         `${POST_MAX_LENGTH + 1}/${POST_MAX_LENGTH} characters. Over the ${POST_MAX_LENGTH}-character limit.`,
       )
-    // Not truncated or blocked: the author may still trim it, and the server's answer is shown.
     await expect.element(publish()).toBeEnabled()
   })
 
@@ -90,7 +87,6 @@ describe('PostComposer', () => {
   })
 
   it('flags a draft over the limit on Publish without sending it, moves focus to it, and clears once fixed', async () => {
-    // No handler: a request would fail the test (setup.ts).
     const onPublished = vi.fn<() => void>()
     await renderInApp(<PostComposer onPublished={onPublished} />)
     await publishDraft('x'.repeat(POST_MAX_LENGTH + 1))
@@ -99,7 +95,6 @@ describe('PostComposer', () => {
     await expect.element(error).toHaveTextContent(`Use at most ${POST_MAX_LENGTH} characters.`)
     await expect.element(field()).toHaveFocus()
     await expect.element(field()).toHaveAttribute('aria-describedby', 'post-body-count post-body-error')
-    // Checked again on every change once flagged.
     await field().fill('x'.repeat(POST_MAX_LENGTH))
     await expect.element(error).not.toBeInTheDocument()
     await expect.element(field()).not.toHaveAttribute('aria-invalid')
@@ -107,7 +102,6 @@ describe('PostComposer', () => {
   })
 
   it('flags a pasted NUL character on Publish without sending it, with the API message', async () => {
-    // No handler: a request would fail the test (setup.ts). Postgres cannot store U+0000 (src/contract/stored-text.ts).
     await renderInApp(<PostComposer />)
     await publishDraft('before\u0000after')
     await expect
@@ -159,7 +153,6 @@ describe('PostComposer', () => {
 
     await expect.element(page.getByRole('alert')).toHaveTextContent(message)
     await expect.element(field()).toHaveValue('keep me')
-    // Only an issue with the text marks the field invalid; the alert describes the draft either way.
     expect(field().element().getAttribute('aria-invalid')).toBe(invalid ? 'true' : null)
     await expect.element(field()).toHaveAttribute('aria-describedby', describedBy)
     await expect.element(publish()).toBeEnabled()

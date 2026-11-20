@@ -1,4 +1,3 @@
-// Load-more pagination state machine: explicit examples plus fast-check model-based command sequences (`fc.commands` / `fc.modelRun`).
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
@@ -25,12 +24,10 @@ const assertLoadMoreInvariants = (model: LoadMoreModel, real: LoadMoreReal) => {
   const { state } = real
   expect(state.status).toBe(model.status)
   expect(state.loadedCount).toBe(model.loadedCount)
-  // Never two page fetches in flight.
   expect(model.inFlight).toBeLessThanOrEqual(1)
   expect(state.status === 'loading').toBe(model.inFlight === 1)
   if (state.status === 'idle' || state.status === 'exhausted') {
     expect(state.focusIndex).toBe(model.focusIndex)
-    // Any pending focus target strictly indexes an existing item.
     if (state.focusIndex !== null) {
       expect(state.focusIndex).toBeGreaterThanOrEqual(0)
       expect(state.focusIndex).toBeLessThan(state.loadedCount)

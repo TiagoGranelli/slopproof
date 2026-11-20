@@ -1,4 +1,3 @@
-// Model-based browser property test (`fc.commands` / `fc.asyncModelRun`) driving the rendered MyPost editor.
 import * as fc from 'fast-check'
 import { HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'

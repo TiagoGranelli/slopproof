@@ -1,7 +1,3 @@
-// postgresRateLimitStorage (src/server/auth-rate-limit.ts) against real Postgres: the rule every limit uses
-// (Better Auth's sign-in limit and the business API's write limit), its atomicity under concurrent requests,
-// the wait it reports, pruning and its query budget. Each test has its own key; time moves by editing the row
-// or with a fake Date, never by sleeping.
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { postgresRateLimitStorage as storage } from '#/server/auth-rate-limit.ts'
@@ -12,7 +8,6 @@ import { expectBudget, statementsOf } from './helpers.ts'
 const RULE = { max: 3, window: 60 }
 const newKey = () => `test|${crypto.randomUUID()}`
 const row = async (key: string) => (await db.select().from(rateLimit).where(eq(rateLimit.key, key)))[0]
-/** Moves the window of `key` into the past, as if its last admitted request happened `ms` earlier. */
 const age = (key: string, ms: number) =>
   pool.query('update rate_limit set last_request = last_request - $1 where key = $2', [ms, key])
 
@@ -48,7 +43,6 @@ describe('postgresRateLimitStorage', () => {
     }
     const lastAdmitted = (await row(key))!.lastRequest
     expect(await storage.consume(key, RULE)).toEqual({ allowed: false, retryAfter: RULE.window })
-    // A refused request is counted but does not move the window.
     expect(await row(key)).toMatchObject({ count: RULE.max + 1, lastRequest: lastAdmitted })
   })
 
@@ -90,7 +84,6 @@ describe('postgresRateLimitStorage', () => {
   })
 
   it('prunes rows idle for ten minutes, at most once per ten minutes, and costs one statement otherwise', async () => {
-    // A process prunes on its first request and then every ten minutes; jump past that with a fake clock.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(Date.now() + 60 * 60 * 1000)
     const now = Date.now()
@@ -102,7 +95,6 @@ describe('postgresRateLimitStorage', () => {
 
     const first = await statementsOf(async () => {
       await storage.consume(key, RULE)
-      // The prune runs in the background; wait until it has deleted the idle row.
       await expect.poll(async () => (await row(idle)) ?? null).toBeNull()
     })
     const remaining = await db
@@ -110,14 +102,12 @@ describe('postgresRateLimitStorage', () => {
       .from(rateLimit)
       .where(inArray(rateLimit.key, [idle, recent]))
     expect(remaining).toEqual([{ key: recent }])
-    // The upsert and the prune; the polling reads above are the test's own.
     expectBudget(
       'consume (pruning)',
       first.statements.filter((sql) => !sql.startsWith('select')),
       2,
     )
 
-    // Within the next ten minutes: one statement per request, whatever the count.
     vi.setSystemTime(now + 9 * 60 * 1000)
     const later = await statementsOf(async () => {
       for (let i = 0; i < 5; i++) {

@@ -4,9 +4,6 @@ import { AlertDialog as AlertDialogPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 import { Button } from '#/components/ui/button.tsx'
 
-// Radix locks page scroll while a dialog is open with a <style> element it injects (react-remove-scroll-bar,
-// which asks get-nonce for a nonce). The CSP blocks it without the page's nonce (ADR 0010), which the router puts
-// in <meta property="csp-nonce">. Runs once, in the browser, when a page that can open a dialog loads.
 const pageNonce =
   typeof document === 'undefined'
     ? undefined
@@ -34,8 +31,6 @@ function AlertDialogOverlay({ className, onMouseDown, ...props }: ComponentProps
       data-slot="alert-dialog-overlay"
       onMouseDown={(event) => {
         onMouseDown?.(event)
-        // Alert dialogs ignore outside clicks; preventing default keeps mousedown on the dimmed backdrop
-        // from blurring the focused dialog control onto document.body.
         event.preventDefault()
       }}
       {...props}
@@ -43,7 +38,6 @@ function AlertDialogOverlay({ className, onMouseDown, ...props }: ComponentProps
   )
 }
 
-// Trimmed to the default size: every class in this file ships in the render-blocking stylesheet of every page.
 function AlertDialogContent({ className, ...props }: ComponentProps<typeof AlertDialogPrimitive.Content>) {
   return (
     <AlertDialogPortal>

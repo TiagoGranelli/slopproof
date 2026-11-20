@@ -1,6 +1,3 @@
-// Handler branching for the posts groups, through the real contract with an in-memory repository and a
-// fake session store (tests/api/harness.ts). The database-backed behavior (SQL, ownership in the WHERE
-// clause, rate limits, CSRF) is covered by tests/integration against the running app.
 import { assert, describe, it } from '@effect/vitest'
 import { Effect } from 'effect'
 import { PostId } from '#/contract/ids.ts'
@@ -10,7 +7,6 @@ import type { PostPage } from '#/contract/posts.ts'
 import { apiLayer, authors, clientAs } from './harness.ts'
 
 const MISSING_ID = PostId.make('00000000-0000-4000-8000-000000000000')
-/** A list request without `cursor` or `limit`: the first page at the default size. */
 const firstPage = { query: {} }
 
 describe('myPosts', () => {
@@ -67,9 +63,6 @@ describe('myPosts', () => {
     }).pipe(Effect.provide(apiLayer())),
   )
 
-  // Another author's post must be indistinguishable from a missing one: same tag, same status, the id echoed
-  // back, and the post left untouched. The path id is a plain string in the contract, so the typed client
-  // can also send one that is not a UUID.
   it.effect('treats another author’s post exactly like a missing one', () =>
     Effect.gen(function* () {
       const [alice, bob] = [yield* clientAs('alice'), yield* clientAs('bob')]
@@ -92,7 +85,6 @@ describe('myPosts', () => {
     }).pipe(Effect.provide(apiLayer())),
   )
 
-  // Every myPosts endpoint sits behind Authentication, which runs before request validation.
   it.effect.each(['none', 'forged'] as const)('answers 401 on every endpoint with session %s', (token) =>
     Effect.gen(function* () {
       const anonymous = yield* clientAs(token)
@@ -113,7 +105,6 @@ describe('myPosts', () => {
     }).pipe(Effect.provide(apiLayer())),
   )
 
-  // Create, edit and delete share one bucket per user; refused writes change nothing; reads are not counted.
   it.effect('answers 429 past the write limit, per user, and keeps reading', () =>
     Effect.gen(function* () {
       const [alice, bob] = [yield* clientAs('alice'), yield* clientAs('bob')]
@@ -122,7 +113,6 @@ describe('myPosts', () => {
       }
       const post = yield* alice.myPosts.create({ payload: { body: 'kept' } })
       yield* alice.myPosts.update({ params: { id: post.id }, payload: { body: 'edited' } })
-      // A write that finds nothing still counts.
       yield* alice.myPosts.remove({ params: { id: MISSING_ID } }).pipe(Effect.flip)
 
       for (const [index, response] of [
@@ -133,11 +123,9 @@ describe('myPosts', () => {
           responseMode: 'response-only',
         }),
         yield* alice.myPosts.remove({ params: { id: post.id }, responseMode: 'response-only' }),
-        // Counted before the body is read, so an invalid one is refused the same way.
         yield* alice.myPosts.update({ params: { id: post.id }, payload: { body: 'x' }, responseMode: 'response-only' }),
       ].entries()) {
         assert.strictEqual(response.status, 429)
-        // The wait the store computed (see the harness's clock), not a fixed stand-in such as the whole window.
         assert.deepStrictEqual(yield* response.json, {
           _tag: 'RateLimited',
           message: 'Too many changes in a short time',
@@ -197,7 +185,6 @@ describe('publicPosts', () => {
   )
 })
 
-/** The bodies on each page of a list, following `nextCursor` until it is null. */
 const allPages = (
   list: (page: { query: { cursor?: PageCursor; limit: number } }) => Effect.Effect<PostPage, unknown>,
   limit: number,
@@ -216,8 +203,6 @@ const allPages = (
 const bodies = (count: number) => Array.from({ length: count }, (_, i) => `post ${count - 1 - i}`)
 
 describe('pagination', () => {
-  // Default clock (one second apart), same millisecond (equal `createdAt` on the wire, so a cursor built from
-  // it would skip or repeat posts) and same instant (only the id orders them).
   it.effect.each([
     ['a second', 1_000_000],
     ['a microsecond', 1],

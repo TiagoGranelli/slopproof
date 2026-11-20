@@ -4,7 +4,6 @@ import { changePassword } from '#/lib/auth.functions.ts'
 
 type ChangePasswordInput = DataOf<typeof changePassword>
 
-/** Changes the password and ends every other session of the account; the session list is then refetched. */
 export function useChangePassword({
   mutationConfig,
 }: { mutationConfig?: AuthMutationConfig<ChangePasswordInput> } = {}) {

@@ -1,5 +1,3 @@
-// RelativeTime: the same UTC date from the server and during hydration (no mismatch), then the browser's relative,
-// local reading, with the exact time kept in `datetime` and on hover.
 import { describe, expect, it, vi } from 'vitest'
 import { RelativeTime } from '#/components/time/relative-time.tsx'
 import { renderInApp, serverRendered } from './test-utils.tsx'

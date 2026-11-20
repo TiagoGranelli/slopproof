@@ -1,4 +1,3 @@
-// Model-based browser property test (`fc.commands` / `fc.asyncModelRun`) driving the rendered LoginForm.
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'

@@ -1,5 +1,3 @@
-// Security behavior of the running app: headers and CSP, CSRF, the Better Auth surface, sessions,
-// request limits and sign-in rate limiting, against the production build (global-setup.ts).
 import { beforeAll, describe, expect, it } from 'vitest'
 import { appUrl, clientIps, postSignIn, sessionCookie, signIn, sharedUsers } from './helpers.ts'
 
@@ -23,7 +21,6 @@ describe('headers', () => {
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-(inline|eval)'/)
     expect(csp).toContain("frame-ancestors 'none'")
     expect(csp).toContain("object-src 'none'")
-    // E2E Firefox runs with COOP enforcement off (playwright.config.ts), so the header is only checked here.
     expect(res.headers.get('cross-origin-opener-policy')).toBe('same-origin')
     const scripts = [...(await res.text()).matchAll(/<script\b[^>]*>/g)].map((m) => m[0])
     expect(scripts.length).toBeGreaterThan(0)
@@ -79,8 +76,6 @@ describe('csrf', () => {
 })
 
 describe('auth surface', () => {
-  // Better Auth endpoints the app does not use (the allowlist in src/server/http/auth-endpoints.ts), and
-  // method or path variants of ones it does. Sign-up's absence with AUTH_SIGN_UP=closed: auth-sign-up.test.ts.
   const unused = [
     ['POST', '/sign-in/social'],
     ['POST', '/update-user'],
@@ -97,7 +92,6 @@ describe('auth surface', () => {
     ['POST', '/sign-in/email/'],
     ['POST', '/list-sessions'],
     ['GET', '/revoke-sessions'],
-    // Used by the account server functions in-process, never over HTTP (auth-account.test.ts).
     ['POST', '/sign-up/email'],
     ['POST', '/send-verification-email'],
     ['GET', '/verify-email?token=x'],
@@ -110,8 +104,6 @@ describe('auth surface', () => {
     ['POST', '/revoke-sessions'],
     ['POST', '/delete-user'],
   ] as const
-  // Sent without a session: an exposed endpoint then answers 400/401 instead of 404, and a regression that
-  // re-exposes e.g. /update-user cannot change the users other tests are using.
   it.each(unused)('%s %s is not exposed', async (method, path) => {
     const res = await fetch(`${appUrl}/api/auth${path}`, {
       body: method === 'POST' ? '{}' : null,
@@ -138,7 +130,6 @@ const postTo = (path: string, body: BodyInit) =>
   } as RequestInit)
 
 describe('requests', () => {
-  // Checked before routing, so any path shows it.
   it('rejects bodies over 64 KiB and bodies without a length', async () => {
     expect((await postTo('/api/me', JSON.stringify({ body: 'x'.repeat(70_000) }))).status).toBe(413)
     const stream = new ReadableStream({
@@ -163,9 +154,6 @@ describe('requests', () => {
     }
   })
 
-  // Start throws on an unknown id before the function runs; serverFunctionRequestErrors
-  // (src/lib/server-function-errors.ts) turns that into a generic 500. Once TanStack/router#8246 ships, this
-  // expects 404 (ADR 0009).
   it('answers an unknown server function with an error that leaks nothing', async () => {
     const get = await fetch(`${appUrl}/_serverFn/does-not-exist`)
     const post = await fetch(`${appUrl}/_serverFn/does-not-exist`, {
@@ -212,8 +200,6 @@ describe('sessions', () => {
     expect(attempts.map((res) => res.status)).toEqual([401, 401, 401, 429])
     expect(Number(attempts[3]!.headers.get('x-retry-after'))).toBeLessThanOrEqual(10)
 
-    // The test process is the trusted proxy and its value is the last hop it vouches for: addresses prepended
-    // in front of it neither reset the bucket nor move it, even with the right password.
     const forgeries: Array<Record<string, string> & { 'x-forwarded-for': string }> = [
       { 'x-forwarded-for': `203.0.113.7, ${client}` },
       { 'x-forwarded-for': `203.0.113.8, 198.18.0.9, ${client}` },
@@ -222,7 +208,6 @@ describe('sessions', () => {
       expect((await postSignIn({ email, password }, headers)).status, JSON.stringify(headers)).toBe(429)
     }
 
-    // Another client is unaffected.
     const res = await postSignIn({ email, password }, { 'x-forwarded-for': nextIp() })
     expect(res.status).toBe(200)
   })
@@ -231,7 +216,6 @@ describe('sessions', () => {
     for (const stale of ['better-auth.session_token=stale.not-a-valid-signature', cookie]) {
       const res = await postSignIn({ email, password }, { cookie: stale, 'x-forwarded-for': nextIp() })
       expect(res.status).toBe(200)
-      // The last session cookie wins in the browser; it must be a new, working session.
       const next = sessionCookie(res)!
       expect(next).toBeTruthy()
       expect(next).not.toBe(stale)
@@ -249,7 +233,6 @@ describe('sessions', () => {
     })
     expect(out.status).toBe(200)
     expect((await me(session)).status).toBe(401)
-    // Other sessions of the same user are not affected.
     expect((await me(cookie)).status).toBe(200)
   })
 })

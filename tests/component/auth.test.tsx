@@ -1,4 +1,3 @@
-// LoginForm and sign-out: pending states, every failure message, and where each success leads.
 import { describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import { LoginForm } from '#/features/auth/components/login-form.tsx'
@@ -26,7 +25,6 @@ describe('LoginForm', () => {
     await expect.element(password()).toHaveAttribute('autocomplete', 'current-password')
     await expect.element(email()).toBeRequired()
     await expect.element(password()).toBeRequired()
-    // A native submit (before hydration) would be a POST to /login, never a GET with the password in the URL.
     await expect.element(formOf(signInButton())).toHaveAttribute('method', 'post')
     await expect.element(signInButton()).toBeEnabled()
   })
@@ -94,17 +92,13 @@ describe('LoginForm', () => {
     await expect.element(page.getByRole('alert')).toHaveTextContent(message)
     await expect.element(formOf(signInButton())).toHaveAccessibleDescription(message)
     await expect.element(signInButton()).toBeEnabled()
-    // Focus stays on the button, so Enter retries.
     await expect.element(signInButton()).toHaveFocus()
     expect(router.state.location.pathname).toBe('/login')
 
-    // The failure is cleared as soon as the next attempt starts.
     const retry = authCalls('signIn')
     worker.use(retry.handler, auth.signIn(held()))
     await signInButton().click()
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
-    // The retry's request must reach its handler before the test ends and the handlers are reset (setup.ts
-    // would count it as unhandled otherwise).
     await expect.poll(() => retry.data.length).toBe(1)
   })
 
@@ -166,7 +160,6 @@ describe('LoginForm', () => {
     expect(Object.fromEntries(new FormData(form()))).toEqual({ email: '', password: '', redirect: '/about' })
 
     hydrate()
-    // Once hydrated the script submits it (signIn) and the schema's messages replace the browser's.
     await expect.poll(() => form().noValidate).toBe(true)
   })
 

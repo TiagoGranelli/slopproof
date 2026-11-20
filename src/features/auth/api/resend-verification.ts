@@ -3,7 +3,6 @@ import { resendVerification } from '#/lib/auth.functions.ts'
 
 type ResendVerificationInput = DataOf<typeof resendVerification>
 
-/** Mails a new verification link to an unverified account; succeeds the same for any other address. */
 export function useResendVerification({
   mutationConfig,
 }: { mutationConfig?: AuthMutationConfig<ResendVerificationInput> } = {}) {

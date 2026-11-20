@@ -13,7 +13,6 @@ import type { SessionView } from '#/lib/auth.functions.ts'
 
 const alert = 'text-sm text-destructive'
 
-/** Better Auth lists sessions only for a recent sign-in: sign out, then back in, and return here. */
 function SignInAgain() {
   const navigate = useNavigate()
   const signOut = useSignOut({
@@ -87,11 +86,6 @@ function SessionItem(props: { session: SessionView }) {
   )
 }
 
-/**
- * The account's sessions, each one revocable, plus "sign out other sessions" and "sign out everywhere". Every
- * button here is only `aria-disabled` while its action is pending and ignores presses meanwhile: a disabled
- * button loses focus, and a keyboard user would be left on <body> when the action fails.
- */
 export function SessionList() {
   const navigate = useNavigate()
   const { data: sessions } = useSuspenseQuery(getSessionsQueryOptions())

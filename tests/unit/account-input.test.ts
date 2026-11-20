@@ -1,5 +1,3 @@
-// The account inputs (src/lib/account-input.ts) the server functions and the forms share: what the login form's
-// own post (FormData, no JavaScript) decodes to, and that it gets the same checks as the script's fields.
 import { Exit, Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { SignInFormPost } from '#/lib/account-input.ts'
@@ -12,7 +10,6 @@ const form = (fields: Record<string, string | Blob>) => {
   return data
 }
 const decodePost = Schema.decodeUnknownExit(SignInFormPost)
-/** The messages of the issues the server function's validator (Standard Schema) reports for `input`. */
 const messagesOf = (input: unknown) => {
   const validation = Schema.toStandardSchemaV1(SignInFormPost)['~standard'].validate(input)
   if ('then' in validation) {

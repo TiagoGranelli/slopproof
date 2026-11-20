@@ -5,8 +5,6 @@ type Level = 'debug' | 'info' | 'warn' | 'error'
 // oxlint-disable-next-line quality/no-unsafe-dictionary-type
 type Fields = Readonly<Record<string, unknown>>
 
-// Only the first line of a message is kept and stacks are reduced to their frames: Drizzle and pg
-// append the SQL parameters (emails, session tokens) on later lines.
 const firstLine = (text: string) => text.split('\n', 1)[0] ?? ''
 const frames = (stack: string | undefined) =>
   stack
@@ -30,7 +28,6 @@ type SerializedError =
       readonly stack: string | undefined
     }
 
-/** An Error by message, name, code, stack frames and cause (three levels deep). */
 const serializeErrorObject = (error: Error, depth: number): SerializedError => ({
   cause: error.cause !== undefined && depth < 3 ? serializeError(error.cause, depth + 1) : undefined,
   code: (error as { code?: string | number }).code,
@@ -41,10 +38,6 @@ const serializeErrorObject = (error: Error, depth: number): SerializedError => (
 
 type ThrownObject = { readonly _tag?: unknown; readonly constructor?: { readonly name: string } }
 
-/**
- * Other thrown objects (Effect data classes, library error shapes) can hold request or response data in any field:
- * only what identifies them is kept. `Object.create(null)` objects have no constructor, whatever the lib types say.
- */
 const summarizeObject = ({ _tag: tag, constructor }: ThrownObject): SerializedError => {
   return { _tag: typeof tag === 'string' ? tag : undefined, type: constructor?.name ?? 'Object' }
 }
@@ -62,10 +55,6 @@ const serializeError = (error: unknown, depth = 0): SerializedError => {
   return error instanceof Error ? serializeErrorObject(error, depth) : summarizeObject(error)
 }
 
-/**
- * One JSON object per line on stdout (stderr for errors), for log collectors.
- * Never pass request headers, cookies, bodies or query strings: they can carry credentials.
- */
 export const log = (level: Level, msg: string, fields: Fields = {}): void => {
   const { error, ...rest } = fields
   const entry = { level, msg, time: new Date().toISOString(), ...rest, error: serializeError(error) }

@@ -1,5 +1,3 @@
-// What the Lighthouse gate (scripts/lighthouse.ts) reports: lighthouse-report/summary.{json,md}, the GitHub step
-// summary, the console, and the exit code (0 pass, 1 fail, 2 inconclusive).
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +12,6 @@ import {
 } from './lighthouse-policy.ts'
 import { LANTERN_TASK_THRESHOLD_MS, type RunsSummary, type ScoreRange } from './lighthouse-runs.ts'
 
-/** One page and form factor, as summary.json lists it. */
 export type PageOutcome = {
   failingAudits: Array<string>
   formFactor: FormFactor
@@ -29,10 +26,8 @@ export type PageOutcome = {
   verdict: Verdict
 }
 
-/** How the pages were reached: the Node server directly, or through the edge over `edge` (h2, h1, http). */
 export type Setup = { edge: false | string; runs: number; shmBytes: number }
 
-/** One console line per page and form factor, as it is measured. */
 export const progressLine = (outcome: PageOutcome): string => {
   const scores = REPORTED.map((category) => `${category}=${outcome.scores[category]?.median ?? '-'}`).join(' ')
   const performance = outcome.perRun.map((run) => run.scores.performance).join(',')
@@ -41,7 +36,6 @@ export const progressLine = (outcome: PageOutcome): string => {
   return `${outcome.verdict.toUpperCase().padEnd(12)} ${outcome.page} ${outcome.formFactor} ${scores} perf runs ${performance} benchmarkIndex ${indexes} preload task ms ${preload}`
 }
 
-/** `median (min–max)`, with `*` for a category the page reports but does not gate. */
 const formatScore = (range: ScoreRange | null, gated: boolean): string => {
   if (!range) {
     return '–'
@@ -59,11 +53,6 @@ const tableRow = (outcome: PageOutcome): string => {
   return `| ${outcome.path} | ${outcome.formFactor} | ${cells.join(' | ')} | ${timings} | ${Math.round(bytes / 1024)} KiB | ${outcome.verdict}${problems} |`
 }
 
-/**
- * A line on the host when a mobile run's preload task reached Lantern's threshold: from there the simulated FCP and
- * LCP include four times that task, so they measure the host's CPU contention as much as the page (ADR 0011).
- * Desktop runs are left out: their CPU slowdown is 1, so the task adds only its own length.
- */
 const contendedHostNote = (outcomes: Array<PageOutcome>): string => {
   const tasks = outcomes
     .filter((outcome) => outcome.formFactor === 'mobile')
@@ -92,7 +81,6 @@ const tableIntro = (outcomes: Array<PageOutcome>, setup: Setup): string => {
   )
 }
 
-/** The Markdown summary: a line on how it was measured, then one row per page and form factor. */
 const summaryTable = (outcomes: Array<PageOutcome>, setup: Setup): string =>
   [
     tableIntro(outcomes, setup),
@@ -112,7 +100,6 @@ const summaryJson = (outcomes: Array<PageOutcome>, setup: Setup) => ({
   results: outcomes,
 })
 
-/** Writes summary.json and summary.md to `outputDir`, the GitHub step summary, and the table to the console. */
 export const writeReport = (outcomes: Array<PageOutcome>, setup: Setup & { outputDir: string }): void => {
   const table = summaryTable(outcomes, setup)
   writeFileSync(join(setup.outputDir, 'summary.json'), `${JSON.stringify(summaryJson(outcomes, setup), null, 2)}\n`)
@@ -129,7 +116,6 @@ export const writeReport = (outcomes: Array<PageOutcome>, setup: Setup & { outpu
   }
 }
 
-/** 1 when a page failed; else 2 when one was inconclusive (with the reason on stderr); else 0. */
 export const exitCodeOf = (outcomes: Array<PageOutcome>): number => {
   const verdicts = new Set(outcomes.map((outcome) => outcome.verdict))
   if (verdicts.has('fail')) {

@@ -1,14 +1,8 @@
 import { availableParallelism } from 'node:os'
 import { defineConfig, devices } from '@playwright/test'
 
-// tests/e2e/global-setup.ts starts the app and sets APP_URL before the workers load this file again.
 const baseURL = process.env.APP_URL ?? 'http://localhost:3000'
 
-// Every flow runs on every project. WebKit (and with it iPhone 15) needs Ubuntu's libraries and does not run
-// on every Linux host, so outside CI the default is the two desktop engines that run anywhere; `pnpm ci:local`
-// and CI run all five. Choose with PW_PROJECTS: a comma-separated list of names, or `all`. Each starts after
-// the `setup` projects, which write the data the specs share.
-// tests/e2e/seed.setup.ts: more posts than fit on a page, for the pagination spec.
 const setup = [{ name: 'seed', testMatch: /seed\.setup\.ts$/ }]
 const dependencies = setup.map((project) => project.name)
 const PROJECTS = [
@@ -18,20 +12,9 @@ const PROJECTS = [
     name: 'firefox',
     use: {
       ...devices['Desktop Firefox'],
-      // Playwright 1.63's Firefox driver sometimes never resolves the first `goto` of a page to a document with
-      // `Cross-Origin-Opener-Policy: same-origin`, which every page of the app sends: the browsing-context swap
-      // stays in the same process and Juggler answers the new document's commit from a stale cache
-      // (microsoft/playwright#42731, fixed after 1.63). With this, Firefox skips COOP's browsing-context swap;
-      // tests/integration/security.test.ts checks the header. Remove on upgrading Playwright past 1.63.
       launchOptions: { firefoxUserPrefs: { 'browser.tabs.remote.useCrossOriginOpenerPolicy': false } },
     },
   },
-  // Known upstream flake in both WebKit projects: Playwright 1.63's WebKit on Linux sometimes never resolves the
-  // first `goto` of a page to a document with COOP same-origin. The process swap COOP causes is cancelled ("Load
-  // request cancelled") and Playwright drops the abort, so `goto` waits for a commit that never comes
-  // (microsoft/playwright#42957, open; about 1 in 500 such navigations under CPU contention, none without COOP).
-  // No launch option turns COOP off here as the Firefox pref does: MiniBrowser's --features never reaches the
-  // pages Playwright creates.
   { dependencies, name: 'webkit', use: { ...devices['Desktop Safari'] } },
   { dependencies, name: 'Pixel 7', use: { ...devices['Pixel 7'] } },
   { dependencies, name: 'iPhone 15', use: { ...devices['iPhone 15'] } },
@@ -47,34 +30,22 @@ if (unknown.length) {
   )
 }
 
-// Locally a passing run is a count and a failing one its failures, each with its error, code and trace path. `line`
-// redraws one line at a terminal; into a pipe or an agent's log it would print every test, so there `dot` prints a
-// character per test. CI keeps GitHub's annotations and the HTML report.
 const LOCAL_REPORTER = process.stdout.isTTY ? 'line' : 'dot'
 
 export default defineConfig({
+  failOnFlakyTests: !!process.env.CI,
   forbidOnly: !!process.env.CI,
+  fullyParallel: false,
   globalSetup: './tests/e2e/global-setup.ts',
+  outputDir: 'test-results/playwright',
   projects: [...setup, ...PROJECTS.filter((p) => names.includes(p.name))],
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : LOCAL_REPORTER,
+  retries: process.env.CI ? 1 : 0,
   testDir: 'tests/e2e',
   timeout: 30_000,
   use: {
     baseURL,
     trace: 'retain-on-failure',
   },
-  // Playwright empties its output directory on start; the app servers' logs (test-results/app-server-e2e*.log) live
-  // next to it.
-  outputDir: 'test-results/playwright',
-  // Tried on: no faster at 8 workers, and pages then missed their hydration deadline under the load spikes.
-  fullyParallel: false,
-  // Half the CPUs, as Playwright's default, but the CPUs this process may use: Playwright counts os.cpus(), every
-  // core of the host, so in a container limited to 4 (`pnpm ci:local`) it started 16 workers and tests timed out.
-  // At most 4: on a 32-thread laptop, 4 workers ran the suite in 65 s at 3.4 GB at the peak, against 54 s at 5.7 GB
-  // with 8 and 54 s at 7.7 GB with 16. `--workers=<n>` overrides it.
   workers: Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2))),
-  // A retry keeps one bad run from hiding the report of the others, but a test that only passes on retry is a
-  // failure in CI: flakiness is fixed, not absorbed (the report names the flaky test).
-  failOnFlakyTests: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
 })

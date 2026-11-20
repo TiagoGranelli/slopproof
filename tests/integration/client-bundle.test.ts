@@ -1,9 +1,3 @@
-// What the browser bundle may carry of Effect. The forms validate with the Effect Schemas the server checks, so the
-// Schema runtime ships in a chunk the forms import on their first interaction
-// (src/components/form/lazy-schema.ts), and no page loads or preloads it up front: preloading it kept the form pages'
-// mobile Lighthouse score under 100. The contract's endpoints (`src/contract/posts.ts`, HttpApi) and the HTTP server
-// never ship: one careless value import in UI code (instead of a type, `src/contract/limits.ts` or an input module
-// such as `src/contract/post-input.ts`) would ship them. `verify:app` runs this against the build and the app.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -11,17 +5,11 @@ import { clientIps, signIn, sharedUsers } from './helpers.ts'
 
 const ASSETS = '.output/public/assets'
 
-/**
- * Strings every Effect module carries at runtime: the `~effect/<Module>` type ids (`~effect/Effect`,
- * `~effect/Schema`, `~effect/Context/Service`, ...). They survive minification because they are values.
- */
 const EFFECT_RUNTIME = /~effect\/[A-Z]/
-/** The same ids of the HttpApi and HTTP modules (`~effect/httpapi/HttpApiEndpoint`, `~effect/http/Headers`). */
 const EFFECT_HTTP = /~effect\/https?(api)?\//
 
 const read = (file: string) => readFileSync(join(ASSETS, file), 'utf8')
 
-/** The scripts a page's HTML loads or preloads before any navigation (`<script src>`, `modulepreload`). */
 const scriptsOf = async (path: string, cookie?: string) => {
   const response = await fetch(new URL(path, process.env.APP_URL), { headers: cookie ? { cookie } : {} })
   expect(new URL(response.url).pathname, `${path} redirected`).toBe(new URL(path, 'http://x').pathname)
@@ -29,7 +17,6 @@ const scriptsOf = async (path: string, cookie?: string) => {
   return [...html.matchAll(/(?:src|href)="\/assets\/([^"]+\.js)"/g)].map((match) => match[1]!)
 }
 
-/** Every page, the form pages included: the reset and verification forms only render with a token. */
 const PUBLIC_PAGES = [
   '/',
   '/about',

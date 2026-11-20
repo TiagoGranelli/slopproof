@@ -10,11 +10,6 @@ export type CspViolation = {
 
 type ReportViolation = (violation: Omit<CspViolation, 'page'>) => void
 
-/**
- * Every E2E test runs with a Content-Security-Policy violation collector: each `securitypolicyviolation`
- * event in any page of the test's browser context is reported to the test, which fails if any arrived.
- * A test that provokes violations on purpose reads and empties `cspViolations` itself.
- */
 export const test = base.extend<{ cspViolations: Array<CspViolation> }>({
   cspViolations: [
     async ({ context }, use) => {

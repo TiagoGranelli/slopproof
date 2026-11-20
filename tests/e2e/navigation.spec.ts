@@ -1,5 +1,3 @@
-// What moving between pages does beyond rendering them: focus and the screen-reader announcement after a
-// client-side navigation, the not-found page's title, and the header's session, which costs no request of its own.
 import type { Page } from '@playwright/test'
 import { APP_NAME, pageTitle } from '#/config/app.ts'
 import { expect, signIn, test, visit } from './support/app.ts'
@@ -7,7 +5,6 @@ import { expect, signIn, test, visit } from './support/app.ts'
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
 
-/** The route announcer: a polite live region inside `main` (RouteAnnouncer). */
 const announcer = (page: Page) => page.getByRole('main').locator('[aria-live="polite"]')
 
 test('a client-side navigation moves focus to the new page heading and announces its title', async ({ page }) => {
@@ -46,7 +43,6 @@ test('the header shows who is signed in from the session SSR read, with no reque
   const nav = page.getByRole('navigation', { name: 'Main' })
   await expect(nav).toContainText(author.name)
   await expect(nav.getByRole('button', { name: 'Sign out' })).toBeVisible()
-  // Between public pages the session comes from the cache that SSR filled.
   await navLink(page, 'About').click()
   await expect(page.getByRole('heading', { level: 1, name: 'About' })).toBeVisible()
   await navLink(page, APP_NAME).click()
@@ -74,7 +70,6 @@ test('the first Tab stop is a visible "Skip to content" that moves focus to the 
   await expect(skip).toBeInViewport()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('main')).toBeFocused()
-  // The next Tab continues inside the page, past the header.
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Load more posts' })).toBeFocused()
 })

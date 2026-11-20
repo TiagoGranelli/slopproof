@@ -1,25 +1,13 @@
-// The built app end to end, one layer after another: the db layer (tests/db), the integration tests (Vitest) and
-// the browser flows (Playwright). Each runner starts and stops its own servers in its global setup
-// (scripts/app-server.ts), so any of them also runs alone: `pnpm test:db`, `pnpm test`, `pnpm test:e2e [filter]`.
-// Every step runs even after a failure, and a summary follows. Last, the contract-coverage check compares the
-// statuses openapi.json declares with those the suites saw: the app servers' request logs, and the api layer,
-// which runs first with its recorder on. When nobody watches live, each runner prints only its failures and
-// totals (vitest.config.ts, playwright.config.ts), and the summary names the command that reruns a failed layer
-// alone, so fixing one failure does not mean running every layer again.
-// Usage: pnpm build && pnpm verify:app   (env: PW_PROJECTS, TEST_EDGE=1, KEEP_TEST_DB=1, ALLOW_STALE_BUILD=1)
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { xSync } from 'tinyexec'
 
-/** Where tests/api/harness.ts records the api layer's responses for scripts/contract-coverage.ts. */
 const CONTRACT_OBSERVATIONS = 'test-results/contract-observations'
-/** The request logs of every server this run starts (startApp's `logFile`). */
 const isServerLog = (name: string) => /^app-server.*\.log$/.test(name)
 const serverLogs = () =>
   readdirSync('test-results')
     .filter((name) => isServerLog(name))
     .map((name) => `test-results/${name}`)
 
-/** A layer, and the command that reruns it alone once it is fixed (a filter narrows it further). */
 type Step = { alone: string; command: () => Array<string>; env?: NodeJS.ProcessEnv; name: string }
 const STEPS: Array<Step> = [
   {
@@ -32,16 +20,14 @@ const STEPS: Array<Step> = [
   { alone: 'pnpm test [filter]', command: () => ['vitest', 'run', '--project', 'integration'], name: 'integration' },
   { alone: 'pnpm test:e2e [filter]', command: () => ['playwright', 'test'], name: 'e2e' },
   {
+    alone: 'pnpm verify:app',
     command: () => [process.execPath, 'scripts/contract-coverage.ts', CONTRACT_OBSERVATIONS, ...serverLogs()],
     name: 'contract coverage',
-    // It reads what every other layer recorded, so only a full run checks it.
-    alone: 'pnpm verify:app',
   },
 ]
 
 type StepOutcome = { detail: string; name: string; ok: boolean }
 
-/** Runs one step with the terminal attached; tinyexec puts node_modules/.bin first on PATH. */
 const run = (step: Step): StepOutcome => {
   const [tool = '', ...args] = step.command()
   const started = performance.now()
@@ -63,7 +49,6 @@ if (process.argv.length > 2) {
   )
   process.exit(2)
 }
-// Coverage must count this run's responses only.
 rmSync(CONTRACT_OBSERVATIONS, { force: true, recursive: true })
 mkdirSync('test-results', { recursive: true })
 for (const log of serverLogs()) {

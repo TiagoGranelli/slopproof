@@ -1,7 +1,3 @@
-// Better Auth's tables, maintained by hand as application code: Better Auth reads and writes them through the
-// Drizzle adapter by the property names below, and `pnpm auth:check` (Better Auth's `auth check schema`)
-// fails when a table, column, nullability or default it needs is missing. Timestamps are `timestamptz`, like
-// every other table; `auth generate` would emit `timestamp` without time zone (better-auth#9920).
 import { relations } from 'drizzle-orm'
 import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import type { UserId } from '../../../contract/ids.ts'
@@ -37,7 +33,6 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  // expires_at: the periodic cleanup deletes expired sessions (../../auth-cleanup.ts).
   (table) => [index('session_userId_idx').on(table.userId), index('session_expires_at_idx').on(table.expiresAt)],
 )
 

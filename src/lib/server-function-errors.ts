@@ -2,13 +2,6 @@ import { isNotFound, isRedirect } from '@tanstack/react-router'
 import { createMiddleware } from '@tanstack/react-start'
 import { log } from '#/server/log.ts'
 
-/**
- * Global function middleware (src/start.ts): runs around every server function, whether the browser calls
- * it or SSR does. Start serializes whatever a server function throws to the client, message included, so a
- * raw Better Auth or database error would reach the browser with its SQL and parameters. Redirects and
- * not-found pass through untouched; any other error is logged through `log` (first line, stack frames,
- * no parameters) and replaced by a generic error.
- */
 export const serverFunctionErrors = createMiddleware({ type: 'function' }).server(async ({ next, serverFnMeta }) => {
   try {
     return await next()
@@ -23,12 +16,6 @@ export const serverFunctionErrors = createMiddleware({ type: 'function' }).serve
   }
 })
 
-/**
- * Global request middleware (src/start.ts) for the server-function errors Start throws before the function and
- * its middleware run: an unknown or unresolved id (`Server function info not found for <id>`) or a payload it
- * cannot read. Since Start 1.169 these are serialized to the client with their message, which echoes the id the
- * client sent and names Start's internals. Logged here and replaced by the same generic error as above.
- */
 export const serverFunctionRequestErrors = createMiddleware().server(async ({ handlerType, next, pathname }) => {
   if (handlerType !== 'serverFn') {
     return next()

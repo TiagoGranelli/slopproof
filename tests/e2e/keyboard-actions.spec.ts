@@ -1,6 +1,3 @@
-// Keyboard use of the actions on a page: editing works from the keyboard and puts focus back; publishing, saving and
-// deleting are announced; alerts and status messages appear where the design says. The Tab order of every page is
-// in keyboard.spec.ts. Pointer-free, so skipped on touch projects.
 import { randomUUID } from 'node:crypto'
 import { dashboardWithMyPost, expect, failServerFunctionPosts, signIn, test, visit } from './support/app.ts'
 
@@ -17,7 +14,6 @@ test.describe('editing from the keyboard', () => {
     await page.keyboard.press('Escape')
     await expect(field).toHaveCount(0)
     await expect(edit).toBeFocused()
-    // The post's body is its first paragraph; what a feature adds under it comes later.
     await expect(post.locator('p').first()).toHaveText(body)
   })
 
@@ -25,7 +21,6 @@ test.describe('editing from the keyboard', () => {
     const { body, edit } = await dashboardWithMyPost(page, author)
     await edit.focus()
     await page.keyboard.press('Enter')
-    // The editor loads on demand (from the focus on Edit): type once it has the caret, as a user would.
     await expect(page.getByLabel('Edit post')).toBeFocused()
     await page.keyboard.type(' (saved)')
     await page.keyboard.press('Tab')
@@ -50,7 +45,6 @@ test.describe('editing from the keyboard', () => {
     await expect(alert).toContainText('Use at most 280 characters')
     await expect(field).toHaveAttribute('aria-invalid', 'true')
     await expect(field).toHaveAccessibleDescription(/Over the 280-character limit\..*Use at most 280 characters/)
-    // Refused before sending, and focus is on the draft to fix.
     await expect(field).toBeFocused()
   })
 })

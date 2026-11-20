@@ -4,10 +4,6 @@ import { myPostsUpdateMutation } from '#/sdk/@tanstack/react-query.gen.ts'
 
 type UpdatePostConfig = Omit<ReturnType<typeof myPostsUpdateMutation>, 'mutationFn'>
 
-/**
- * Saves an edited post. The saved post replaces the cached one before the caller's `onSuccess` runs, then
- * both post lists are invalidated.
- */
 export function useUpdatePost({ mutationConfig }: { mutationConfig?: UpdatePostConfig } = {}) {
   const queryClient = useQueryClient()
   const { onSuccess, ...config } = mutationConfig ?? {}

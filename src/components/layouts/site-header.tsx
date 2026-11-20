@@ -2,17 +2,13 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { APP_NAME } from '#/config/app.ts'
 
-// The current page's link is `aria-current="page"` (TanStack marks it `data-status="active"`) and shows it in its
-// color; forced colors (Windows High Contrast) drop that color, so there it is underlined instead.
 const navLink =
   'rounded-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground forced-colors:data-[status=active]:underline'
 
-/** Who is signed in, as the header shows it: `null` signed out, `undefined` not known (a prerendered page). */
 type HeaderUser = { readonly name: string } | null | undefined
 
 function AccountLinks(props: { signOut: ReactNode; user: HeaderUser }) {
   const { user } = props
-  // A page prerendered at build time cannot know; Dashboard is right either way (its guard sends to sign-in).
   if (user === undefined) {
     return (
       <Link className={navLink} to="/dashboard">
@@ -41,10 +37,6 @@ function AccountLinks(props: { signOut: ReactNode; user: HeaderUser }) {
   )
 }
 
-/**
- * The header on every page: the main navigation, then the account's links for `user` (see HeaderUser) and its
- * `signOut` control, which the app composes from the auth feature.
- */
 export function SiteHeader(props: { signOut: ReactNode; user: HeaderUser }) {
   return (
     <header className="border-b">

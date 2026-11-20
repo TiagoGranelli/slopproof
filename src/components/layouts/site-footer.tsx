@@ -1,7 +1,6 @@
 import { ThemeToggle } from '#/components/layouts/theme-toggle.tsx'
 import { APP_NAME } from '#/config/app.ts'
 
-/** The footer on every page: what the app is, and the theme choice. */
 export function SiteFooter() {
   return (
     <footer className="border-t">

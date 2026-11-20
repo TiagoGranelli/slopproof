@@ -1,7 +1,6 @@
 import { Link, useLocation } from '@tanstack/react-router'
 import { describeApiError } from '#/lib/api-error.ts'
 
-/** Announces a failed API call. `action` completes "Could not …", e.g. "save your changes". */
 export function ApiErrorAlert(props: { action: string; error: unknown; id?: string }) {
   const href = useLocation({ select: (location) => location.href })
   const { message, signIn } = describeApiError(props.error, props.action)

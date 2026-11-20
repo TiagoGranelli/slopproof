@@ -1,15 +1,8 @@
-// License gate over the production dependencies, the packages whose code ships in .output and the Docker image
-// (`pnpm licenses list --json --prod`, read from node_modules: offline, well under a second). Every package must
-// carry a license from ALLOWED, satisfy one alternative of an `OR` expression and every part of an `AND`
-// (spdx-satisfies), or be one of the exact versions in EXCEPTIONS. Anything else fails, including copyleft
-// licenses (GPL, LGPL, AGPL, SSPL, BUSL) and packages without a license.
-// Usage: pnpm licenses:check   (a gate of `pnpm check`)
 import satisfies from 'spdx-satisfies'
 import { xSync } from 'tinyexec'
 
 type Allowance = { onlyFor?: Array<string>; why: string }
 
-/** Licenses any production package may carry. `onlyFor` limits one to the packages named there. */
 const ALLOWED = {
   '0BSD': { why: 'permissive, no attribution' },
   'Apache-2.0': { why: 'permissive, with a patent grant' },
@@ -31,10 +24,6 @@ const ALLOWED = {
   Unlicense: { why: 'public domain dedication' },
 } satisfies Record<string, Allowance>
 
-/**
- * Exact versions accepted with a license outside ALLOWED (a missing or non-SPDX license field that the
- * package's own LICENSE file resolves, for example): `'name@version': 'why'`. None today.
- */
 const EXCEPTIONS: Record<string, string> = {}
 
 type Package = { license: string; name: string; versions: Array<string> }
@@ -53,7 +42,6 @@ try {
   process.exit(1)
 }
 
-/** The SPDX expression is satisfied by the licenses this package may carry; a non-SPDX string is not. */
 const acceptable = (expression: string, name: string) => {
   const allowed = Object.entries<Allowance>(ALLOWED)
     .filter(([, { onlyFor }]) => !onlyFor || onlyFor.includes(name))
@@ -61,12 +49,10 @@ const acceptable = (expression: string, name: string) => {
   try {
     return satisfies(expression, allowed)
   } catch {
-    // spdx-satisfies throws on anything that is not an SPDX expression ("SEE LICENSE IN ...", "UNLICENSED").
     return false
   }
 }
 
-/** Every installed version of every production package, with the license it declares. */
 const installed = Object.entries(byLicense).flatMap(([license, packages]) =>
   packages.flatMap(({ name, versions }) => versions.map((version) => ({ id: `${name}@${version}`, license, name }))),
 )

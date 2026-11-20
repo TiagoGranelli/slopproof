@@ -5,13 +5,8 @@ import { myPostsRemoveMutation } from '#/sdk/@tanstack/react-query.gen.ts'
 
 type DeletePostConfig = Omit<ReturnType<typeof myPostsRemoveMutation>, 'mutationFn'>
 
-/** The post was already gone (deleted in another tab): not worth an alert, the refetch removes it. */
 export const isPostNotFound = (error: unknown) => apiErrorTag(error) === 'PostNotFound'
 
-/**
- * Deletes a post. The post leaves the cached list before the caller's `onSuccess` runs, then both post lists
- * are invalidated. A PostNotFound error also invalidates them, so the stale entry disappears.
- */
 export function useDeletePost({ mutationConfig }: { mutationConfig?: DeletePostConfig } = {}) {
   const queryClient = useQueryClient()
   const { onSuccess, ...config } = mutationConfig ?? {}

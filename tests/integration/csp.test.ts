@@ -1,6 +1,3 @@
-// Content-Security-Policy of every kind of response: SSR pages (per-request nonce), the prerendered page
-// (sha256 hashes), not-found pages, and responses that are not documents. Production build only.
-// Error pages are covered by tests/integration/db-failure.test.ts, which needs its own server.
 import { describe, expect, it } from 'vitest'
 import { inlineSourceHashes } from '#/server/nitro/prerender-csp.ts'
 import { appUrl, clientIps, signIn, sharedUsers } from './helpers.ts'
@@ -14,7 +11,6 @@ const directive = (csp: string, name: string) =>
     .find(([key]) => key === name)
     ?.slice(1) ?? []
 
-/** The policy must hold without any escape hatch and name only same-origin hosts. Returns it. */
 const expectStrictPolicy = (res: Response, label: string) => {
   const csp = res.headers.get('content-security-policy') ?? ''
   expect(csp, label).not.toMatch(/'unsafe-(inline|eval|hashes)'|\*|https?:|data:[^;]*script/)
@@ -41,7 +37,6 @@ describe('content security policy', () => {
     expect(directive(csp, 'script-src')).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"])
     expect(directive(csp, 'style-src')).toEqual(["'self'", `'nonce-${nonce}'`])
     const html = await res.text()
-    // Throws on inline `style` or `on*` attributes, which neither a nonce nor a hash can allow.
     inlineSourceHashes(html)
     const tags = [...openTags(html, 'script'), ...openTags(html, 'style')]
     expect(tags.length).toBeGreaterThan(0)

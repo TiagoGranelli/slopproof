@@ -1,5 +1,3 @@
-// describeTime: how a time reads, relative and local in the browser, and the same UTC date on the server and during
-// hydration.
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { describeTime } from '#/components/time/describe-time.ts'
@@ -20,7 +18,6 @@ describe('describeTime', () => {
     ['a day after', DAY + HOUR, 'yesterday'],
     ['six days after', 6 * DAY, '6 days ago'],
     ['a week after', 7 * DAY, 'Sep 27, 2026'],
-    // A browser clock behind the server's: never "in 2 minutes".
     ['before it, by a clock running late', -2 * MINUTE, 'just now'],
   ])('reads %s as "%s"', (_, elapsed, label) => {
     expect(describeTime(written, after(elapsed)).label).toBe(label)
@@ -28,7 +25,6 @@ describe('describeTime', () => {
 
   it('reads older times as a date in the browser time zone, with the full local time on hover', () => {
     const inSaoPaulo = { now: Date.parse('2026-10-20T00:00:00Z'), timeZone: 'America/Sao_Paulo' }
-    // 01:30 UTC on the 1st is still the evening of September 30 in São Paulo (UTC-3).
     expect(describeTime('2026-10-01T01:30:00.000Z', inSaoPaulo)).toEqual({
       label: 'Sep 30, 2026',
       title: 'Wednesday, September 30, 2026 at 10:30 PM',

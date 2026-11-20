@@ -1,11 +1,8 @@
-// src/server/env.ts validates the environment once, at import, and stops the process with a message naming
-// the variable. Each test imports a fresh copy of the module under its own environment.
 import { inspect } from 'node:util'
 import { Redacted } from 'effect'
 import { describe, expect, it, vi } from 'vitest'
 import { stubEnvironment } from './process-fakes.ts'
 
-/** Valid values for every required variable; each test overrides what it checks. */
 const BASE = {
   APP_URL: 'https://app.example.com',
   AUTH_SIGN_UP: '',
@@ -19,7 +16,6 @@ const BASE = {
   TRUSTED_PROXIES: '',
 }
 
-/** `env` with each Redacted value read, so a test compares the secret itself and not two `<redacted>` wrappers. */
 const revealed = (env: Awaited<ReturnType<typeof load>>) => ({
   ...env,
   authSecret: Redacted.value(env.authSecret),
@@ -51,7 +47,6 @@ describe('env', () => {
   it('never shows a credential when it is printed, logged or serialized', async () => {
     const smtpUrl = 'smtps://user:mail-not-a-secret@smtp.example.com:465'
     const env = await load({ MAIL_FROM: 'no-reply@example.com', SMTP_URL: smtpUrl })
-    // What a log line and `console.log` do with a value.
     const printed = [JSON.stringify(env), inspect(env, { depth: 5 })]
     for (const text of printed) {
       for (const secret of [BASE.DATABASE_URL, BASE.BETTER_AUTH_SECRET, smtpUrl]) {

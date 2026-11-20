@@ -1,6 +1,3 @@
-// scripts/features.ts: feature ownership lookup and drift checks. The last test fails `pnpm check` when a source file
-// under src/features, src/routes, src/server/api or src/contract is unowned, a listed path/test is missing, or an
-// OpenAPI operation is unmapped.
 import { describe, expect, it } from 'vitest'
 import { type Feature, checkFeatures, featuresForPath, loadFeatures } from '../../scripts/features.ts'
 

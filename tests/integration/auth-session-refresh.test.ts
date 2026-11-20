@@ -1,6 +1,3 @@
-// A session older than Better Auth's updateAge (1 day of its 7) is renewed on use, and the renewed cookie
-// reaches the client on both paths that read the session: the Effect API's Authentication middleware
-// (/api/me) and Better Auth's own /get-session.
 import { Pool } from 'pg'
 import { afterAll, describe, expect, it } from 'vitest'
 import { appUrl, databaseUrl, clientIps, sessionCookie, signIn, sharedUsers } from './helpers.ts'
@@ -12,7 +9,6 @@ afterAll(() => pool.end())
 const DAY = 24 * 60 * 60 * 1000
 const tokenOf = (cookie: string) => decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1)).split('.')[0]!
 
-/** A fresh session, aged: it expires in one hour, so more than updateAge has passed since it was renewed. */
 const agedSession = async () => {
   const cookie = await signIn(sharedUsers.author, nextIp())
   const { rowCount } = await pool.query(
@@ -27,7 +23,6 @@ const expiresAt = async (cookie: string) =>
   (await pool.query<{ expires_at: Date }>('select expires_at from session where token = $1', [tokenOf(cookie)]))
     .rows[0]!.expires_at
 
-/** The renewed session cookie on a response: same token, a full 7-day lifetime again. */
 const expectRenewedCookie = (res: Response, cookie: string) => {
   const renewed = sessionCookie(res)
   expect(renewed, 'Set-Cookie with the session token').toBeTruthy()

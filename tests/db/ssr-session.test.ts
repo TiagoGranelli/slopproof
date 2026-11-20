@@ -1,7 +1,3 @@
-// What an authed SSR page costs in session lookups, inside a real Start request context (`createServerEntry`, which
-// Start wraps around every request): the `_authed` guard's read (requestSession, what getSession in
-// src/lib/session.functions.ts runs) and then the dashboard loader's API call through the in-process client, whose
-// Authentication middleware asks for the same cookie's session. Counted at pg's Client (helpers.ts).
 import { createServerEntry, getRequestHeaders } from '@tanstack/react-start/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { meGet } from '#/sdk/sdk.gen.ts'
@@ -30,7 +26,6 @@ const signIn = async (label: string) => {
     .join('; ')
 }
 
-/** Runs `work` as Start runs a request for `/dashboard` with `cookie`, and returns what `work` returned. */
 const serve = async <T>(cookie: string, work: () => Promise<T>): Promise<T> => {
   const returned: Array<T> = []
   await createServerEntry({
@@ -44,9 +39,7 @@ const serve = async <T>(cookie: string, work: () => Promise<T>): Promise<T> => {
 
 const touchesSession = (sql: string) => sql.includes('"session"')
 
-/** Sends a write (any: the client refuses it before routing) and returns why it failed, or `sent`. */
 const sendWrite = async () => {
-  // The SDK hands a thrown fetch back as `error`.
   const { error } = await createInProcessApiClient().post({ url: '/api/me' })
   return error instanceof Error ? error.message : 'sent'
 }
@@ -56,7 +49,6 @@ let otherCookie: string
 let lookup: number
 beforeAll(async () => {
   ;[cookie, otherCookie] = await Promise.all([signIn('ssr-session'), signIn('ssr-session-other')])
-  // What one lookup costs outside any request: the budget of a whole page below.
   const { statements } = await statementsOf(() => auth.api.getSession({ headers: new Headers({ cookie }) }))
   lookup = statements.length
   expect(statements.some((sql) => touchesSession(sql))).toBe(true)
@@ -72,7 +64,6 @@ describe('an authed SSR page', () => {
       }),
     )
     expect(page).toEqual({ signedIn: true, status: 200 })
-    // GET /api/me answers from the session the middleware already has: nothing more than the one lookup.
     expectBudget('an authed SSR page', statements, lookup)
   })
 

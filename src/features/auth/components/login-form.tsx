@@ -10,11 +10,6 @@ import { type AuthFailure, signInFromForm } from '#/lib/auth.functions.ts'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.SignInInput))
 
-/**
- * Email and password sign-in. On success it goes to `redirectTo` if that is a safe same-origin path. It also
- * works before hydration and without JavaScript: the browser posts it to signInFromForm, which answers with a
- * redirect back to /login, and a failure arrives here as `failure` (from the URL).
- */
 export function LoginForm(props: { failure?: AuthFailure; redirectTo?: string }) {
   const navigate = useNavigate()
   const signIn = useSignIn({

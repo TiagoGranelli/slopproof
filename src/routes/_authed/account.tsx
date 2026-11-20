@@ -11,7 +11,6 @@ import { SessionList } from '#/features/auth/components/session-list.tsx'
 export const Route = createFileRoute('/_authed/account')({
   loader: ({ context }) => context.queryClient.query({ ...getSessionsQueryOptions(), staleTime: 'static' }),
   head: () => ({ meta: [{ title: pageTitle('Account') }, { name: 'robots', content: 'noindex' }] }),
-  // The loader's failures. Once the page is up, each section fails on its own (SectionErrorBoundary).
   errorComponent: (props) => (
     <RouteError {...props} action="load your account" title="Your account could not be loaded" />
   ),

@@ -1,6 +1,3 @@
-// LoadMoreList over a list that is not the API's, so it holds for any `{ items, nextCursor }` pages: the empty state,
-// and "Load more" (pending, failure, retry, focus, last page). The posts lists add their API errors
-// (post-list.test.tsx).
 import { infiniteQueryOptions, useSuspenseInfiniteQuery } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -17,7 +14,6 @@ const CURSOR = 'cursor-after-page-1'
 const first = listPage([note('newest'), note('newer')], CURSOR)
 const second = listPage([note('older'), note('oldest')])
 
-/** Where the list's pages come from: the page after `cursor`. The first is seeded, as a route loader leaves it. */
 type Source = (cursor: string) => Promise<NotePage>
 
 const notesQuery = (source: Source) =>
@@ -41,7 +37,6 @@ function Notes(props: { source: Source }) {
   )
 }
 
-/** Renders the list with `seeded` loaded; returns the cursors the list asked for. */
 const renderNotes = async (seeded: NotePage, answer: () => Promise<NotePage>) => {
   const cursors: Array<string> = []
   const queryClient = testQueryClient()
@@ -79,7 +74,6 @@ describe('LoadMoreList', () => {
     response.release()
     await expect.element(items().nth(2)).toHaveTextContent('older')
     await expect.element(items().nth(2)).toHaveFocus()
-    // The second page ends the list.
     await expect.element(loadMore()).not.toBeInTheDocument()
     expect(cursors).toEqual([CURSOR])
   })

@@ -15,9 +15,6 @@ const Post = Schema.Struct({
 }).annotate({ identifier: 'Post' })
 export type Post = typeof Post.Type
 
-// `Post.pipe(HttpApiSchema.status(201))` would be a second schema with the identifier `Post`, which the
-// OpenAPI generator emits as a duplicate component `Post_1`. The status goes on a suspended reference
-// instead, so the 201 response points at the one `Post` component.
 const Created = Schema.suspend(() => Post).pipe(HttpApiSchema.status(201))
 
 const PostPath = { id: PostId }
@@ -56,15 +53,12 @@ export class MyPosts extends HttpApiGroup.make('myPosts')
     })
       .middleware(RequestValidation)
       .middleware(WriteRateLimit),
-    // No RequestValidation: the only input is the path id, a plain string that cannot fail to decode. A
-    // malformed id is a 404 like a missing one (as on update), so a 400 is never answered and not declared.
     HttpApiEndpoint.delete('remove', '/me/posts/:id', {
       params: PostPath,
       success: HttpApiSchema.NoContent,
       error: PostNotFound,
     }).middleware(WriteRateLimit),
   )
-  // Added last, so it runs first: WriteRateLimit counts by the CurrentUser it provides.
   .middleware(Authentication)
   .prefix('/api')
   .annotateMerge(

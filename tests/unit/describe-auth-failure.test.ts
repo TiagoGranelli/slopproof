@@ -1,5 +1,3 @@
-// describeAuthFailure turns a failed account action into the sentence the UI shows. It must never show raw
-// server output (a thrown message, an unknown Better Auth code), and each known code has its own message.
 import { describe, expect, it } from 'vitest'
 import { AuthActionError } from '#/features/auth/api/auth-action.ts'
 import {
@@ -13,7 +11,6 @@ import type { AuthFailureCode } from '#/lib/auth.functions.ts'
 const failure = (code: AuthFailureCode, retryAfter?: number) => new AuthActionError({ code, retryAfter })
 
 describe('describeAuthFailure', () => {
-  // What a server function rejects with when the request failed or the handler threw.
   it.each<[string, unknown]>([
     ['a network error', new TypeError('Failed to fetch')],
     ['a thrown server error', new Error('duplicate key value violates unique constraint "user_email_key"')],
@@ -70,7 +67,6 @@ describe('describeAuthFailure', () => {
   })
 
   it('shows the generic message for a code from a newer server, never the code', () => {
-    // A server deployed after this client can send a code the union does not have yet.
     const fromNewerServer = new AuthActionError({ code: 'UNEXPECTED' })
     Object.defineProperty(fromNewerServer, 'code', { value: 'relation "session" does not exist' })
     expect(describeAuthFailure(fromNewerServer)).toBe('Something went wrong. Try again.')
@@ -82,7 +78,6 @@ describe('isAuthFailureCode', () => {
     expect(isAuthFailureCode(code)).toBe(true)
   })
 
-  // A code read from the URL (/login?error=...) is only shown when it is one of ours.
   it.each(['', 'invalid_email_or_password', 'toString', '__proto__', 'constructor', '<script>'])(
     'refuses %j',
     (code) => {
@@ -91,7 +86,6 @@ describe('isAuthFailureCode', () => {
   )
 })
 
-/** What the login URL can carry: the failure, and the redirect the failure ignores. */
 type LoginSearch = Parameters<typeof failureFromSearch>[0] & { readonly redirect?: string }
 
 describe('failureFromSearch', () => {

@@ -1,5 +1,3 @@
-// U+0000 never reaches Postgres (src/contract/stored-text.ts): every user-supplied string that is stored or looked
-// up refuses it with a message and the path of its field, on the server and in the forms that share the schemas.
 import { Schema } from 'effect'
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
@@ -9,7 +7,6 @@ import { SessionInput, SignInInput, SignUpInput, TokenInput } from '#/lib/accoun
 
 const NUL_MESSAGE = 'Remove the invisible NUL character (U+0000) from the text.'
 
-/** The issues a server function's validator or a form (both Standard Schema) reports for `input`. */
 const issuesOf = (schema: Parameters<typeof Schema.toStandardSchemaV1>[0], input: unknown) => {
   const validation = Schema.toStandardSchemaV1(schema)['~standard'].validate(input)
   if ('then' in validation) {

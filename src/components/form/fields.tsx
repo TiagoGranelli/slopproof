@@ -8,10 +8,6 @@ import { ServerIssues } from './server-issues.ts'
 
 type InputProps = Omit<ComponentProps<'input'>, 'name' | 'value' | 'checked' | 'onChange' | 'onBlur'>
 
-/**
- * A labelled input bound to its form field. The hint and the field's error, its own or one the server reported
- * for it (ServerIssues), are read out with it.
- */
 export function TextField({ hint, id, label, ...input }: InputProps & { hint?: string; id: string; label: string }) {
   const field = useFieldContext<string>()
   const serverIssue = use(ServerIssues)[field.name]
@@ -41,7 +37,6 @@ export function TextField({ hint, id, label, ...input }: InputProps & { hint?: s
   )
 }
 
-/** A checkbox bound to its form field, with its label after it. */
 export function CheckboxField({ id, label, ...input }: InputProps & { id: string; label: ReactNode }) {
   const field = useFieldContext<boolean>()
   const error = fieldErrorMessage(field.state.meta.errors)

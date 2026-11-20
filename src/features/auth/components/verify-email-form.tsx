@@ -5,14 +5,9 @@ import { AuthForm, useAuthFormController } from '#/features/auth/components/auth
 import { AuthStatus } from '#/features/auth/components/auth-status.tsx'
 import { ResendVerificationForm } from '#/features/auth/components/resend-verification-form.tsx'
 
-/**
- * Confirms the address of a confirmation link, but only when its owner presses the button: opening the link
- * (a GET, which mail scanners and link previews also make) changes nothing. Signing in stays a separate step.
- */
 export function VerifyEmailForm(props: { token: string }) {
   const verify = useVerifyEmail()
   const controller = useAuthFormController()
-  // No fields: the token comes from the link.
   const form = useAppForm({
     defaultValues: {},
     onSubmit: () => controller.submitAction(() => verify.mutateAsync({ token: props.token })),

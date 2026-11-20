@@ -7,11 +7,9 @@ import { rateLimit } from './db/schema/rate-limit.ts'
 
 type RateLimitStorage = NonNullable<NonNullable<BetterAuthOptions['rateLimit']>['customStorage']>
 
-/** Rows idle this long are deleted; longer than every rule's window (the longest is 60 s). */
 const IDLE_ROW_MS = 10 * 60 * 1000
 let lastPrune = 0
 
-/** Deletes idle rows in the background, at most once per IDLE_ROW_MS per process. */
 const pruneIdleRows = (now: number): void => {
   if (now - lastPrune <= IDLE_ROW_MS) {
     return
@@ -20,19 +18,6 @@ const pruneIdleRows = (now: number): void => {
   runInBackground(db.delete(rateLimit).where(lt(rateLimit.lastRequest, now - IDLE_ROW_MS)))
 }
 
-/**
- * Better Auth's rate-limit `consume` on the rate_limit table (also the business API's write limit, keys
- * `api-write|<user id>`, ./api/rate-limit.ts) as one INSERT ... ON CONFLICT DO UPDATE, which
- * Postgres runs atomically per key: concurrent requests never both take the last slot. Same rule as Better
- * Auth's own storages: a window starts at the first request and restarts once `window` seconds passed since the
- * last admitted one. `count` counts every request in the window, so it passes `max` exactly when one is refused.
- *
- * Written when Better Auth's `storage: 'database'` was not atomic on Postgres with the Drizzle adapter
- * (better-auth#10557, fixed in 1.7.7 by #11331). It stays because the business API's write limit needs the same
- * upsert on the same table: with `storage: 'database'` Better Auth would own the table (an `id` column, its own
- * queries) and the API would keep this statement anyway.
- */
-/** Counts one request against `key` in one upsert, starting a new window when the last one has expired. */
 const countRequest = async (key: string, rule: { readonly max: number; readonly window: number }, now: number) => {
   const expired = sql`${rateLimit.lastRequest} <= ${now - rule.window * 1000}`
   const [row] = await db
@@ -55,7 +40,6 @@ export const postgresRateLimitStorage: RateLimitStorage = {
     const windowMs = rule.window * 1000
     const row = await countRequest(key, rule, now)
     pruneIdleRows(now)
-    // `count` is the number of requests since the window started, refused ones included.
     if (row && row.count <= rule.max) {
       return { allowed: true, retryAfter: null }
     }

@@ -1,5 +1,3 @@
-// scripts/build-freshness.ts: the test runners refuse a build whose sources changed, and only then. `pnpm check`
-// regenerates src/sdk with the same bytes (its drift job runs `pnpm codegen`), which must not make the build stale.
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +11,6 @@ const write = (path: string, content: string) => {
   writeFileSync(join(root, path), content)
 }
 
-/** A checkout with a few inputs and a build of them, stamped as `pnpm build` does. */
 const buildCheckout = () => {
   write('package.json', '{}')
   write('src/sdk/sdk.gen.ts', 'export const x = 1\n')

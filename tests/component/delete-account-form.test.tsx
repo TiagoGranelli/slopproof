@@ -1,4 +1,3 @@
-// The account page's delete-account form: what it needs before it sends, and what follows each answer.
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { DeleteAccountForm } from '#/features/auth/components/delete-account-form.tsx'
@@ -12,7 +11,6 @@ const deleteConfirm = () =>
   page.getByRole('checkbox', { name: 'I understand that my account and all its data are deleted for good.' })
 const deleteButton = () => page.getByRole('button', { name: 'Delete account' })
 
-/** The form refused to send because of `field`: flagged invalid, focused, and described by `message`. */
 const expectFlagged = async (field: ReturnType<typeof page.getByRole>, message: string) => {
   await expect.element(field).toBeInvalid()
   await expect.element(field).toHaveFocus()

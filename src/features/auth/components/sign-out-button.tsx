@@ -2,19 +2,11 @@ import { useNavigate } from '@tanstack/react-router'
 import { Button } from '#/components/ui/button.tsx'
 import { useSignOut } from '#/features/auth/api/sign-out.ts'
 
-/**
- * The header's Sign out. On success the visitor lands on `/` with a "You are signed out." flash (src/lib/flash.ts);
- * the cache is already cleared by then. A failure is an alert on a line of its own. While pending the button is
- * only `aria-disabled` and ignores presses: a disabled button loses focus, and a keyboard user would be left on
- * <body> if signing out fails (the same holds for every pending button).
- */
 export function SignOutButton() {
   const navigate = useNavigate()
   const signOut = useSignOut({
     mutationConfig: {
       onSuccess: () => {
-        // Clearing the session cache unmounts this button before the home route's loader finishes; move focus
-        // to <main> first so it never drops to <body> while the navigation loads.
         document.querySelector<HTMLElement>('main')?.focus({ preventScroll: true })
         return navigate({ state: { flash: 'signed-out' }, to: '/' })
       },

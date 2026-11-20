@@ -1,6 +1,3 @@
-// WCAG 2.2 non-text contrast (1.4.11: 3:1 against adjacent colors) of the focus outline and of text field borders,
-// in the light and the dark theme. Measured on the colors Chromium computes from src/styles/app.css and paints, not
-// read off the tokens: a token change, an opacity modifier or a variant that overrides the ring shows up here.
 import '#/styles/app.css'
 import { afterEach, describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
@@ -11,7 +8,6 @@ import { Textarea } from '#/components/ui/textarea.tsx'
 
 type Rgb = readonly [number, number, number]
 
-/** `color` as the browser paints it over `under` (so alpha and color-mix resolve): sRGB bytes of a canvas pixel. */
 const painted = (color: string, under = 'white'): Rgb => {
   const canvas = Object.assign(document.createElement('canvas'), { height: 1, width: 1 })
   const context = canvas.getContext('2d', { willReadFrequently: true })!
@@ -23,7 +19,6 @@ const painted = (color: string, under = 'white'): Rgb => {
   return [red, green, blue]
 }
 
-/** WCAG relative luminance of an sRGB color. */
 const luminance = (rgb: Rgb) => {
   const [red, green, blue] = rgb.map((byte) => {
     const channel = byte / 255
@@ -32,13 +27,11 @@ const luminance = (rgb: Rgb) => {
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
-/** WCAG contrast ratio of two colors, from 1 to 21. */
 const contrast = (first: Rgb, second: Rgb) => {
   const [lighter, darker] = [luminance(first), luminance(second)].toSorted((a, b) => b - a) as [number, number]
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-/** The background `element` sits on: its own if painted, else the nearest painted ancestor's, over white. */
 const surfaceOf = (element: Element): Rgb => {
   for (let node: Element | null = element; node; node = node.parentElement) {
     const background = getComputedStyle(node).backgroundColor
@@ -90,11 +83,9 @@ describe.each(themes)('%s theme', (theme) => {
       await userEvent.tab()
       const focused = document.activeElement!
       expect(focused.getAttribute('aria-label') ?? focused.textContent).toBe(name)
-      // Buttons transition into their focus outline (`transition-all`); measure where it ends.
       await Promise.all(focused.getAnimations().map((animation) => animation.finished))
       const style = getComputedStyle(focused)
       expect([style.outlineStyle, style.outlineWidth, style.outlineOffset], name).toEqual(['solid', '2px', '2px'])
-      // The offset leaves a gap, so the outline sits on the surface around the control, not on the control.
       const surface = surfaceOf(focused.parentElement!)
       const outline = painted(style.outlineColor, `rgb(${surface.join()})`)
       expect(contrast(outline, surface), `${theme} focus outline of ${name}`).toBeGreaterThanOrEqual(3)

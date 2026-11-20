@@ -1,4 +1,3 @@
-// The account page's change-password form: its fields, what it sends, and every answer it explains.
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { ChangePasswordForm } from '#/features/auth/components/change-password-form.tsx'
@@ -58,7 +57,6 @@ describe('ChangePasswordForm', () => {
     await expect.element(formOf(changeButton())).toHaveAttribute('aria-busy', 'true')
     response.release()
     await expect.element(statusText('Password changed')).toHaveTextContent('Your other sessions were signed out.')
-    // The fields were emptied by a fresh form, which has no focus to keep.
     await expectFocusedStatus('Password changed')
     await expect.element(currentPassword()).toHaveValue('')
     await expect.element(newPassword()).toHaveValue('')

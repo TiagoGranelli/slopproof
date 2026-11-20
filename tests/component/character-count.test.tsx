@@ -1,5 +1,3 @@
-// CharacterCount: the trimmed length against the limit, read out as characters, and flagged and announced only over
-// it. The forms that use it test it again with their own limit (post-composer.test.tsx).
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { CharacterCount, isTooLong } from '#/components/form/character-count.tsx'

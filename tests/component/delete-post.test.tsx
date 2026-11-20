@@ -1,5 +1,3 @@
-// Deleting one of the author's posts (MyPost with ConfirmDeleteButton): where focus goes, the pending state and every
-// failure branch. The dialog that asks first is tested on its own in confirm-delete-button.test.tsx.
 import { HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -23,22 +21,18 @@ const card = () =>
       .closest('[data-slot="card"]')!,
   )
 
-/** Delete, then Delete again in the dialog that asks first. */
 const deletePost = async () => {
   await deleteButton().click()
   await confirmDelete().click()
 }
 
-/** Opens the dialog and confirms from the keyboard (Enter on its Delete). */
 const confirmWithKeyboard = async () => {
   await deleteButton().click()
-  // The dialog loads on first use: wait for it before reaching into it.
   await expect.element(confirmDelete()).toBeVisible()
   ;(confirmDelete().element() as HTMLElement).focus()
   await userEvent.keyboard('{Enter}')
 }
 
-/** A delete that waits for `release()`, then fails like a lost connection; `calls.count` counts the requests. */
 const heldFailingDelete = () => {
   const response = held()
   const calls = { count: 0 }

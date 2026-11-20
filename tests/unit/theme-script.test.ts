@@ -1,10 +1,7 @@
-// THEME_SCRIPT runs in <head> before the first paint, as a string: here it runs in a context of its own, against a
-// stand-in document and storage, the only two things it touches.
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { THEME_SCRIPT } from '#/lib/theme.ts'
 
-/** Runs the script with `stored` as the saved choice (storage that throws with `blocked`); returns `data-theme`. */
 const run = (stored: string | null, options: { blocked?: boolean } = {}) => {
   const documentElement = { dataset: {} as Record<string, string> }
   const localStorage = {

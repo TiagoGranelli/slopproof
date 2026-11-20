@@ -68,10 +68,10 @@ failure says what was wrong. Oxlint (`oxlint.config.ts`) enforces the numbers; t
   rejects an empty one). Never echo secrets, passwords or user content: log length, scheme or path (`env` uses
   `Redacted`). Across trust boundaries clients get a generic message and `log` gets the cause
   (`src/lib/server-function-errors.ts`).
-- **Comments.** Say why, not what. Keep them when you refactor, update them when the reason changes. A line that
-  exists because of an upstream bug or limit links the issue (`better-auth#9920`) and says when to remove it.
-  Exports of `src/server`, `src/lib` and `features/*/{api,utils}` get a JSDoc sentence on intent, plus a
-  one-line example when the types do not make the call obvious.
+- **Comments.** Banned in code ([ADR 0019](docs/decisions/0019-no-comments.md), enforced by `repo/no-comments`).
+  Express intent through names, types, tests, and ADRs. Only machine-checked tool directives
+  (`oxlint-disable-next-line`, `fallow-ignore-next-line`, `@ts-expect-error`, `@effect-expect-leaking`,
+  `@effect-diagnostics`) and the single-line reason directly above each directive are allowed.
 - **Logging.** Server code logs through `log` (`src/server/log.ts`), one JSON object per line; `console` is for
   scripts (`no-console`).
 - **No effects or timers.** `src/` bans `useEffect`, `useLayoutEffect`, `useInsertionEffect`, `setTimeout`,

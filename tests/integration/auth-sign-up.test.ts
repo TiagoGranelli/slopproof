@@ -1,5 +1,3 @@
-// The sign-up policy (AUTH_SIGN_UP). The main server runs `open`, the second one the default `closed`. The UI
-// signs up through the signUp server function; /api/auth/sign-up/email is not exposed in either mode.
 import { describe, expect, it } from 'vitest'
 import { appUrl, clientIps, closedAppUrl, postSignIn, sharedUsers } from './helpers.ts'
 import { callAuthFunction } from './server-functions.ts'
@@ -48,7 +46,6 @@ describe('open sign-up', () => {
     const account = newAccount()
     const { response, value } = await signUp(appUrl, account, nextIp())
     expect(value).toEqual({ ok: true, value: null })
-    // No session before verification (requireEmailVerification, autoSignIn off).
     expect(
       response.headers.getSetCookie().filter((cookie) => cookie.includes('session_token=') && !cookie.includes('=;')),
     ).toEqual([])

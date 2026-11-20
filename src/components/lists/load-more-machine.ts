@@ -1,17 +1,14 @@
-/** Snapshot of the query's current list length and pagination cursor presence. */
 export interface LoadMoreSnapshot {
   readonly hasNextPage: boolean
   readonly itemCount: number
 }
 
-/** Explicit states of a load-more paginated list and its pending focus target. */
 export type LoadMoreState =
   | { readonly focusIndex: number | null; readonly loadedCount: number; readonly status: 'idle' }
   | { readonly loadedCount: number; readonly status: 'loading' }
   | { readonly error: unknown; readonly loadedCount: number; readonly status: 'error' }
   | { readonly focusIndex: number | null; readonly loadedCount: number; readonly status: 'exhausted' }
 
-/** Every event the load-more pagination state chart handles. */
 export type LoadMoreEvent =
   | { readonly type: 'LOAD_MORE' }
   | { readonly addedCount: number; readonly hasNextPage: boolean; readonly type: 'LOAD_SUCCEEDED' }
@@ -23,7 +20,6 @@ const clampCount = (count: number): number => Math.max(0, Math.trunc(count))
 const clampFocus = (focusIndex: number | null, itemCount: number): number | null =>
   focusIndex !== null && focusIndex >= 0 && focusIndex < itemCount ? focusIndex : null
 
-/** Initial state for a paginated list seeded with `snapshot`. */
 export const initialLoadMoreState = (snapshot: LoadMoreSnapshot): LoadMoreState => {
   const loadedCount = clampCount(snapshot.itemCount)
   return snapshot.hasNextPage
@@ -31,10 +27,6 @@ export const initialLoadMoreState = (snapshot: LoadMoreSnapshot): LoadMoreState 
     : { focusIndex: null, loadedCount, status: 'exhausted' }
 }
 
-/**
- * Reconciles the machine state with external query updates (for example, a post created or deleted in another
- * component), keeping `focusIndex` strictly in bounds without effects.
- */
 export const reconcileLoadMoreState = (state: LoadMoreState, snapshot: LoadMoreSnapshot): LoadMoreState => {
   const loadedCount = clampCount(snapshot.itemCount)
   switch (state.status) {
@@ -118,7 +110,6 @@ const transitionExhausted = (
   }
 }
 
-/** Pure state transition function for load-more pagination. */
 export const transitionLoadMore = (state: LoadMoreState, event: LoadMoreEvent): LoadMoreState => {
   switch (state.status) {
     case 'idle':

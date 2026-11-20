@@ -1,7 +1,3 @@
-/**
- * The first Tab stop of every page: jumps past the header to `<main id="main">`, which takes focus (it has
- * `tabIndex={-1}`). A plain anchor, so it works before hydration and without JavaScript. Hidden until focused.
- */
 export function SkipLink() {
   return (
     <a

@@ -1,6 +1,3 @@
-// Cursor pagination of GET /api/posts and GET /api/me/posts against the running app (`pnpm test`).
-// Other files add and delete posts concurrently, so every assertion is either about posts this file created
-// or about invariants that hold for any single request (a page is one SELECT).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { myPostsCreate, myPostsList, myPostsRemove, publicPostsList } from '#/sdk/sdk.gen.ts'
 import type { Post, PostPage } from '#/sdk/types.gen.ts'
@@ -13,8 +10,6 @@ let author: Client
 let other: Client
 const created: Array<{ client: Client; id: string }> = []
 
-// Accounts of this file alone: it publishes and deletes dozens of posts, which the shared users' write limit
-// (src/server/api/rate-limit.ts) would have to absorb together with every other file's writes.
 let authorName: string
 beforeAll(async () => {
   const [mine, theirs] = await Promise.all([createUser('pagination'), createUser('pagination-other')])
@@ -29,7 +24,6 @@ afterAll(async () => {
 
 const tag = crypto.randomUUID().slice(0, 8)
 
-/** Publishes posts one after another (distinct timestamps), oldest first. */
 const publish = async (client: Client, label: string, count: number) => {
   const posts: Array<Post> = []
   for (let i = 0; i < count; i++) {
@@ -53,10 +47,6 @@ const myPage = async (client: Client, query: Query) => {
   return res.data!
 }
 
-/**
- * Follows `nextCursor` from the first page until `done` says stop or the list ends. `between` runs after each
- * page, before the next request (to publish concurrently with the walk).
- */
 const walk = async (
   fetchPage: (query: Query) => Promise<PostPage>,
   limit: number,
@@ -77,7 +67,6 @@ const walk = async (
   throw new Error('the list did not end after 200 pages')
 }
 
-/** Every full page (one with a next cursor) holds exactly `limit` posts; the last one at most `limit`. */
 const expectPageSizes = (pages: Array<PostPage>, limit: number) => {
   for (const page of pages.slice(0, -1)) {
     expect(page.nextCursor).toEqual(expect.any(String))
@@ -86,7 +75,6 @@ const expectPageSizes = (pages: Array<PostPage>, limit: number) => {
   expect(pages.at(-1)!.items.length).toBeLessThanOrEqual(limit)
 }
 
-/** Newest first: createdAt never increases (it is rounded to milliseconds, so equal values are allowed). */
 const expectNewestFirst = (posts: Array<Post>) => {
   const times = posts.map((p) => Date.parse(p.createdAt))
   expect(times).toEqual(times.toSorted((a, b) => b - a))
@@ -96,7 +84,6 @@ const ids = (posts: Array<Post>) => posts.map((p) => p.id)
 
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url')
 
-/** The cursor after the first `count` posts, in pages of at most 50. */
 const cursorAfter = async (count: number) => {
   let cursor: string | undefined
   for (let left = count; left > 0; left -= 50) {
@@ -147,7 +134,6 @@ describe('cursor', () => {
     ['an impossible date', encode({ createdAt: '2026-02-30T00:00:00.000000Z', id: validId })],
     ['year 0, which Postgres rejects', encode({ createdAt: '0000-01-01T00:00:00.000000Z', id: validId })],
     ['SQL in the timestamp', encode({ createdAt: "now()'); drop table post; --", id: validId })],
-    // Postgres's ::timestamptz would read past the Z and fail the query if the pattern let this through.
     ['text after the Z', encode({ createdAt: '2026-01-01T00:00:00.000000Zjunk', id: validId })],
     ['month 13', encode({ createdAt: '2026-13-01T00:00:00.000000Z', id: validId })],
   ])('rejects a cursor with %s as a 400, never a 500', async (_, cursor) => {
@@ -165,7 +151,6 @@ describe('cursor', () => {
     }
   })
 
-  // Every key the schema admits must also be one Postgres accepts (::timestamptz, ::uuid): a 200, never a 500.
   it.each([
     '0001-01-01T00:00:00.000000Z',
     '2026-10-31T23:59:59.999999Z',
@@ -189,7 +174,6 @@ describe('cursor', () => {
     expect(await publicPage({ cursor: past })).toEqual({ items: [], nextCursor: null })
     expect(await myPage(author, { cursor: past })).toEqual({ items: [], nextCursor: null })
 
-    // A key from the far future starts before every post, like the first page, but still only the author's.
     const theirs = await publish(other, 'future-key', 1)
     const future = encode({ createdAt: '9999-12-31T23:59:59.999999Z', id: validId })
     const mine = await myPage(author, { cursor: future, limit: '50' })
@@ -204,26 +188,22 @@ describe('paging', () => {
     const seededIds = new Set(ids(seeded))
     const lateIds = new Set<string>()
     const pages = await walk(publicPage, 3, {
-      done: (seen) => [...seededIds].every((id) => ids(seen).includes(id)),
-      // After each page, another post goes to the top of the list, which must not shift the next pages.
       between: async () => {
         const [late] = await publish(other, 'during-walk', 1)
         lateIds.add(late!.id)
       },
+      done: (seen) => [...seededIds].every((id) => ids(seen).includes(id)),
     })
     const seen = pages.flatMap((p) => p.items)
     expectPageSizes(pages, 3)
     expectNewestFirst(seen)
     expect(new Set(ids(seen)).size).toBe(seen.length)
-    // Every seeded post exactly once, newest first.
     expect(ids(seen).filter((id) => seededIds.has(id))).toEqual(ids(seeded).toReversed())
-    // Posts published during the walk are newer than every cursor after the first page.
     expect(ids(pages.slice(1).flatMap((p) => p.items)).filter((id) => lateIds.has(id))).toEqual([])
     expect(lateIds.size).toBeGreaterThan(0)
   })
 
   it('resumes strictly after the cursor, also for posts created in the same instant', async () => {
-    // Published concurrently: timestamps can collide at millisecond precision, and the id breaks ties.
     const burst = await Promise.all(
       Array.from({ length: 6 }, async (_, i) => {
         const res = await myPostsCreate({ body: { body: `pagination ${tag} burst ${i}` }, client: author })
@@ -246,14 +226,11 @@ describe('paging', () => {
 
   it('ends with nextCursor null exactly when no post is left', async () => {
     await publish(author, 'end', 3)
-    // Other files publish and delete concurrently; when that moved the tail between the walk and the check,
-    // the whole check runs again.
     for (let attempt = 1; ; attempt++) {
       const pages = await walk(publicPage, 50)
       expectPageSizes(pages, 50)
       expect(pages.at(-1)!.nextCursor).toBeNull()
       const all = pages.flatMap((p) => p.items)
-      // A page that ends exactly at the last post says there is no next page (the server reads limit + 1).
       const cursor = await cursorAfter(all.length - 3)
       const [exact, short] = await Promise.all([publicPage({ cursor, limit: '3' }), publicPage({ cursor, limit: '2' })])
       if (ids(exact.items).join() !== ids(all.slice(-3)).join() && attempt < 5) {
@@ -286,7 +263,6 @@ describe('author isolation across pages', () => {
       expect(seen.filter((id) => ownIds.has(id))).toEqual(ids(own).toReversed())
     }
 
-    // A cursor taken from one author's list is only a position in the other's list.
     const first = await myPage(author, { limit: '1' })
     const across = await myPage(other, { cursor: first.nextCursor!, limit: '50' })
     for (const post of mine) {

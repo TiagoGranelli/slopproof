@@ -11,7 +11,6 @@ function SectionError({ action, error, reset }: ErrorComponentProps & { action: 
       <ApiErrorAlert action={action} error={error} />
       <Button
         onClick={() => {
-          // A suspense query inside fetches again instead of rethrowing its cached error.
           queryErrorResetBoundary.reset()
           reset()
         }}
@@ -25,12 +24,6 @@ function SectionError({ action, error, reset }: ErrorComponentProps & { action: 
   )
 }
 
-/**
- * Contains a failure to one part of a page. When something inside throws while rendering (a suspense query with
- * nothing to show, a bug), that part says what failed and offers a retry, and the rest of the page keeps
- * working. Failures of the route's loader still reach the route's `errorComponent`. `action` completes
- * "Could not …", as in ApiErrorAlert.
- */
 export function SectionErrorBoundary(props: { action: string; children: ReactNode }) {
   return (
     <CatchBoundary

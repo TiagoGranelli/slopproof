@@ -1,6 +1,3 @@
-// The business API's write limit (WriteRateLimit, src/server/api/rate-limit.ts): per user, on the rate_limit
-// table Better Auth's limits use, incremented atomically. A throwaway account, so no other file's writes
-// share its bucket; deletes of a post that does not exist count without changing any data.
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { WRITE_WINDOW_SECONDS, WRITES_PER_WINDOW } from '#/contract/limits.ts'
@@ -23,13 +20,11 @@ const RATE_LIMITED = { _tag: 'RateLimited', message: 'Too many changes in a shor
 const deleteMissing = () =>
   fetch(`${appUrl}/api/me/posts/${crypto.randomUUID()}`, { headers: { cookie, origin: appUrl }, method: 'DELETE' })
 
-/** Sends `count` deletes at once and returns their statuses, lowest first. */
 const raceDeletes = async (count: number) => {
   const responses = await Promise.all(Array.from({ length: count }, deleteMissing))
   return responses.map((res) => res.status).toSorted((a, b) => a - b)
 }
 
-/** Moves the last admitted write of bucket `key` 30 s into the past, and returns its new time (epoch ms). */
 const moveLastWriteBack = async (key: string) => {
   await pool.query('update rate_limit set last_request = last_request - 30000 where key = $1', [key])
   const {
@@ -38,7 +33,6 @@ const moveLastWriteBack = async (key: string) => {
   return Number(lastRequest)
 }
 
-/** A delete, with the clock read just before and after it, to bound the wait its answer names. */
 const timedDelete = async () => {
   const before = Date.now()
   const response = await deleteMissing()
@@ -46,7 +40,6 @@ const timedDelete = async () => {
   return { after, before, body: (await response.json()) as { retryAfter: number }, status: response.status }
 }
 
-/** Creating and editing share the bucket: each is refused the same way, before its body is read. */
 const expectCreateAndEditRefused = async () => {
   for (const [method, path] of [
     ['POST', '/api/me/posts'],
@@ -69,8 +62,6 @@ describe('write rate limit', () => {
       ...Array.from({ length: 10 }, () => 429),
     ])
 
-    // The wait is what the store computed from the window's last admitted write, not a stand-in for the whole
-    // window: move that write 30 s into the past, and a refused write must be told about the 30 s left.
     const key = `api-write|${userId}`
     const lastRequest = await moveLastWriteBack(key)
     const refused = await timedDelete()
@@ -81,10 +72,8 @@ describe('write rate limit', () => {
     expect(refused.body.retryAfter).toBeLessThanOrEqual(Math.ceil((windowEnd - refused.before) / 1000))
     expect(refused.body.retryAfter).toBeLessThan(WRITE_WINDOW_SECONDS - 20)
 
-    // Creating and editing share the bucket, and their refusals are counted too.
     await expectCreateAndEditRefused()
 
-    // One row per user, next to Better Auth's `<ip>|<path>` rows; reads are not counted.
     expect((await fetch(`${appUrl}/api/me/posts`, { headers: { cookie } })).status).toBe(200)
     const { rows } = await pool.query<{ count: number; key: string }>(
       'select key, count from rate_limit where key like $1',

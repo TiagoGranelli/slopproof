@@ -1,6 +1,3 @@
-// Bombadil browser property specification for the running app (ADR 0018).
-// Explores rendered pages with visible hit-tested interactive clicks plus Bombadil's default input/navigation
-// generators while continuously verifying runtime, landmark, focus, HTTP 5xx, and CSP invariants.
 import { always, type Formula } from '@antithesishq/bombadil'
 import { type Action, actions, extract, type Fingerprint, getFingerprint } from '@antithesishq/bombadil/browser'
 import { back, forward, inputs, reload, scroll, waitOnce } from '@antithesishq/bombadil/browser/defaults/actions'
@@ -68,7 +65,6 @@ const visibleTargets = extract((state) => {
   return targets
 })
 
-/** Clicks only visible, non-occluded interactive controls (scoped to any open modal dialog). */
 export const interactiveClicks = actions(() => visibleTargets.current.map((target) => ({ Click: target })))
 
 const pageSnapshot = extract((state) => {
@@ -85,7 +81,6 @@ const pageSnapshot = extract((state) => {
   }
 })
 
-/** Every loaded page renders exactly one h1 heading and one main landmark. */
 export const singleH1AndMainLandmark: Formula = always(
   () =>
     pageSnapshot.current.readyState !== 'complete' ||
@@ -100,10 +95,6 @@ const previousPathname = extract((state) => {
   return previous
 })
 
-/**
- * Interactive actions on a page must never drop keyboard focus onto document.body.
- * Route changes and initial/reload states may reset focus to body before the next interaction.
- */
 export const focusNeverDroppedToBodyAfterAction: Formula = always(() => {
   const current = pageSnapshot.current
   if (current.readyState !== 'complete' || !current.interactive) {
@@ -125,7 +116,6 @@ const serverErrorStatuses = extract((state) => [
   ...collect5xx(state.window.performance.getEntriesByType('resource')),
 ])
 
-/** No navigation or subresource request may ever answer with an HTTP 5xx status. */
 export const noServerErrorResponses: Formula = always(() => serverErrorStatuses.current.length === 0)
 
 const cspViolations = extract((state) => {
@@ -143,5 +133,4 @@ const cspViolations = extract((state) => {
   return [...(win[CSP_VIOLATIONS_KEY] ?? []), ...consoleCsp]
 })
 
-/** The Content-Security-Policy must never record a violation on any page or interaction. */
 export const noCspViolations: Formula = always(() => cspViolations.current.length === 0)

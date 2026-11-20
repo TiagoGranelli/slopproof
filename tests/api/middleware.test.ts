@@ -1,6 +1,3 @@
-// The API's shared middleware on an endpoint of its own, apart from any feature, so its coverage does not depend
-// on the example: RequestValidation (request decoding failures become the documented 400 ValidationError) and
-// WriteRateLimit (a write budget per user, 429 past it). A feature's own tests check that its endpoints use them.
 import { assert, describe, expect, it, onTestFinished } from '@effect/vitest'
 import { Effect, Layer, Schema } from 'effect'
 import { HttpRouter, HttpServer } from 'effect/http'
@@ -12,7 +9,6 @@ import { RequestValidationLive } from '#/server/api/middleware.ts'
 import { WriteRateLimitLive } from '#/server/api/rate-limit.ts'
 import { AuthenticationOverFakeSessions, memoryRateLimitStore } from './harness.ts'
 
-/** A write endpoint that exists only here, wired like a feature's: session, then write limit, then validation. */
 class Probe extends HttpApiGroup.make('probe')
   .add(
     HttpApiEndpoint.post('write', '/probe', {
@@ -27,7 +23,6 @@ class ProbeApi extends HttpApi.make('probe').add(Probe) {}
 
 const ProbeHandlers = HttpApiBuilder.group(ProbeApi, 'probe', (handlers) => handlers.handle('write', () => Effect.void))
 
-/** The probe with the real middleware over a fresh in-memory rate-limit store. Not recorded for contract coverage. */
 const probe = () => {
   const handlers = ProbeHandlers.pipe(
     Layer.provideMerge(
@@ -96,16 +91,14 @@ describe('WriteRateLimit on an endpoint', () => {
     for (let i = 0; i < WRITES_PER_WINDOW; i++) {
       expect((await send('alice', valid)).status).toBe(204)
     }
-    // Counted before the body is decoded, so an invalid body is refused the same way.
     for (const [index, body] of [valid, '{', JSON.stringify({ value: '' })].entries()) {
       expect(await send('alice', body)).toEqual({
-        status: 429,
-        // The wait the store computed on the harness's clock (one second per request), not the whole window.
         json: {
           _tag: 'RateLimited',
           message: 'Too many changes in a short time',
           retryAfter: WRITE_WINDOW_SECONDS - 1 - index,
         },
+        status: 429,
       })
     }
     expect((await send('bob', valid)).status).toBe(204)
@@ -113,17 +106,14 @@ describe('WriteRateLimit on an endpoint', () => {
 })
 
 describe('RequestValidation middleware', () => {
-  /** The middleware as a plain function: its declared types only admit what the router hands it. */
   type Middleware = (effect: Effect.Effect<never, unknown>, options: never) => Effect.Effect<unknown, unknown>
   const schemaError = Schema.decodeUnknownEffect(Schema.Struct({ id: Schema.String }))({ id: 1 }).pipe(Effect.flip)
   const run = (kind: HttpApiError.HttpApiSchemaError['kind']) =>
     Effect.gen(function* () {
-      // The router hands the middleware failures typed `unhandled` and provides HttpRouter.Provided; called directly,
-      // its declared types admit neither, so they are erased.
+      // Direct middleware invocation bypasses HttpRouter.Provided and unhandled failure typing.
       // oxlint-disable-next-line quality/no-chained-type-assertions
       const middleware = (yield* RequestValidation) as unknown as Middleware
       const failure = new HttpApiError.HttpApiSchemaError({ cause: yield* schemaError, kind })
-      // The options (endpoint, group) are not read by this middleware.
       return yield* middleware(Effect.fail(failure), undefined as never).pipe(Effect.flip)
     }).pipe(Effect.provide(RequestValidationLive))
 
@@ -138,8 +128,6 @@ describe('RequestValidation middleware', () => {
     }),
   )
 
-  // A response that does not match its own schema is a server bug: it must reach ServerMiddleware
-  // (src/server/api/web-handler.ts) unchanged and become a logged 500, never a 400 blaming the client.
   it.effect.each(['Body', 'ResponseHeaders'] as const)('passes %s encoding failures through', (kind) =>
     Effect.gen(function* () {
       const error = yield* run(kind)

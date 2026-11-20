@@ -7,7 +7,6 @@ import { AuthStatus } from '#/features/auth/components/auth-status.tsx'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.EmailInput))
 
-/** Asks for a reset link. The answer does not reveal whether the address has an account. */
 export function ForgotPasswordForm() {
   const request = useRequestPasswordReset()
   const controller = useAuthFormController({ fieldCodes: { INVALID_EMAIL: 'email' } })

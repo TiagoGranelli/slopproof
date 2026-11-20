@@ -3,10 +3,6 @@ import { RelativeTime } from '#/components/time/relative-time.tsx'
 import { Card, CardContent, CardDescription } from '#/components/ui/card.tsx'
 import type { Post } from '#/sdk/types.gen.ts'
 
-/**
- * A post's card. `children` replaces the body (the edit form uses it), `actions` sit next to the byline
- * and `alert` goes last.
- */
 export function PostCard(props: {
   actions?: ReactElement
   alert?: ReactNode

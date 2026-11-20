@@ -1,5 +1,3 @@
-// deleteExpiredAuthRows (src/server/auth-cleanup.ts) against real Postgres: which sessions and verification
-// tokens the periodic cleanup deletes, which it keeps, and that it costs two statements.
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { deleteExpiredAuthRows, EXPIRED_SESSION_RETENTION_MS } from '#/server/auth-cleanup.ts'
@@ -11,7 +9,6 @@ const HOUR = 60 * 60 * 1000
 
 afterAll(() => pool.end())
 
-/** A session of `userId` that expires at `expiresAt` (epoch ms), its id prefixed with `label`. */
 const sessionRow = (userId: string, label: string, expiresAt: number) => ({
   expiresAt: new Date(expiresAt),
   id: `${label}-${crypto.randomUUID()}`,
@@ -21,7 +18,6 @@ const sessionRow = (userId: string, label: string, expiresAt: number) => ({
   userId,
 })
 
-/** A password-reset token for `userId` that expires at `expiresAt` (epoch ms), its id prefixed with `label`. */
 const tokenRow = (userId: string, label: string, expiresAt: number) => ({
   expiresAt: new Date(expiresAt),
   id: `${label}-${crypto.randomUUID()}`,
@@ -44,7 +40,6 @@ describe('deleteExpiredAuthRows', () => {
 
     const { returned: deleted, statements } = await statementsOf(() => deleteExpiredAuthRows(now))
     expectBudget('deleteExpiredAuthRows', statements, 2)
-    // Other files' rows may expire too, so at least ours.
     expect(deleted.sessions).toBeGreaterThanOrEqual(1)
     expect(deleted.verifications).toBeGreaterThanOrEqual(1)
 

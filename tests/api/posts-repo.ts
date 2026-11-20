@@ -1,4 +1,3 @@
-// PostsRepo in memory for the api layer (./harness.ts), with the real repository's contract.
 import { Layer } from 'effect'
 import { PostId, type UserId } from '#/contract/ids.ts'
 import type { Post } from '#/contract/posts.ts'
@@ -6,7 +5,6 @@ import { PostsRepo } from '#/server/posts/repo.ts'
 import { memoryQuery, type RepoOptions } from './memory-db.ts'
 import { memoryClock, memoryPage } from './memory-keyset.ts'
 
-/** A stored post: the public fields, its owner, and its sort key at Postgres's microsecond precision. */
 type StoredPost = Post & { readonly authorId: UserId; readonly cursorAt: string }
 
 const view = ({ authorName, body, createdAt, id, updatedAt }: StoredPost): Post => ({
@@ -17,11 +15,6 @@ const view = ({ authorName, body, createdAt, id, updatedAt }: StoredPost): Post 
   updatedAt,
 })
 
-/**
- * PostsRepo in memory, with the real repository's contract: keyset pages ordered by (created_at, id) newest
- * first at microsecond precision, and ownership as part of the lookup (another author's id behaves like a
- * missing id).
- */
 export const memoryPostsRepo = (options: RepoOptions) => {
   const db = memoryQuery(options)
   return Layer.sync(PostsRepo, () => {

@@ -58,20 +58,17 @@ const listByAuthor = Effect.fn('PostsRepo.listByAuthor')(function* (own: Db, aut
 
 const create = Effect.fn('PostsRepo.create')(function* (own: Db, author: Author, body: string) {
   const [row] = yield* query(own, (db) => db.insert(post).values({ authorId: author.id, body }).returning())
-  // INSERT … RETURNING yields the inserted row; none at all is a driver defect, not an outcome to handle.
   if (!row) {
     return yield* Effect.die(new Error(`INSERT … RETURNING returned no row for a post by author ${author.id}`))
   }
   return toPost(row, author.name)
 })
 
-/** A new body for the post `id`. */
 interface Edit {
   readonly body: string
   readonly id: PostId
 }
 
-// Ownership is part of the WHERE clause, so another author's id behaves exactly like a missing id.
 const update = Effect.fn('PostsRepo.update')(function* (own: Db, author: Author, edit: Edit) {
   if (!isUuid(edit.id)) {
     return undefined
@@ -99,7 +96,6 @@ const remove = Effect.fn('PostsRepo.remove')(function* (own: Db, author: Author,
   return rows.length > 0
 })
 
-/** The posts table: public and per-author pages, and an author's writes, ownership checked in each query. */
 export class PostsRepo extends Context.Service<
   PostsRepo,
   {

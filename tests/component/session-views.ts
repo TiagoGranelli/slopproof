@@ -1,4 +1,3 @@
-// The sessions the account page lists, for the tests of the session list and of the forms that refresh it.
 import type { ReactNode } from 'react'
 import { sessionsQueryKey } from '#/features/auth/api/get-sessions.ts'
 import type { AuthOutcome, SessionView } from '#/lib/auth.functions.ts'
@@ -18,20 +17,14 @@ const session = (overrides: Partial<SessionView>): SessionView => ({
   userAgent: FIREFOX_LINUX,
   ...overrides,
 })
-/** The session of the browser the page runs in: Firefox on Linux. */
 export const thisBrowser = session({ current: true, lastActiveAt: '2026-09-27T09:00:00.000Z' })
-/** Another session, Chrome on Windows, whose address Better Auth did not keep. */
 export const phone = session({ ipAddress: null, userAgent: CHROME_WINDOWS })
-/** The accessible name of `phone`'s Sign out button. */
 export const otherName = 'Sign out Chrome on Windows, signed in 2026-09-01 10:00 UTC'
 
-/** The outcome of listing `sessions`, as the listSessions server function answers it. */
 export const listed = (...sessions: Array<SessionView>) => ({ ok: true, value: sessions }) as const
-/** Answers the listSessions server function with `sessions`, for the refetch after an action. */
 export const listSessions = (...sessions: Array<SessionView>) =>
   authFunction<ReadonlyArray<SessionView>>('listSessions', listed(...sessions))
 
-/** Renders `ui` with the session list already loaded (the route loader does that in the app). */
 export const renderWithSessions = (ui: ReactNode, sessions: AuthOutcome<ReadonlyArray<SessionView>>) => {
   const queryClient = testQueryClient()
   queryClient.setQueryData(sessionsQueryKey, sessions)

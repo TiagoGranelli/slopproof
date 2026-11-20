@@ -13,21 +13,13 @@ import {
 import { truncateCodePoints } from '#/lib/truncate-text.ts'
 import type { Post } from '#/sdk/types.gen.ts'
 
-// The editor loads on the first hover or focus of an Edit button, not with the dashboard, whose first paint on a
-// throttled phone counts every preloaded byte (Lighthouse FCP).
 const loadEditor = () =>
   import('#/features/posts/components/edit-post-form.tsx').then((module) => ({ default: module.EditPostForm }))
 const EditPostForm = lazy(loadEditor)
 const preloadEditor = () => {
-  // A failed early load is retried by the lazy component when the editor opens.
   loadEditor().catch(() => {})
 }
 
-/**
- * One of the author's posts, with Edit and Delete. Edit swaps the body for a form driven by `post-editor-machine`;
- * focus moves into the textarea and returns to the Edit button on Save or Cancel. Delete asks first
- * (ConfirmDeleteButton).
- */
 export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; post: Post }) {
   const { post } = props
   const [editor, dispatch] = useReducer(transitionPostEditor, INITIAL_POST_EDITOR_STATE)
@@ -42,8 +34,6 @@ export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; 
   }
 
   return (
-    // Keep the Suspense boundary mounted across view/edit transitions so React 19's `startTransition` retains the
-    // focused Edit button while the lazy EditPostForm chunk loads instead of unmounting into the fallback (ADR 0018).
     <Suspense fallback={<PostCard busy post={post} />}>
       {isPostEditorOpen(editor) ? (
         <EditPostForm dispatch={dispatch} onUpdated={props.onUpdated} post={post} state={editor} />

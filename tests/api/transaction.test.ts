@@ -1,5 +1,3 @@
-// Database.transaction's bookkeeping over a fake driver that records BEGIN/COMMIT/ROLLBACK like Drizzle's: which
-// client a body sees, and what it returns. tests/db/transaction.test.ts proves the same against Postgres.
 import { PgTransaction } from 'drizzle-orm/pg-core'
 import { Cause, Data, Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vitest'

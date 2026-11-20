@@ -4,7 +4,6 @@ import { pageTitle } from '#/config/app.ts'
 import { ResetPasswordForm } from '#/features/auth/components/reset-password-form.tsx'
 import { tokenFromSearch } from '#/features/auth/utils/token-search.ts'
 
-// Opened from the reset email (src/server/mail/auth-messages.ts). The token is checked when the form is sent.
 export const Route = createFileRoute('/reset-password')({
   component: ResetPassword,
   validateSearch: tokenFromSearch,

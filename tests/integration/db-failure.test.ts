@@ -1,7 +1,3 @@
-// Database failures must not leak. This file starts its own server (the built app) on its own database,
-// signs in, then renames the `user` and `session` tables so every query that carries an email or a session
-// token fails inside Postgres. Drizzle puts the failed query's parameters into its error message, so any
-// raw error that reached a response or the log would show them. Production build only.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Client } from 'pg'
@@ -16,7 +12,6 @@ let cookie: string
 let token: string
 let databaseUrl: string
 
-/** Everything a leak would consist of: credentials, the session token, and database internals. */
 const secrets = () => [app.user.email, app.user.password, app.otherUser.email, token]
 const expectNoLeak = (text: string, label: string) => {
   for (const secret of secrets()) {
@@ -25,7 +20,6 @@ const expectNoLeak = (text: string, label: string) => {
   expect(text, label).not.toMatch(/Failed query|relation "|_offline|Failed to get session|node_modules|\.mjs:\d+/)
 }
 
-/** Ids of the server functions the client bundle can call (Start compiles each to a sha256 id). */
 const serverFunctionIds = () => {
   const dir = '.output/public/assets'
   const ids = new Set<string>()
@@ -61,7 +55,6 @@ describe('database failure', () => {
   }, 60_000)
 
   afterAll(async () => {
-    // Still unassigned when beforeAll failed before the app started.
     await (app as RunningApp | undefined)?.stop()
     if (databaseUrl) {
       await dropTestDatabase(databaseUrl)
@@ -87,7 +80,6 @@ describe('database failure', () => {
       expectNoLeak(text, `server function ${id}`)
       bodies.push(text)
     }
-    // At least the session check (src/lib/session.functions.ts) reached the database and failed.
     expect(bodies.some((text) => text.includes('Internal error'))).toBe(true)
   })
 

@@ -1,5 +1,3 @@
-// Reference-counted Constructable Stylesheet singleton (and its <style> fallback) used in place of
-// react-style-singleton's DOM <style> injector so Radix scroll-lock styles work under strict hash-based CSP.
 import { setNonce } from 'get-nonce'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stylesheetSingleton } from '#/lib/adopted-stylesheet-singleton.ts'
@@ -89,7 +87,6 @@ describe('stylesheetSingleton', () => {
     const { existing, fakeDocument } = installAdoptedDocument()
     const singleton = stylesheetSingleton()
 
-    // Extra remove before any add is a safe no-op.
     singleton.remove()
     expect(fakeDocument.adoptedStyleSheets).toEqual([existing])
 
@@ -97,7 +94,6 @@ describe('stylesheetSingleton', () => {
     expect(fakeDocument.adoptedStyleSheets).toHaveLength(2)
     expect(fakeDocument.adoptedStyleSheets[1]?.cssText).toContain('overflow: hidden !important;')
 
-    // Second add only increments the reference count and does not append a duplicate sheet.
     singleton.add('body { color: red; }')
     expect(fakeDocument.adoptedStyleSheets).toHaveLength(2)
 

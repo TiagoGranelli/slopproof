@@ -8,10 +8,6 @@ import { AuthForm, useAuthFormController } from '#/features/auth/components/auth
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.NewPasswordInput))
 
-/**
- * Sets a new password with the token from a reset link. Every session of the account ends, so the next step is
- * signing in: the form goes to /login, which says why (a flash message).
- */
 export function ResetPasswordForm(props: { token: string }) {
   const navigate = useNavigate()
   const reset = useResetPassword({

@@ -1,7 +1,3 @@
-// scripts/migrate.ts (the deploy migrator, bundled as .output/migrate.mjs) against its own empty database:
-// concurrent runs, the retry on a busy table, the bound on waiting for another run, MIGRATION_DATABASE_URL, and
-// bookkeeping that Drizzle's own migrator agrees with.
-// The same script behind PgBouncer in transaction mode is covered by `pnpm ci:docker` (scripts/docker-smoke.ts).
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -16,7 +12,6 @@ const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8'
 const LOCK_KEY = '8098991147069224299'
 
 type Run = { code: number; lines: Array<{ applied?: number; error?: string; msg: string; total?: number }> }
-/** Runs the migrator with only the given environment (no .env: DATABASE_URL or MIGRATION_DATABASE_URL is set). */
 const migrate = (env: Record<string, string>) =>
   new Promise<Run>((resolve) => {
     execFile(
@@ -34,11 +29,9 @@ const migrate = (env: Record<string, string>) =>
     )
   })
 
-/** Opens a transaction on the test database that holds `lock` until the returned release is called. */
 const hold = async (lock: string) => {
   const client = new Client({ connectionString: url })
   await client.connect()
-  // This session idles in its transaction on purpose, also where the database sets a bound for the app.
   await client.query('set idle_in_transaction_session_timeout = 0')
   await client.query('begin')
   await client.query(lock)
@@ -48,7 +41,6 @@ const hold = async (lock: string) => {
   }
 }
 
-/** Every row of the bookkeeping table both migrators read. */
 const recorded = async () => {
   const client = new Client({ connectionString: url })
   await client.connect()
@@ -77,7 +69,6 @@ describe('scripts/migrate.ts', () => {
       MIGRATIONS,
     ])
     expect(summaries.every((summary) => summary?.total === MIGRATIONS)).toBe(true)
-    // A later run finds nothing to do.
     const again = await migrate({ DATABASE_URL: url })
     expect(again.lines.at(-1)).toMatchObject({ applied: 0, msg: 'migrations applied', total: MIGRATIONS })
   })
@@ -87,7 +78,6 @@ describe('scripts/migrate.ts', () => {
     await (
       await hold(`create schema drizzle; create table ${table} (id serial primary key, hash text, created_at bigint)`)
     )()
-    // A long transaction on a table the migration needs; it ends after a while.
     const release = await hold(`lock table ${table} in access exclusive mode`)
     const released = new Promise((resolve) => setTimeout(resolve, 1500)).then(release)
     const run = await migrate({ DATABASE_URL: url, MIGRATE_DDL_LOCK_TIMEOUT: '300ms' })
@@ -134,10 +124,6 @@ describe('scripts/migrate.ts', () => {
     expect(run.lines.at(-1)).toMatchObject({ applied: MIGRATIONS, msg: 'migrations applied' })
   })
 
-  // scripts/migrate.ts copies Drizzle's bookkeeping instead of calling Drizzle's migrator, because it takes a
-  // transaction-scoped advisory lock inside the migrations' transaction (safe behind a pooler). If the copy drifted
-  // from Drizzle's rules, Drizzle's migrator (`drizzle-kit migrate`, resetTestDatabase in scripts/test-db.ts)
-  // would apply migrations again on a database this script had already brought up to date.
   it("leaves nothing for Drizzle's own migrator to apply", async () => {
     await migrate({ DATABASE_URL: url })
     const before = await recorded()

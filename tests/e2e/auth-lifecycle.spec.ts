@@ -1,7 +1,4 @@
 import type { APIRequestContext, Locator } from '@playwright/test'
-// The account lifecycle on the open server (AUTH_SIGN_UP=open, mail to Mailpit). Every test works on
-// a throwaway account (./support/accounts.ts), never the worker's `author`, and every browser context has its
-// own client IP.
 import { FLASH_MESSAGES } from '#/lib/flash.ts'
 import {
   createAccount,
@@ -18,7 +15,6 @@ import {
 } from './support/accounts.ts'
 import { type Author, expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
 
-/** Better Auth's own sign-in endpoint refuses `account` until its address is confirmed. */
 const expectApiSignInUnverified = async (request: APIRequestContext, account: Author) => {
   const early = await request.post('/api/auth/sign-in/email', {
     data: { email: account.email, password: account.password },
@@ -27,14 +23,12 @@ const expectApiSignInUnverified = async (request: APIRequestContext, account: Au
   expect(await early.json()).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' })
 }
 
-/** A failure the server pinned on `field`: said next to it, which is invalid, described by it and focused. */
 const expectFieldIssue = async (field: Locator, message: string) => {
   await expect(field).toHaveAttribute('aria-invalid', 'true')
   await expect(field).toHaveAccessibleDescription(message)
   await expect(field).toBeFocused()
 }
 
-/** Types `password` into the delete-account form (`deletion`) and presses Delete account. */
 const submitDeletion = async (deletion: Locator, password: string) => {
   await deletion.getByLabel('Password', { exact: true }).fill(password)
   await deletion.getByRole('button', { name: 'Delete account' }).click()
@@ -48,15 +42,12 @@ test('signs up, confirms the address from the mail, then signs in', async ({ pag
   await signUpWithForm(page, account)
   await expect(page.getByRole('status')).toContainText(`Check your inbox at ${account.email}`)
 
-  // Not before the address is confirmed.
   await expectFormSignInRefused(page, account, 'Confirm your email address first')
 
   const link = await mailLink(account.email, 'Confirm your email address', '/verify-email')
-  // Following the link, as a mail scanner or a link preview does, confirms nothing.
   expect((await request.get(link)).status()).toBe(200)
   await expectApiSignInUnverified(request, account)
 
-  // Its owner confirms with the button (a POST).
   await visit(page, link)
   await page.getByRole('button', { name: 'Confirm email' }).click()
   await expect(page.getByRole('status')).toContainText('Your email address is confirmed')
@@ -70,7 +61,6 @@ test('resets a forgotten password from the mailed link, which ends every session
   page,
 }, testInfo) => {
   const account = await createAccount()
-  // Signed in elsewhere before the reset.
   const elsewhere = await signedInElsewhere(browser, testInfo, account)
 
   await requestPasswordReset(page, account.email)
@@ -81,7 +71,6 @@ test('resets a forgotten password from the mailed link, which ends every session
   await setPasswordWithLink(page, link, newPassword)
   await expectFlash(page, /\/login$/, FLASH_MESSAGES['password-reset'])
 
-  // The link works once.
   await setPasswordWithLink(page, link, `pw-${crypto.randomUUID()}`)
   await expect(page.getByRole('alert')).toContainText('This link is invalid or has expired')
 
@@ -139,13 +128,11 @@ test('deletes the account after the password and an explicit confirmation', asyn
   await visit(page, '/account')
 
   const deletion = page.getByRole('region', { name: 'Delete account' })
-  // The confirmation checkbox is required: nothing is sent without it, and focus goes to it.
   await submitDeletion(deletion, 'not-the-password-123')
   await expect(deletion.getByRole('alert')).toHaveText('Confirm that you want to delete the account.')
   await expect(deletion.getByRole('checkbox')).toBeFocused()
   await deletion.getByRole('checkbox').check()
   await deletion.getByRole('button', { name: 'Delete account' }).click()
-  // A wrong password is about the password field, so it is said there.
   await expectFieldIssue(deletion.getByLabel('Password', { exact: true }), 'That password is not correct.')
 
   await submitDeletion(deletion, account.password)

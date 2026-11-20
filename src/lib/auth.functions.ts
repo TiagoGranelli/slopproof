@@ -17,25 +17,13 @@ import { env } from '#/server/env.ts'
 import { type AuthEndpointResult, type AuthErrorCode, callAuthEndpoint } from '#/server/http/auth-handler.ts'
 import { displayClientAddress } from '#/server/http/client-address.ts'
 
-// Every account action the UI offers, as server functions: the browser bundle carries no Better Auth client.
-// Each one validates its input with Effect Schema and calls Better Auth in-process through its router
-// (callAuthEndpoint), so rate limiting, the endpoint allowlist and the origin check apply exactly as they do on
-// /api/auth/*, and Better Auth's cookies reach the browser on this response.
-
-/**
- * Why an action failed: a Better Auth error code the exposed endpoints answer with, RATE_LIMITED (429), NOT_FOUND
- * (an endpoint that is off, such as sign-up when closed) or UNEXPECTED (anything else). A closed union: the UI's
- * describeAuthFailure stops compiling until it handles a new code.
- */
 export type AuthFailureCode = AuthErrorCode | 'RATE_LIMITED' | 'NOT_FOUND' | 'UNEXPECTED'
 
 export interface AuthFailure {
   readonly code: AuthFailureCode
-  /** Seconds until a rate-limited client may retry. */
   readonly retryAfter?: number
 }
 
-/** Expected failures are values, not exceptions: a wrong password is not a server error. */
 export type AuthOutcome<T = null> =
   | { readonly ok: true; readonly value: T }
   | { readonly failure: AuthFailure; readonly ok: false }
@@ -60,19 +48,13 @@ const failure = (refused: EndpointFailure): AuthOutcome<never> => {
 
 const done = (answer: AuthEndpointResult): AuthOutcome => (answer.ok ? { ok: true, value: null } : failure(answer))
 
-// Nothing here may be cached: the answers depend on the session cookie.
 const noStore = () => setResponseHeader('cache-control', 'private, no-store')
 
-/** Whether /sign-up is available (AUTH_SIGN_UP). */
 export const getSignUpPolicy = createServerFn({ method: 'GET' }).handler(() => {
   noStore()
   return { open: env.authSignUp === 'open' }
 })
 
-/**
- * Where a sign-in posted by the form itself goes: back to /login, whose guard sends a signed-in visitor on to
- * `redirect` (validated there, as for every visitor), and which shows a failure's code otherwise.
- */
 const loginPageAfter = (outcome: AuthOutcome, redirectTo: string) => {
   const search = new URLSearchParams()
   if (redirectTo) {
@@ -87,21 +69,10 @@ const loginPageAfter = (outcome: AuthOutcome, redirectTo: string) => {
   return search.size > 0 ? `/login?${search}` : '/login'
 }
 
-/**
- * Signs in with email and password; the session cookie comes back on this response. A wrong password is a
- * failure value (`INVALID_EMAIL_OR_PASSWORD`), not an exception.
- *
- * @example const outcome = await signIn({ data: { email, password } })
- */
 export const signIn = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(SignInInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/sign-in/email', { body: data })))
 
-/**
- * The login form posted by the browser itself, before hydration or without JavaScript (its `action`; the script
- * calls signIn instead). Answers a 303 to the next page, with the session cookie on it:
- * docs/decisions/0015-login-without-javascript.md.
- */
 export const signInFromForm = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(SignInFormPost))
   .handler(async ({ data }) => {
@@ -110,37 +81,30 @@ export const signInFromForm = createServerFn({ method: 'POST' })
     throw redirect({ href: loginPageAfter(outcome, data.redirect), statusCode: 303 })
   })
 
-/** Ends this browser's session and clears its cookie; the account's other sessions go on. */
 export const signOut = createServerFn({ method: 'POST' }).handler(async () =>
   done(await callAuthEndpoint('POST', '/sign-out', { body: {} })),
 )
 
-/** Answers the same whether or not the email already has an account; the owner of an existing one gets a mail. */
 export const signUp = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(SignUpInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/sign-up/email', { body: data })))
 
-/** Sends a new verification link if the address has an unverified account; answers the same otherwise. */
 export const resendVerification = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(EmailInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/send-verification-email', { body: data })))
 
-/** Confirms the email address of the link's token (/verify-email); an expired or used token is a failure value. */
 export const verifyEmail = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(TokenInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('GET', '/verify-email', { query: { token: data.token } })))
 
-/** Mails a reset link if the address has an account; answers the same otherwise. */
 export const requestPasswordReset = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(EmailInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/request-password-reset', { body: data })))
 
-/** Sets the new password and signs out every session of the account (revokeSessionsOnPasswordReset). */
 export const resetPassword = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(ResetPasswordInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/reset-password', { body: data })))
 
-/** Always ends the account's other sessions; this one continues with a new token. */
 export const changePassword = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(ChangePasswordInput))
   .handler(async ({ data }) =>
@@ -158,12 +122,10 @@ const ListedSession = Schema.Struct({
 const decodeSessions = Schema.decodeUnknownSync(Schema.Array(ListedSession))
 const decodeCurrent = Schema.decodeUnknownSync(Schema.Struct({ session: Schema.Struct({ id: Schema.String }) }))
 
-/** A session as the account page shows it. Tokens never leave the server. */
 export interface SessionView {
   readonly createdAt: string
   readonly current: boolean
   readonly id: string
-  /** An IPv4 address, or the IPv6 network Better Auth recorded, in CIDR notation (`2001:db8:1:2::/64`). */
   readonly ipAddress: string | null
   readonly lastActiveAt: string
   readonly userAgent: string | null
@@ -177,7 +139,6 @@ const listRaw = async () => {
   return { ok: true as const, sessions: decodeSessions(listed.body) }
 }
 
-/** `sessions` as the account page shows them, newest activity first, the one of this request marked current. */
 const sessionViews = (
   sessions: ReadonlyArray<typeof ListedSession.Type>,
   currentId: string,
@@ -193,7 +154,6 @@ const sessionViews = (
     }))
     .toSorted((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
 
-/** The account's active sessions, newest activity first. Better Auth wants a recent sign-in (SESSION_NOT_FRESH). */
 export const listSessions = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AuthOutcome<ReadonlyArray<SessionView>>> => {
     noStore()
@@ -211,7 +171,6 @@ export const listSessions = createServerFn({ method: 'GET' }).handler(
   },
 )
 
-/** Ends one session of the account, by id; Better Auth addresses sessions by token, which stays here. */
 export const revokeSession = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(SessionInput))
   .handler(async ({ data }): Promise<AuthOutcome> => {
@@ -220,19 +179,16 @@ export const revokeSession = createServerFn({ method: 'POST' })
       return failure(listed)
     }
     const session = listed.sessions.find((candidate) => candidate.id === data.id)
-    // Already gone (or never the caller's): the outcome the user asked for.
     if (!session) {
       return { ok: true, value: null }
     }
     return done(await callAuthEndpoint('POST', '/revoke-session', { body: { token: session.token } }))
   })
 
-/** Ends every session of the account except this one. */
 export const revokeOtherSessions = createServerFn({ method: 'POST' }).handler(async () =>
   done(await callAuthEndpoint('POST', '/revoke-other-sessions', { body: {} })),
 )
 
-/** Ends every session of the account, this one included, and clears this browser's cookie. */
 export const signOutEverywhere = createServerFn({ method: 'POST' }).handler(async (): Promise<AuthOutcome> => {
   const revoked = await callAuthEndpoint('POST', '/revoke-sessions', { body: {} })
   if (!revoked.ok) {
@@ -241,7 +197,6 @@ export const signOutEverywhere = createServerFn({ method: 'POST' }).handler(asyn
   return done(await callAuthEndpoint('POST', '/sign-out', { body: {} }))
 })
 
-/** Deletes the account, and through foreign keys what it owns, after checking the password. */
 export const deleteAccount = createServerFn({ method: 'POST' })
   .validator(Schema.toStandardSchemaV1(DeleteAccountInput))
   .handler(async ({ data }) => done(await callAuthEndpoint('POST', '/delete-user', { body: data })))

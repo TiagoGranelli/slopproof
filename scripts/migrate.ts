@@ -1,25 +1,12 @@
-// Applies pending Drizzle migrations from drizzle/ for deploys, to MIGRATION_DATABASE_URL if set, else
-// DATABASE_URL.
-// Safe to start from several instances at once, and behind a connection pooler in transaction mode
-// (PgBouncer, Neon's and Supabase's poolers): everything happens in one transaction that first takes a
-// transaction-scoped advisory lock, so concurrent runs queue behind each other and each one reads
-// drizzle.__drizzle_migrations only once it holds the lock. Migrations already recorded there are skipped, so
-// reruns are no-ops. Settings are `SET LOCAL`, which ends with the transaction; nothing is left on a pooled
-// server connection.
-// Usage: node scripts/migrate.ts   (the Docker image runs the bundled copy: node .output/migrate.mjs)
 import { existsSync } from 'node:fs'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { Client } from 'pg'
 
-// Any constant works as long as nothing else in the database uses it. ASCII "proofstk".
 const LOCK_KEY = '8098991147069224299'
 const LOCK_WAIT = process.env.MIGRATE_LOCK_TIMEOUT ?? '5min'
-// Bound for each table lock a migration takes. DDL waiting on a busy table would otherwise queue every
-// later query on that table behind it; with the bound it gives up, rolls back and tries again.
 const DDL_LOCK_WAIT = process.env.MIGRATE_DDL_LOCK_TIMEOUT ?? '5s'
 const DDL_ATTEMPTS = 5
 const LOCK_NOT_AVAILABLE = '55P03'
-// Drizzle's bookkeeping table, so `drizzle-kit` and this script agree on what has been applied.
 const TABLE = 'drizzle.__drizzle_migrations'
 
 const setting = (value: string) => `'${value.replaceAll("'", '')}'`
@@ -56,23 +43,16 @@ if (!existsSync(`${migrationsFolder}/meta/_journal.json`)) {
 }
 const migrations = readMigrationFiles({ migrationsFolder })
 
-/** Thrown when another run held the lock for longer than MIGRATE_LOCK_TIMEOUT: not retried. */
 class LockWaitExceededError extends Error {}
 
 type Migration = (typeof migrations)[number]
 type Counts = { applied: number; total: number }
 
-// The role's timeouts are meant for the app (docs/operations.md, "Connection poolers"): they must cut short
-// neither the wait for another run nor a long migration. lock_timeout bounds both waits instead.
 const relaxTimeouts = async (client: Client) => {
   await client.query('set local statement_timeout = 0')
   await client.query('set local idle_in_transaction_session_timeout = 0')
 }
 
-/**
- * Waits for the advisory lock for at most LOCK_WAIT (lock_timeout first bounds this wait, then each lock the DDL
- * takes). The commit or rollback of the transaction releases it.
- */
 const takeLock = async (client: Client) => {
   await client.query(`set local lock_timeout = ${setting(LOCK_WAIT)}`)
   await client.query('select pg_advisory_xact_lock($1)', [LOCK_KEY]).catch((error: unknown) => {
@@ -82,7 +62,6 @@ const takeLock = async (client: Client) => {
   })
 }
 
-/** A migration is pending when it is newer than the last recorded one, as in Drizzle's migrator. */
 const pendingMigrations = async (client: Client): Promise<Array<Migration>> => {
   const { rows } = await client.query<{ created_at: string | null }>(
     `select created_at from ${TABLE} order by created_at desc limit 1`,
@@ -101,7 +80,6 @@ const applyMigration = async (client: Client, migration: Migration) => {
   ])
 }
 
-/** Applies what is pending, each DDL lock bounded by DDL_LOCK_WAIT. Returns how many it applied and are recorded. */
 const applyPending = async (client: Client): Promise<Counts> => {
   await client.query(`set local lock_timeout = ${setting(DDL_LOCK_WAIT)}`)
   await client.query('create schema if not exists drizzle')
@@ -116,7 +94,6 @@ const applyPending = async (client: Client): Promise<Counts> => {
   return { applied: pending.length, total }
 }
 
-/** One attempt, in one transaction: wait for the advisory lock, then apply what is pending. */
 const attempt = async (client: Client): Promise<Counts> => {
   await client.query('begin')
   try {
@@ -131,12 +108,9 @@ const attempt = async (client: Client): Promise<Counts> => {
   }
 }
 
-/** A table-lock timeout is retried up to DDL_ATTEMPTS times; waiting too long for another run is not. */
 const retriable = (error: unknown, attemptNumber: number) =>
   !(error instanceof LockWaitExceededError) && codeOf(error) === LOCK_NOT_AVAILABLE && attemptNumber < DDL_ATTEMPTS
 
-// All pending migrations share one transaction, so a table-lock timeout rolls back everything and the next
-// attempt starts clean (and waits for the advisory lock again).
 const migrateWithRetries = async (client: Client, attemptNumber = 1): Promise<Counts> => {
   try {
     return await attempt(client)
@@ -156,7 +130,6 @@ const client = new Client({
   connectionString: url,
   connectionTimeoutMillis: 10_000,
 })
-// Postgres NOTICEs ("schema drizzle already exists, skipping") are noise here.
 client.on('notice', () => {})
 const started = performance.now()
 try {

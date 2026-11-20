@@ -4,7 +4,6 @@ import { revokeSession } from '#/lib/auth.functions.ts'
 
 type RevokeSessionInput = DataOf<typeof revokeSession>
 
-/** Ends one of the account's sessions; the session list is then refetched. */
 export function useRevokeSession({ mutationConfig }: { mutationConfig?: AuthMutationConfig<RevokeSessionInput> } = {}) {
   return useAuthMutation((data: RevokeSessionInput) => revokeSession({ data }), mutationConfig, {
     invalidates: [{ queryKey: sessionsQueryKey }],

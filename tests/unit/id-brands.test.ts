@@ -1,5 +1,3 @@
-// The id brands of src/contract/ids.ts exist only for the compiler, so this file is checked by `pnpm typecheck`:
-// each `@ts-expect-error` below fails the typecheck the day the line under it starts to compile.
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { type PostId, UserId } from '#/contract/ids.ts'
@@ -12,7 +10,6 @@ describe('id brands', () => {
     const mixedUp: PostId = author
     // @ts-expect-error the same mix-up in a WHERE clause: post.id compared with a user's id
     const condition = eq(post.id, author)
-    // At run time both are the same string and the query is built; only the compiler tells them apart.
     expect(mixedUp).toBe('user-1')
     expect(condition).toBeDefined()
   })

@@ -11,8 +11,6 @@ import { pageRequest } from '../db/keyset.ts'
 import { isDraining } from '../lifecycle.ts'
 import { PostsRepo } from '../posts/repo.ts'
 
-// A draining process is not ready, whatever the database says: the load balancer stops routing to it while it
-// finishes what it has (../lifecycle.ts).
 const readiness = (database: DatabaseHealth['Service']) =>
   Effect.suspend(() => {
     if (isDraining()) {
@@ -24,7 +22,6 @@ const readiness = (database: DatabaseHealth['Service']) =>
     )
   })
 
-/** GET /api/health (the process answers) and GET /api/ready (it can serve: not draining, database up). */
 const SystemHandlers = HttpApiBuilder.group(
   Api,
   'system',
@@ -36,12 +33,10 @@ const SystemHandlers = HttpApiBuilder.group(
   }),
 )
 
-/** The session's user, as the Authentication middleware resolved it: no query of its own. */
 const MeHandlers = HttpApiBuilder.group(Api, 'me', (handlers) =>
   handlers.handle('get', () => CurrentUser.use(Effect.succeed)),
 )
 
-/** The public feed, newest first, a page at a time. Needs no session. */
 const PublicPostsHandlers = HttpApiBuilder.group(
   Api,
   'publicPosts',
@@ -53,7 +48,6 @@ const PublicPostsHandlers = HttpApiBuilder.group(
 
 type Repo = PostsRepo['Service']
 
-/** Edits one of the signed-in author's posts; another author's post is as missing as a deleted one (404). */
 const updateOwnPost = (repo: Repo, id: PostId, body: string) =>
   Effect.gen(function* () {
     const author = yield* CurrentUser
@@ -64,7 +58,6 @@ const updateOwnPost = (repo: Repo, id: PostId, body: string) =>
     return updated
   })
 
-/** Deletes one of the signed-in author's posts, with the same 404 as `updateOwnPost`. */
 const removeOwnPost = (repo: Repo, id: PostId) =>
   Effect.gen(function* () {
     const author = yield* CurrentUser
@@ -74,7 +67,6 @@ const removeOwnPost = (repo: Repo, id: PostId) =>
     }
   })
 
-/** The signed-in author's own posts: list, create, update and remove, behind the Authentication middleware. */
 const MyPostsHandlers = HttpApiBuilder.group(
   Api,
   'myPosts',
@@ -92,8 +84,4 @@ const MyPostsHandlers = HttpApiBuilder.group(
   }),
 )
 
-/**
- * Every handler group of the contract, the one list both the running API (./web-handler.ts) and the api test layer
- * (tests/api/harness.ts) provide: a new group goes here, and each of those two adds the Layers it needs.
- */
 export const ApiHandlers = Layer.mergeAll(SystemHandlers, MeHandlers, PublicPostsHandlers, MyPostsHandlers)

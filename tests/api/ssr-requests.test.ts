@@ -1,6 +1,3 @@
-// SSR's side of the business API without a database: the in-process client (GET only) and the per-request session
-// lookup, inside a real Start request context (`createServerEntry`) with Better Auth's lookup stubbed. The db project
-// counts the same composition in SQL statements (tests/db/ssr-session.test.ts).
 import { createServerEntry } from '@tanstack/react-start/server'
 import { describe, expect, it } from 'vitest'
 import { meGet, systemHealth } from '#/sdk/sdk.gen.ts'
@@ -9,7 +6,6 @@ import { env } from '#/server/env.ts'
 import { requestSession } from '#/server/http/request-session.ts'
 import { recordSessionLookups } from './better-auth-sessions.ts'
 
-/** Runs `work` as Start runs one request with `cookie` (none when null), and returns what `work` returned. */
 const serve = async <T>(work: () => Promise<T>, cookie: string | null = 'session=a'): Promise<T> => {
   const returned: Array<T> = []
   await createServerEntry({
@@ -55,7 +51,6 @@ describe('the in-process API client', () => {
   it('refuses anything but GET before the handler runs', async () => {
     const { error, response } = await serve(() => createInProcessApiClient().post({ url: '/api/me' }))
     expect(response).toBeUndefined()
-    // The SDK hands a thrown fetch back as `error`, whatever its declared error bodies are.
     const thrown: unknown = error
     expect(thrown instanceof Error && thrown.message).toMatch(/only sends GET \(got POST \/api\/me\)/)
   })

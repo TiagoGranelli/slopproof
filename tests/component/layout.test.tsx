@@ -1,5 +1,3 @@
-// The frame around every page: the header for each session state, the theme choice, the flash message an action
-// leaves, and what a client-side navigation does for focus and screen readers.
 import { useLocation } from '@tanstack/react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -74,10 +72,6 @@ describe('ThemeToggle', () => {
   })
 })
 
-/**
- * The page at the current path, as the app renders it: a heading naming the path, and a new page (a new `Page`)
- * for every path, as each route has its own component.
- */
 function PathPage() {
   const pathname = useLocation({ select: (location) => location.pathname })
   return <Page key={pathname} title={`Page ${pathname}`} />
@@ -98,7 +92,6 @@ describe('a flash message', () => {
     await router.navigate({ state: { flash: 'password-reset' }, to: '/login' })
     await expect.element(page.getByTestId('flash')).toBeVisible()
     await expect.poll(() => router.state.location.state.flash).toBeUndefined()
-    // Still the same entry (the back button goes to /dashboard), and still showing the message.
     expect(router.history.length).toBe(2)
     await expect.element(page.getByTestId('flash')).toHaveTextContent(FLASH_MESSAGES['password-reset'])
   })

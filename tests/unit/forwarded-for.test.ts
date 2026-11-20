@@ -1,4 +1,3 @@
-// forwardedFor builds the only X-Forwarded-For value Better Auth reads the client IP from. Pure function: no app.
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { forwardedFor } from '#/server/http/forwarded-for.ts'
@@ -29,8 +28,6 @@ describe('forwardedFor', () => {
     expect(forwardedFor(null, '', false)).toBeUndefined()
   })
 
-  // Whatever a client writes into the header, the address that connected is the last entry, so Better Auth,
-  // walking from the right, meets it before anything the client made up.
   it('always ends with the TCP peer, and is only the peer without trusted proxies', () => {
     const peers = fc.oneof(
       fc.ipV4(),

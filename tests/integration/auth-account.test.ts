@@ -1,7 +1,3 @@
-// Account management is reachable only through the server functions (src/lib/auth.functions.ts), whose input
-// is narrower than Better Auth's: /api/auth/* exposes sign-in, sign-out and get-session alone
-// (src/server/http/auth-endpoints.ts). Every test works on a throwaway account, because a regression here
-// deletes it.
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Json } from '#/contract/json.ts'
 import { appUrl, clientIps, createUser, signIn } from './helpers.ts'
@@ -19,7 +15,6 @@ beforeEach(async () => {
 const tokenOf = (sessionCookie: string) =>
   decodeURIComponent(sessionCookie.slice(sessionCookie.indexOf('=') + 1)).split('.')[0]!
 
-/** The signed-in user of `cookie` over GET /api/auth/get-session, or null. */
 const sessionUser = async () => {
   const res = await fetch(`${appUrl}/api/auth/get-session`, { headers: { cookie, 'x-forwarded-for': nextIp() } })
   expect(res.status).toBe(200)
@@ -89,7 +84,6 @@ describe('account server functions', () => {
   })
 
   it('refuse to delete the account without the password or with a wrong one', async () => {
-    // Refused by the server function's input schema, before Better Auth runs.
     expect((await deleteAccount({})).thrown).toBe('Internal error')
     expect((await deleteAccount({ password: '' })).thrown).toBe('Internal error')
     const wrong = await deleteAccount({ password: 'not-the-password-123' })

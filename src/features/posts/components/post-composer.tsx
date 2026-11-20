@@ -13,13 +13,6 @@ import { useCreatePost } from '#/features/posts/api/create-post.ts'
 import { postDraftSchema } from '#/features/posts/utils/post-draft-schema.ts'
 import { fieldIssue } from '#/lib/api-error.ts'
 
-/**
- * Writes a new post. The draft is checked in the browser with the API's own rules before it is sent; a
- * ValidationError the API still answers lands next to the field it names, any other failure under the form.
- * After publishing, focus returns to the emptied field, ready for the next post: Publish, which had it, is
- * disabled until there is text again, and a disabled button drops focus to <body>. The page announces the
- * success (`onPublished`).
- */
 export function PostComposer(props: { onPublished?: () => void }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const create = useCreatePost({
@@ -47,7 +40,6 @@ export function PostComposer(props: { onPublished?: () => void }) {
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
-        // Publish stays focusable while pending (aria-disabled, see below), so a second press lands here.
         if (create.isPending) {
           return
         }
@@ -81,8 +73,6 @@ export function PostComposer(props: { onPublished?: () => void }) {
               />
               <div className="flex items-center justify-between gap-2">
                 <CharacterCount id="post-body-count" max={POST_MAX_LENGTH} value={body} />
-                {/* Only aria-disabled while pending: a disabled button loses focus, and a keyboard user would be left
-                    on <body> when publishing fails. */}
                 <Button aria-disabled={create.isPending || undefined} disabled={body.trim().length === 0} type="submit">
                   Publish
                 </Button>

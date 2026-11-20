@@ -1,18 +1,3 @@
-// Lighthouse gate. Boots the built app against a fresh database with seeded data and a signed-in author,
-// puts the reference edge in front of it (deploy/Caddyfile: HTTPS, HTTP/2, compression, as in production),
-// runs Lighthouse several times per page and form factor with Playwright's Chromium, and applies POLICY
-// (scripts/lighthouse-policy.ts, with PAGES). Writes lighthouse-report/summary.{json,md} plus every raw report
-// (scripts/lighthouse-report.ts).
-// Usage: pnpm build && pnpm lighthouse [--runs=3] [--page=home] [--form-factor=mobile] [--direct]
-//                                      [--edge-protocol=h2|h1|http] [--bar=target|ci]
-//   --bar: the performance bar (POLICY.performance in scripts/lighthouse-policy.ts); `ci` is what CI applies.
-//   --direct: measure the Node server without the edge (to tell app regressions from edge ones).
-//   --edge-protocol: h2 (default, production), or HTTP/1.1 over HTTPS (h1) or plain HTTP (http) to compare.
-// Exit codes: 0 pass, 1 fail, 2 inconclusive (the machine measured as too slow for the performance score).
-// Lighthouse runs one at a time; run nothing else heavy meanwhile, it shifts the simulated timings.
-// Env: LIGHTHOUSE_DATABASE_URL overrides the database (default: app_lighthouse_<pid>_test next to
-//      DATABASE_URL, dropped afterwards). Logs: lighthouse-report/{app-server,edge}.log. EDGE_RUNTIME: see
-//      scripts/edge.ts.
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -40,7 +25,6 @@ const OUT = 'lighthouse-report'
 
 const option = (name: string) => process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1]
 
-/** `--<name>=<value>` when `value` is one of `allowed`, else `fallback`; anything else is a usage error. */
 const oneOf = <T extends string>(name: string, allowed: ReadonlyArray<T>, fallback: Array<T>): Array<T> => {
   const value = option(name)
   if (value === undefined) {
@@ -65,11 +49,6 @@ const pageNames = oneOf(
 const pages = PAGES.filter((page) => pageNames.includes(page.name))
 const direct = process.argv.includes('--direct')
 const [performanceBar = 'target'] = oneOf<PerformanceBar>('bar', ['target', 'ci'], ['target'])
-/**
- * How Chrome reaches the edge. h2 (default) is production: HTTPS, where Chrome negotiates HTTP/2 and
- * shares one connection for the page. h1 forces HTTP/1.1 over the same HTTPS edge, http is plain HTTP/1.1;
- * both only to compare.
- */
 const [protocol = 'h2'] = oneOf('edge-protocol', ['h2', 'h1', 'http'] as const, ['h2'])
 const tls = !direct && protocol !== 'http'
 
@@ -80,7 +59,6 @@ const POSTS = [
   'Reminder to self: the authenticated route is measured too, minus SEO because it is private.',
 ]
 
-// Posts go straight to the database so public pages can be measured even when sign-in is broken.
 const seedPosts = async (databaseUrl: string, email: string) => {
   const pool = new Pool({ connectionString: databaseUrl })
   try {
@@ -112,10 +90,8 @@ const signIn = async (appUrl: string, credentials: { email: string; password: st
     .join('; ')
 }
 
-/** Where the runs point: the app's public URL, the author's session cookie (for `auth` pages) and Chrome. */
 type Target = { chrome: Chrome; cookie: string | undefined; url: string }
 
-/** `runs` Lighthouse runs of one page and form factor; each must have loaded the page itself. */
 const measureRuns = (target: Target, page: Page, formFactor: FormFactor): Array<Lhr> =>
   Array.from({ length: runs }, (_, index) => {
     const lhr = runLighthouse({
@@ -154,7 +130,6 @@ const measurePage = (target: Target, page: Page, formFactor: FormFactor): PageOu
   }
 }
 
-/** Seeds the posts, signs the author in if a page needs it, warms the server, then measures every page. */
 const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<PageOutcome>> => {
   const flags = chromeFlags({ edgeCertificateSpki: app.edgeCertificateSpki, http1: protocol === 'h1' })
   const through = direct ? ' (Node server, no edge)' : ` (edge in front of ${app.directUrl}, ${protocol})`
@@ -163,7 +138,6 @@ const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<Pa
   const cookie = pages.some((page) => page.auth)
     ? await signIn(app.url, { email: app.user.email, password: app.user.password })
     : undefined
-  // Warm the server so the first measured run does not pay for lazy initialization.
   for (const page of pages) {
     await fetch(app.url + page.path, { headers: page.auth && cookie ? { cookie } : {} })
   }
@@ -189,7 +163,6 @@ mkdirSync(OUT, { recursive: true })
 const databaseUrl = testDatabaseUrl('lighthouse', process.env.LIGHTHOUSE_DATABASE_URL)
 let outcomes: Array<PageOutcome> = []
 let app: RunningApp | undefined
-// startApp creates the database: it is dropped in the finally below even when a server or create-user fails.
 try {
   app = await startApp({
     databaseUrl,

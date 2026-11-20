@@ -1,4 +1,3 @@
-// MyPost: edit mode, focus management, pending states and every failure branch of save. Delete: delete-post.test.tsx.
 import { HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
@@ -62,7 +61,6 @@ describe('MyPost', () => {
   ])('%s discards the draft and returns focus to Edit', async (_, dismiss) => {
     await renderInApp(<MyPost post={original} />)
     await startEditing()
-    // Typed key by key, so only Escape, not any other key, may close the editor.
     await userEvent.keyboard(' and a discarded draft')
     await expect.element(field()).toHaveValue('The original body and a discarded draft')
     await dismiss()
@@ -105,7 +103,6 @@ describe('MyPost', () => {
     await expect.element(field()).not.toBeInTheDocument()
     await expect.element(editButton()).toHaveFocus()
     expect(onUpdated).toHaveBeenCalledOnce()
-    // The cached list shows the saved post before its refetch, and both lists are invalidated.
     expect(queryClient.getQueryData(getMyPostsQueryOptions().queryKey)?.pages[0]?.items[0]?.body).toBe('The new body')
     expect(queryClient.getQueryState(getMyPostsQueryOptions().queryKey)?.isInvalidated).toBe(true)
   })
@@ -151,8 +148,6 @@ describe('MyPost', () => {
 
       await expect.element(page.getByRole('alert')).toHaveTextContent(message)
       await expect.element(field()).toHaveValue('my draft')
-      // A ValidationError is shown next to the field it names and marks it invalid; any other failure goes under the
-      // form and still describes the draft.
       const id = `edit-post-${original.id}`
       expect(field().element().getAttribute('aria-invalid')).toBe(fieldLevel ? 'true' : null)
       await expect

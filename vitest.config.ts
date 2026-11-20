@@ -8,70 +8,29 @@ import { playwright } from '@vitest/browser-playwright'
 import type { Plugin } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 
-// Separate from vite.config.ts so tests do not load the Start/Nitro plugins.
-// Projects (select with `vitest run --project <name>`):
-// - `unit`: pure functions, no app.
-// - `api`: Effect handlers through HttpApiTest with an in-memory repository and a fake session store.
-// - `component`: React components in Chromium (Vitest browser mode), network mocked by MSW.
-// - `db`: server modules against a real, freshly migrated Postgres (no build, no app): the rate-limit storage and
-//   query budgets. `pnpm test:db`; also run by `pnpm verify:app`.
-// - `integration`: the built app over HTTP; its global setup starts the servers (`pnpm test`).
-// `pnpm check` runs unit, api and component (the `tests` job in .config/lefthook.yml); `pnpm verify:app` runs db and
-// integration.
-
-/**
- * Security-critical and fully tested modules: `vitest run --coverage` (`pnpm test:fast`, part of
- * `pnpm check`) fails unless the unit, api and component tests together cover every line and branch of each.
- * Add a module here together with the tests that cover it; everything else only has to stay above the
- * global floor (COVERAGE_FLOOR).
- */
 const COVERAGE_GATE = [
-  // Where `?redirect=` may send a user after sign-in (open-redirect defense).
   'src/features/auth/utils/safe-redirect.ts',
-  // Every error the UI shows goes through here; it must never render raw server output.
   'src/lib/api-error.ts',
-  // The same for every failed account action (sign-in, sign-up, password, sessions, delete account).
   'src/features/auth/utils/describe-auth-failure.ts',
-  // The X-Forwarded-For value Better Auth resolves the client IP from (rate limits, sessions).
   'src/server/http/forwarded-for.ts',
-  // The client address a session shows (IPv6 as the network Better Auth kept).
   'src/server/http/client-address.ts',
-  // How the account page names a session's device, address and times.
   'src/features/auth/utils/describe-session.ts',
-  // Every handler branch of the business API (tests/api).
   'src/server/api/handlers.ts',
-  // Shutdown order: the pool must outlive every task that still queries it.
   'src/server/lifecycle.ts',
-  // The text of every account email (links, expiry).
   'src/server/mail/auth-messages.ts',
-  // Startup validation of every setting: TRUSTED_PROXIES, AUTH_SIGN_UP, APP_URL, SMTP and the rest.
   'src/server/env.ts',
-  // The Content-Security-Policy of every HTML document.
   'src/lib/content-security-policy.ts',
-  // Constructable Stylesheet singleton replacing react-style-singleton's <style> injection (ADR 0010).
   'src/lib/adopted-stylesheet-singleton.ts',
-  // Unicode-safe label truncation (never splits UTF-16 surrogate pairs).
   'src/lib/truncate-text.ts',
-  // Explicit UI state machines (ADR 0018).
   'src/features/posts/utils/post-editor-machine.ts',
   'src/features/auth/utils/auth-form-machine.ts',
   'src/components/lists/load-more-machine.ts',
 ]
-/**
- * Whole-project floor, a little under the measured coverage of `pnpm test:fast`: it only stops a regression, such
- * as a module added without tests. Raise it when coverage grows.
- */
-// Measured lines 70.4%, branches 68.5%, functions 60.3%, statements 70.3% when set.
 const COVERAGE_FLOOR = { branches: 67, functions: 59, lines: 69, statements: 69 }
 for (const file of COVERAGE_GATE) {
-  // A renamed file would otherwise drop out of the gate silently: a threshold glob that matches nothing passes.
   readFileSync(file)
 }
 
-/**
- * Serves MSW's worker script to the browser tests straight from the installed package, so it always matches
- * the library version and never sits in public/ (which would ship it with the app).
- */
 const mswWorkerScript = (): Plugin => ({
   configureServer(server) {
     const script = createRequire(import.meta.url).resolve('msw/mockServiceWorker.js')
@@ -83,19 +42,14 @@ const mswWorkerScript = (): Plugin => ({
   name: 'msw-worker-script',
 })
 
-// A run nobody watches live (an agent, a pipe) prints only its failures and the totals, Vitest's `agent` reporter:
-// agents read the whole output, and every passing file is context they pay for. At a terminal and in CI, Vitest's
-// own reporters. The coverage summary prints in CI only: locally a threshold that fails names the module and the
-// metric, and coverage/index.html has the rest.
 const watched = Boolean(process.env.CI) || process.stdout.isTTY
 
 export default defineConfig({
   test: {
     coverage: {
+      exclude: ['src/sdk/**', 'src/routeTree.gen.ts', 'src/components/ui/**', 'src/server/db/schema/auth.ts'],
       include: ['src/**/*.{ts,tsx}'],
       provider: 'v8',
-      // Generated code and vendored shadcn primitives.
-      exclude: ['src/sdk/**', 'src/routeTree.gen.ts', 'src/components/ui/**', 'src/server/db/schema/auth.ts'],
       reporter: process.env.CI ? ['text-summary', 'html'] : ['html'],
       thresholds: {
         ...COVERAGE_FLOOR,
@@ -112,11 +66,6 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['tests/api/**/*.test.ts'],
-          name: 'api',
-          // src/server/env.ts validates the environment when it is imported, and the handlers import the
-          // database client and Better Auth. These values pass that validation; nothing connects to them
-          // (the harness replaces the repository and the session check).
           env: {
             APP_URL: 'http://localhost:3000',
             BETTER_AUTH_SECRET: 'api-handler-tests-only-not-a-secret-000',
@@ -124,18 +73,12 @@ export default defineConfig({
             NODE_ENV: 'test',
             TRUSTED_PROXIES: '',
           },
+          include: ['tests/api/**/*.test.ts'],
+          name: 'api',
           testTimeout: 5000,
         },
       },
       {
-        // The same React transform as the app (vite.config.ts), so components run as they ship, and Tailwind for the
-        // tests that import src/styles/app.css to measure what the browser computes (contrast.test.tsx).
-        plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mswWorkerScript()],
-        // Pre-bundled up front: discovering them during the run makes Vite reload the page mid-test, and test files
-        // then fail with "Failed to fetch dynamically imported module". If the run also logs "Error during dependency
-        // optimization" about `#tanstack-router-entry`, a component under test reaches a server function file with
-        // no stub below (`session.functions.ts` through `useSessionUser`, for one): read the value from the route's
-        // context instead.
         optimizeDeps: {
           include: [
             'react',
@@ -155,6 +98,7 @@ export default defineConfig({
             'vitest-browser-react',
           ],
         },
+        plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mswWorkerScript()],
         resolve: {
           alias: [
             {
@@ -171,13 +115,9 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            // No port set, on purpose: the browser server takes Vitest's 63315 or, when another run holds it, the next
-            // free one (Vite's strictPort is off), so checkouts and worktrees run this project at the same time.
-            // `api.port: 0` would not ask the OS for one: Vitest reads 0 as unset and uses 63315.
             instances: [{ browser: 'chromium' }],
-            screenshotFailures: false,
-            // Playwright's Chromium, or CHROME_PATH like verify:app and lighthouse.
             provider: playwright({ launchOptions: { executablePath: process.env.CHROME_PATH || undefined } }),
+            screenshotFailures: false,
           },
           include: ['tests/component/**/*.test.tsx'],
           name: 'component',
@@ -187,13 +127,6 @@ export default defineConfig({
       },
       {
         test: {
-          include: ['tests/db/**/*.test.ts'],
-          name: 'db',
-          // Creates a fresh, migrated app_db_<pid>_test next to DATABASE_URL (or .env's) and hands its URL
-          // to the workers as DATABASE_URL; dropped afterwards. Needs Postgres, no build, no running app.
-          globalSetup: ['tests/db/global-setup.ts'],
-          // Everything src/server/env.ts requires except DATABASE_URL (see the global setup). Outgoing mail
-          // stays off whatever .env says: nothing here sends any.
           env: {
             APP_URL: 'http://localhost:3000',
             AUTH_SIGN_UP: 'closed',
@@ -203,24 +136,21 @@ export default defineConfig({
             SMTP_URL: '',
             TRUSTED_PROXIES: '',
           },
+          globalSetup: ['tests/db/global-setup.ts'],
           hookTimeout: 30_000,
+          include: ['tests/db/**/*.test.ts'],
+          name: 'db',
           testTimeout: 15_000,
         },
       },
       {
         test: {
+          fileParallelism: true,
+          globalSetup: ['tests/integration/global-setup.ts'],
+          hookTimeout: 15_000,
           include: ['tests/integration/**/*.test.ts'],
           name: 'integration',
-          // Starts the built app's two servers on a fresh database and hands them over (`inject('servers')`);
-          // setup.ts gives each worker the app's environment. Needs `pnpm build`, Postgres and Mailpit.
-          globalSetup: ['tests/integration/global-setup.ts'],
           setupFiles: ['tests/integration/setup.ts'],
-          // Files share only the server. Each one signs in from its own client IP (X-Forwarded-For), so they
-          // cannot exhaust each other's sign-in rate limit, and they only assert on posts they created.
-          fileParallelism: true,
-          // Generous for a loaded CI runner or laptop; a healthy run finishes every hook and test in well under a
-          // second.
-          hookTimeout: 15_000,
           testTimeout: 15_000,
         },
       },

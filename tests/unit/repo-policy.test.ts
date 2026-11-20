@@ -1,5 +1,3 @@
-// Repository rules that no linter checks: each test lists every violation with what to do about it.
-// Rules about code shape are `no-restricted-syntax` selectors in .config/oxlint/ instead.
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, sep } from 'node:path'
@@ -20,8 +18,6 @@ const codeFiles = () =>
     .filter((file) => /\.(?:ts|tsx|mts)$/.test(file) && !GENERATED.some((prefix) => file.startsWith(prefix)))
     .toSorted()
 
-// A lint directive: a comment that starts with it, or an end-of-line `-disable-line` one. Oxlint's port of
-// eslint-comments/require-description crashes (oxc#17021), so this reads the files itself.
 const DIRECTIVE = /^\s*(?:\/\/|\/\*)\s*(?:oxlint|eslint)-disable|\/\/\s*(?:oxlint|eslint)-disable-line/
 const COMMENT = /^\s*(?:\/\/|\/\*|\*)/
 
@@ -62,14 +58,9 @@ it('pins every dependency to one exact version', () => {
       .map(([name, version]) => `${section}.${name} is "${version}": \`pnpm add --save-exact ${name}@<version>\``),
   )
   expect(ranges).toEqual([])
-  // `pnpm add` pins exact versions only with this setting.
   expect(read('pnpm-workspace.yaml')).toMatch(/^savePrefix: ''$/m)
 })
 
-/**
- * Migrations in the journal at CHECK_BASE_REF may already be applied somewhere, and a database never runs an
- * edited migration again. The default HEAD compares the working tree with the last commit; CI sets HEAD^.
- */
 describe('applied migrations', () => {
   const base = process.env.CHECK_BASE_REF ?? 'HEAD'
   const JOURNAL = 'drizzle/meta/_journal.json'
@@ -77,7 +68,6 @@ describe('applied migrations', () => {
   const hasBase = git('rev-parse', '--verify', '--quiet', `${base}^{commit}`).status === 0
 
   it('has the base commit to compare with', () => {
-    // Only a repository without commits has nothing to compare with by default.
     expect(
       hasBase || process.env.CHECK_BASE_REF === undefined,
       `git ref ${base} is missing: fetch the parent commit (actions/checkout fetch-depth: 2)`,
@@ -103,15 +93,11 @@ describe('applied migrations', () => {
   })
 })
 
-/** Where the app's name may appear: its two homes, the generated API title, the license notice, and prose. */
 const NAME_ALLOWED = [/^package\.json$/, /^src\/config\/app\.ts$/, /^openapi\.json$/, /^LICENSE$/, /\.md$/]
 
-// The name lives in package.json (`name`) and src/config/app.ts (APP_NAME); everything else imports it or stays
-// neutral, so renaming the app is the short edit in docs/adopting.md. Docs may name the template.
 it('names the app only in package.json, src/config/app.ts and docs', () => {
   const slug = (JSON.parse(read('package.json')) as { name: string }).name
   const name = new RegExp(`${slug}|${APP_NAME.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}`, 'i')
-  // Tracked and new files; a tracked link to a directory (a skill link) is not a file.
   const offenders = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
     .stdout.split('\0')
     .filter((file) => file !== '' && !NAME_ALLOWED.some((pattern) => pattern.test(file)))
@@ -121,16 +107,11 @@ it('names the app only in package.json, src/config/app.ts and docs', () => {
 })
 
 it('keeps Tailwind from scanning the build output', () => {
-  // Without source("../") Tailwind scans .output, and the SSR and client CSS hashes diverge (AGENTS.md, "Sharp edges").
   expect(read('src/styles/app.css'), 'src/styles/app.css: keep `@import "tailwindcss" source("../")`').toMatch(
     /@import\s+['"]tailwindcss['"]\s+source\(\s*['"]\.\.\/['"]\s*\)/,
   )
 })
 
-/**
- * Folder names under src/ are kebab-case like file names (Oxlint `unicorn/filename-case`), optionally with a
- * TanStack Router prefix: `_` (pathless layout), `$` (path param), `-` (not routed), or `(group)`.
- */
 it('names every folder under src/ in kebab-case', () => {
   const FOLDER = /^(?:[_$-]?[a-z0-9]+(?:-[a-z0-9]+)*|\([a-z0-9]+(?:-[a-z0-9]+)*\))$/
   const bad = readdirSync('src', { recursive: true, withFileTypes: true })
@@ -141,7 +122,6 @@ it('names every folder under src/ in kebab-case', () => {
   expect(bad).toEqual([])
 })
 
-/** The bytes Codex reads in a file's directory: every AGENTS.md from the root down to it. */
 const chainBytes = (file: string) =>
   file
     .split(sep)
@@ -149,8 +129,6 @@ const chainBytes = (file: string) =>
     .filter((path) => existsSync(path))
     .reduce((total, path) => total + statSync(path).size, 0)
 
-// Every session loads the root AGENTS.md, and Codex concatenates the AGENTS.md files from the root down to its
-// working directory and silently drops what passes 32 KiB (docs/agents/skills.md).
 it('keeps the AGENTS.md files within their size budget', () => {
   const nested = ['src', 'tests', 'scripts', 'docs'].flatMap((dir) =>
     readdirSync(dir, { encoding: 'utf8', recursive: true }).flatMap((path) =>

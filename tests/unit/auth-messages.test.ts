@@ -1,4 +1,3 @@
-// The account emails link to the app's own pages with the token in the query string. Pure: no app, no SMTP.
 import { describe, expect, it } from 'vitest'
 import { authMessages } from '#/server/mail/auth-messages.ts'
 

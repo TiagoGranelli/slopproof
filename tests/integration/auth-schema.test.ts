@@ -1,6 +1,3 @@
-// Better Auth against the migrated test database: the Drizzle adapter's runtime schema check (which gates every
-// auth request) passes, and the auth tables use timestamptz. Loads the server's auth configuration in-process
-// with the app's environment (DATABASE_URL, APP_URL, BETTER_AUTH_SECRET; setup.ts).
 import { afterAll, describe, expect, it } from 'vitest'
 import { auth } from '#/server/auth.ts'
 import { pool } from '#/server/db/client.ts'
@@ -11,9 +8,7 @@ afterAll(() => pool.end())
 describe('auth schema', () => {
   it('passes the Drizzle adapter runtime schema check', async () => {
     const context = await auth.$context
-    // Registered by the adapter unless advanced.database.validateSchema is false; never turn it off.
     expect(context.checkSchema).toBeTypeOf('function')
-    // Returns a promise on the first call and undefined once the schema is known to be clean.
     await expect(Promise.resolve(context.checkSchema?.())).resolves.toBeUndefined()
   })
 

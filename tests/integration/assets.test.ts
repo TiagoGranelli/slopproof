@@ -1,5 +1,3 @@
-// Every stylesheet, script and modulepreload referenced by rendered HTML must exist in the client
-// build and be served with the right type. Catches client/SSR asset hash drift (TanStack/router#7658).
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

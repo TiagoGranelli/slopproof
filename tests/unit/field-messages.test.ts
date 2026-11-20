@@ -1,5 +1,3 @@
-// What a form field shows and announces (src/components/form/field-messages.ts): the first message among the
-// validators' results, and the ids its input is described by.
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { describedBy, fieldErrorMessage } from '#/components/form/field-messages.ts'

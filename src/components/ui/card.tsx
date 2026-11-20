@@ -1,10 +1,6 @@
 import { cn } from 'cn'
 import type { ComponentProps } from 'react'
 
-// radix-nova's card, trimmed to the parts this app uses: every class in this file ships in the render-blocking
-// stylesheet of every page, used or not. `pnpm exec shadcn add card --overwrite` restores the rest (header, title,
-// action, footer, the small size).
-
 function Card({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div

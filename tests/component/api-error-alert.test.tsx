@@ -1,5 +1,3 @@
-// ApiErrorAlert renders describeApiError's view (its branches are pinned in tests/unit/api-error.test.ts)
-// as an alert, with a sign-in link back to the current page when the session has ended.
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'

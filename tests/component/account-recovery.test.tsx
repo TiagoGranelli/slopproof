@@ -1,5 +1,3 @@
-// Signing up, confirming the address and recovering a password: the forms, and the /reset-password and
-// /verify-email routes (search validation, every token state).
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { ForgotPasswordForm } from '#/features/auth/components/forgot-password-form.tsx'
@@ -23,7 +21,6 @@ const password = () => page.getByLabelText('Password')
 const newPassword = () => page.getByLabelText('New password')
 const resend = () => button('Send a new link')
 
-/** While an account action is pending, its button is disabled and its form announces that it is busy. */
 const expectBusy = async (label: string) => {
   await expect.element(button(label)).toBeDisabled()
   await expect.element(formOf(button(label))).toHaveAttribute('aria-busy', 'true')
@@ -62,7 +59,6 @@ describe('SignUpForm', () => {
     await expect.element(password()).toBeInvalid()
     await expect.element(password()).toHaveFocus()
     await expect.element(password()).toHaveAccessibleDescription('At least 12 characters. Use at least 12 characters.')
-    // Checked again as the password is fixed.
     await password().fill('a long enough password')
     await expect.element(password()).not.toHaveAttribute('aria-invalid')
     expect(calls.data).toEqual([])
@@ -134,7 +130,6 @@ describe('SignUpForm', () => {
     await expect.element(formOf(button('Create account'))).toHaveAccessibleDescription(message)
     await expect.element(button('Create account')).toHaveFocus()
     await expect.element(password()).toHaveValue('a long enough password')
-    // No raw Better Auth code (SCREAMING_SNAKE_CASE) reaches the page, whatever the failure.
     expect(document.body.textContent).not.toMatch(/\b[A-Z]+(?:_[A-Z]+)+\b/)
   })
 })
@@ -198,7 +193,6 @@ describe('/reset-password', () => {
     worker.use(calls.handler, authFunction('resetPassword', response))
     const { queryClient, router } = await renderReset('/reset-password?token=abc123')
     queryClient.setQueryData(['my data'], ['private'])
-    // The flash leaves the location once /login shows it, so it is read from the navigation itself.
     const flashes: Array<unknown> = []
     router.subscribe('onBeforeNavigate', (event) => flashes.push(event.toLocation.state.flash))
     await setNewPassword()
@@ -248,7 +242,6 @@ describe('/reset-password', () => {
 })
 
 describe('/verify-email', () => {
-  // Opening the link is what a mail scanner does too.
   it('sends nothing when the link is opened, and waits for the button', async () => {
     const calls = authCalls('verifyEmail')
     worker.use(calls.handler)

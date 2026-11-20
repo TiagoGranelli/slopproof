@@ -26,7 +26,6 @@ interface EditPostProps {
   readonly state: OpenPostEditorState
 }
 
-/** Wires TanStack Form and the update mutation directly into the post editor state machine. */
 function useEditPost(props: EditPostProps) {
   const update = useUpdatePost()
   const form = useForm({
@@ -50,7 +49,6 @@ function useEditPost(props: EditPostProps) {
   return form
 }
 
-/** The editor's row under the textarea: the character count, Cancel and Save. */
 function EditPostActions(props: { countId: string; draft: string; onCancel: () => void; saving: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -114,10 +112,6 @@ const submitEditForm = async (
   await form.handleSubmit()
 }
 
-/**
- * The form that replaces a post's body while it is edited. Its lifecycle lives in `post-editor-machine`
- * (`editing`, `saving`, `save-failed`, `cancelled`): Save, Cancel and Escape transition the machine directly.
- */
 export function EditPostForm(props: EditPostProps) {
   const { dispatch, post, state } = props
   const form = useEditPost(props)

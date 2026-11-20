@@ -1,6 +1,3 @@
-// Setup for every component test file: the MSW worker intercepts the app's requests, handlers are reset
-// after each test, and a request to /api or to a server function (/_serverFn) that no handler answered fails
-// the test (instead of reaching the Vitest server and failing somewhere less obvious).
 import { afterAll, afterEach, beforeAll, expect } from 'vitest'
 import { releaseHeld, worker } from './api-mocks.ts'
 
@@ -15,9 +12,6 @@ const frameRequest = (data: unknown): Request | undefined =>
 
 beforeAll(async () => {
   await worker.start({
-    quiet: true,
-    // Vitest's own module requests pass through the worker too; only the app's API calls must be mocked.
-    // MSW 3 types every frame's data as unknown, so read the request of an HTTP frame by narrowing.
     onUnhandledFrame: ({ frame }) => {
       const request = frameRequest(frame.data)
       if (!request) {
@@ -28,6 +22,7 @@ beforeAll(async () => {
         unhandled.push(`${request.method} ${url.pathname}`)
       }
     },
+    quiet: true,
   })
 })
 

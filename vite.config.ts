@@ -9,11 +9,6 @@ import { writeBuildStamp } from './scripts/build-freshness.ts'
 import { documentHeaders } from './src/lib/content-security-policy.ts'
 import { inlineSourceHashes } from './src/server/nitro/prerender-csp.ts'
 
-/**
- * TanStack Form's devtools event client, replaced by a silent one in production builds, browser and server alike:
- * form-core imports it with no production guard, and on the server its connect loop delayed shutdown by about 5 s
- * (TanStack/form#2132; src/lib/no-devtools-event-client.ts). `pnpm dev` keeps the real one.
- */
 const noDevtoolsInProduction: Plugin = {
   apply: 'build',
   config: () => ({
@@ -29,18 +24,11 @@ const noDevtoolsInProduction: Plugin = {
   name: 'no-devtools-in-production',
 }
 
-/**
- * Replaces `react-style-singleton`'s `<style>`-tag injector with Constructable Stylesheets
- * (`src/lib/adopted-stylesheet-singleton.ts`) so Radix dialogs lock scroll without violating strict
- * hash-based CSP (`style-src 'self'`, no nonce) after navigating from a prerendered page (ADR 0010).
- */
 const adoptedStylesheetSingleton: Plugin = {
   enforce: 'pre',
   name: 'adopted-stylesheet-singleton',
   resolveId(source, importer) {
     if ((source === './singleton' || source === './singleton.js') && importer?.includes('react-style-singleton')) {
-      // The stand-in matches the `./singleton` module of react-style-singleton 2.2.3: another version may change
-      // what it exports, so the build stops until the stand-in is checked against it.
       if (!importer.includes('react-style-singleton@2.2.3')) {
         throw new Error(`adopted-stylesheet-singleton was written for react-style-singleton 2.2.3, got ${importer}`)
       }
@@ -53,8 +41,6 @@ const adoptedStylesheetSingleton: Plugin = {
 export default defineConfig({
   build: {
     rolldownOptions: {
-      // Radix and TanStack Query ship `"use client"` directives for React Server Components. They are
-      // meaningless here and the bundler drops them, one warning per module. Everything else still shows.
       onLog(level, log, handler) {
         if (log.code === 'MODULE_LEVEL_DIRECTIVE' && log.message.includes('use client')) {
           return
@@ -67,10 +53,13 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart(),
     nitro({
+      compressPublicAssets: { brotli: true, gzip: true },
       hooks: {
-        // A static page cannot carry a per-request nonce, so its CSP allows exactly its own inline scripts
-        // and styles by sha256 hash. Written as a route rule header, which Nitro applies to the static file;
-        // the server bundle is built after prerendering, so the rule is part of it.
+        compiled(nitroBuild) {
+          if (!nitroBuild.options.dev) {
+            writeBuildStamp(nitroBuild.options.rootDir)
+          }
+        },
         'prerender:generate'(route, nitroBuild) {
           if (route.error || !route.contents || !route.contentType?.includes('text/html')) {
             return
@@ -81,22 +70,9 @@ export default defineConfig({
             headers: { ...rule?.headers, ...documentHeaders(inlineSourceHashes(route.contents)) },
           }
         },
-        // What this build was made from, so the test runners refuse a stale .output (scripts/build-freshness.ts).
-        compiled(nitroBuild) {
-          if (!nitroBuild.options.dev) {
-            writeBuildStamp(nitroBuild.options.rootDir)
-          }
-        },
       },
-      // startup: validates env and logs process-level errors. http: security headers, the fallback CSP and
-      // request logs for every response, static files included.
       plugins: ['./src/server/nitro/startup.ts', './src/server/nitro/http.ts'],
-      // Finite static pages are prerendered by Nitro, the deployment layer (ADR 0004).
-      // failOnError: a page that cannot be prerendered (e.g. missing env) fails the build instead of
-      // silently shipping without its static copy.
       prerender: { crawlLinks: false, failOnError: true, routes: ['/about'] },
-      // Build-time .br/.gz copies of static assets, served by Nitro when the client accepts them.
-      compressPublicAssets: { brotli: true, gzip: true },
     }),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
@@ -106,8 +82,6 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
-    // Build output, reports and agent/vendored-source folders never feed the dev graph; watching them
-    // makes `pnpm build` or a Lighthouse run during `pnpm dev` churn the watcher.
     watch: {
       ignored: [
         '**/.output/**',

@@ -1,6 +1,3 @@
-// Feature map CLI: find where a user-facing feature lives, which feature owns a file, how to verify it, and check
-// that docs/agents/features.json stays in step with src/ and openapi.json.
-// Usage: node scripts/features.ts <list|show <id>|where <path>|verify <id>|check>
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { xSync } from 'tinyexec'
@@ -40,11 +37,9 @@ const matchesQuery = (owned: string, target: string): boolean => {
   return target === clean || target.startsWith(`${clean}/`) || clean.startsWith(`${target}/`)
 }
 
-/** Loads the feature map from disk. */
 export const loadFeatures = (file = FEATURES_FILE): Array<Feature> =>
   JSON.parse(readFileSync(file, 'utf8')) as Array<Feature>
 
-/** Returns every feature that owns `rawPath` (a file or directory path). */
 export const featuresForPath = (rawPath: string, features: ReadonlyArray<Feature> = loadFeatures()): Array<Feature> => {
   const target = normalizePath(rawPath)
   return features.filter((feature) => feature.paths.some((owned) => matchesQuery(owned, target)))
@@ -110,7 +105,6 @@ const operationProblems = (
   return [...unmapped, ...unknown]
 }
 
-/** Validates the feature map against disk paths, owned source roots and openapi.json; empty when valid. */
 export const checkFeatures = (options: CheckOptions = {}): Array<string> => {
   const features = options.features ?? loadFeatures()
   const roots = options.roots ?? OWNED_ROOTS

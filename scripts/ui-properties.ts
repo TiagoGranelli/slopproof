@@ -1,9 +1,3 @@
-// Runs Bombadil property-based browser testing against the built app (public and signed-in sessions).
-// Starts the built app via scripts/app-server.ts on a throwaway Postgres database, launches Playwright's
-// headless Chromium with remote debugging, runs `bombadil browser test-external`, and asserts zero 5xx logs.
-// Usage:
-//   pnpm build && pnpm verify:ui-properties
-//   pnpm verify:ui-properties -- --reproduce=test-results/bombadil/authenticated --pass=authenticated
 import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -18,7 +12,6 @@ const TIME_LIMIT = process.env.BOMBADIL_TIME_LIMIT || '15s'
 const SPEC_FILE = 'tests/bombadil/app.ts'
 const OUTPUT_ROOT = 'test-results/bombadil'
 const LOG_FILE = 'test-results/app-server-bombadil.log'
-// Short path under ~/.cache so Chromium's SingletonSocket stays under Linux's 108-byte sun_path limit.
 const CHROME_CACHE_DIR = join(homedir(), '.cache', 'b-cdp')
 
 type PassName = 'authenticated' | 'public'

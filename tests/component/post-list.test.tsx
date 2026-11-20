@@ -1,4 +1,3 @@
-// PostList: the empty state, read-only cards, and "Load more" (pending, failure, retry, focus, last page).
 import { useSuspenseInfiniteQuery } from '@tanstack/react-query'
 import { HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -9,13 +8,11 @@ import type { PostPage } from '#/sdk/types.gen.ts'
 import { api, apiError, held, post, listPage, listPages, worker } from './api-mocks.ts'
 import { pressAndKeepFocus, renderInApp, testQueryClient } from './test-utils.tsx'
 
-/** The public list as src/routes/index.tsx renders it. */
 function PublicPosts() {
   const pages = useSuspenseInfiniteQuery(getPublicPostsQueryOptions())
   return <PostList empty="No posts yet." pages={pages} testId="public-posts" />
 }
 
-/** Renders the list with `first` already loaded, as the route loader leaves it. */
 const renderList = (first: PostPage) => {
   const queryClient = testQueryClient()
   queryClient.setQueryData(getPublicPostsQueryOptions().queryKey, listPages(first))
@@ -29,7 +26,6 @@ const CURSOR = 'cursor-after-page-1'
 const firstPage = listPage([post({ body: 'newest' }), post({ body: 'newer' })], CURSOR)
 const secondPage = listPage([post({ body: 'older' }), post({ body: 'oldest' })])
 
-/** Answers the request for the page after CURSOR with `respond`; records every cursor requested. */
 const nextPage = (respond: () => Promise<Response> | Response) => {
   const cursors: Array<string | null> = []
   worker.use(
@@ -54,7 +50,6 @@ describe('PostList', () => {
     await expect.element(items().nth(0)).toHaveTextContent('newerTest Author · Jan 2, 2026')
     await expect.element(items().nth(1)).toHaveTextContent('olderOther Author · Jan 2, 2026')
     expect(items().elements()).toHaveLength(2)
-    // `nextCursor: null`: no Load more button, and no other buttons on read-only cards.
     expect(page.getByRole('button').elements()).toHaveLength(0)
   })
 
@@ -65,10 +60,8 @@ describe('PostList', () => {
       return HttpResponse.json(secondPage)
     })
     await renderList(firstPage)
-    // aria-disabled, not disabled: the button keeps keyboard focus while the page loads, also once rendered.
     await pressAndKeepFocus(loadMore())
     await expect.element(loadMore()).toHaveTextContent('Loading more posts…')
-    // Pressing it again while busy sends no second request.
     await userEvent.keyboard('{Enter}')
     expect(cursors).toEqual([CURSOR])
 
@@ -76,7 +69,6 @@ describe('PostList', () => {
     await expect.element(items().nth(2)).toMatchTextContent(/^older/)
     await expect.element(items().nth(2)).toHaveFocus()
     expect(items().elements()).toHaveLength(4)
-    // The second page ends the list.
     await expect.element(loadMore()).not.toBeInTheDocument()
     expect(cursors).toEqual([CURSOR])
   })

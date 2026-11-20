@@ -1,5 +1,3 @@
-// scripts/contract-coverage.ts, run by verify:app: declared statuses must be observed, observed ones declared,
-// and the allowlist must hold only live gaps with reasons.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { ALLOWLIST, contractCoverageProblems, logObservations, operations } from '../../scripts/contract-coverage.ts'
@@ -19,7 +17,6 @@ describe('contractCoverageProblems', () => {
       seen('PATCH', '/api/me/posts/1', 200),
       seen('PATCH', '/api/me/posts/not-a-uuid', 404),
       seen('DELETE', '/api/me/posts/2', 204),
-      // Not an operation of the contract: ignored.
       seen('GET', '/api/me/posts/2', 405),
       seen('PATCH', '/api/me/posts/1/extra', 404),
     ]

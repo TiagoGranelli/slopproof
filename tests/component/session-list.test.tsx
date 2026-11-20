@@ -1,4 +1,3 @@
-// The account page's session list: each session's device, address and times, and its three sign-out actions.
 import { describe, expect, it } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 import { SessionList } from '#/features/auth/components/session-list.tsx'
@@ -86,7 +85,6 @@ describe('SessionList', () => {
 
   it('signs out everywhere, busy meanwhile, then clears the cache and goes to sign-in', async () => {
     const response = held()
-    // The list stays mounted here after the cache is cleared (in the app, the page is left), so it reloads.
     worker.use(authFunction('signOutEverywhere', response), listSessions())
     const { queryClient, router } = await renderWithSessions(<SessionList />, listed(thisBrowser, phone))
     queryClient.setQueryData(['my data'], ['private'])
@@ -96,8 +94,6 @@ describe('SessionList', () => {
     response.release()
     await expect.poll(() => router.state.location.href).toBe('/login')
     expect(queryClient.getQueryData(['my data'])).toBeUndefined()
-    // The list's reload must end inside this test: after it, the handlers are reset and a late request would fail
-    // the next test as unhandled.
     await expect.poll(() => queryClient.isFetching()).toBe(0)
   })
 
@@ -133,8 +129,6 @@ describe('SessionList', () => {
     expect(router.state.location.pathname).toBe('/account')
   })
 
-  // A disabled button loses focus while the browser renders, so these stay focusable (aria-disabled) and
-  // ignore presses while their action is pending: a keyboard user who pressed one is still on it when it fails.
   it.each([
     ['one session’s Sign out', 'revokeSession', () => page.getByRole('button', { name: otherName })],
     ['Sign out other sessions', 'revokeOtherSessions', othersButton],

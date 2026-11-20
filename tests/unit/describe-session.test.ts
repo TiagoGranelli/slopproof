@@ -1,4 +1,3 @@
-// How the account page labels a session. Pure functions: no app.
 import { describe, expect, it } from 'vitest'
 import { describeAddress, describeDevice, formatTimestamp } from '#/features/auth/utils/describe-session.ts'
 
@@ -37,7 +36,6 @@ describe('describeDevice', () => {
       'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0',
       'Edge on Android',
     ],
-    // Only one of the two is known: that one alone, never "undefined".
     ['Firefox/131.0', 'Firefox'],
     ['Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/AP2A.240905.003)', 'Android'],
     ['curl/8.10.1', 'Unknown device'],

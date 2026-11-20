@@ -1,4 +1,3 @@
-// Shared by the `db` project: statement counting for query budgets, and throwaway authors.
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Effect, Layer } from 'effect'
 import { Client } from 'pg'
@@ -11,11 +10,6 @@ import * as schema from '#/server/db/schema/index.ts'
 const textOf = (query: unknown) =>
   typeof query === 'string' ? query : String((query as { text?: unknown } | null)?.text ?? query)
 
-/**
- * Runs `work` and returns the SQL statements every pg client of this process sent meanwhile (the app's pool
- * included: Drizzle, Better Auth's adapter and the rate-limit storage all go through it). Test-only
- * instrumentation on pg's Client, so production code needs no hook.
- */
 export async function statementsOf<A>(work: () => Promise<A>): Promise<{ returned: A; statements: Array<string> }> {
   const spy = vi.spyOn(Client.prototype, 'query')
   try {
@@ -26,7 +20,6 @@ export async function statementsOf<A>(work: () => Promise<A>): Promise<{ returne
   }
 }
 
-/** Fails, naming `what` and listing the statements, unless exactly `budget` statements ran. */
 export const expectBudget = (what: string, statements: Array<string>, budget: number) => {
   expect(
     statements,
@@ -35,12 +28,9 @@ export const expectBudget = (what: string, statements: Array<string>, budget: nu
 }
 
 const logged: Array<string> = []
-/** The app's pool behind a Drizzle client that records every statement it sends. */
 export const recordingDb = drizzle({ client: pool, logger: { logQuery: (query) => void logged.push(query) }, schema })
-/** `recordingDb` as the `Database` service, for building repositories whose statements `withBudget` counts. */
 export const recordingDatabase = Layer.succeed(Database, recordingDb)
 
-/** Runs `effect`, built on `recordingDatabase`, and checks it sent exactly `budget` statements. */
 export const withBudget = async <A, E>(what: string, budget: number, effect: Effect.Effect<A, E>) => {
   logged.length = 0
   const value = await Effect.runPromise(effect)
@@ -48,7 +38,6 @@ export const withBudget = async <A, E>(what: string, budget: number, effect: Eff
   return value
 }
 
-/** A verified account with a password, created the way `pnpm user:create` does it. */
 export const createAccount = async (label: string) => {
   const context = await auth.$context
   const password = `pw-${crypto.randomUUID()}`

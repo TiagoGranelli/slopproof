@@ -1,11 +1,7 @@
-// One-command local setup after `pnpm install`: .env with a fresh auth secret, Postgres, Mailpit, migrations.
-// Idempotent and non-destructive: an existing .env is never overwritten, only an empty secret is filled in.
-// Usage: pnpm bootstrap   (named so because `pnpm setup` is a built-in pnpm command)
 import { randomBytes } from 'node:crypto'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { xSync } from 'tinyexec'
 
-/** Exit code of `command`, or the reason it could not start (tinyexec throws when spawning fails). */
 const exitOf = (command: string, args: Array<string>) => {
   try {
     return xSync(command, args, { nodeOptions: { stdio: 'inherit' } }).exitCode ?? 1
@@ -37,7 +33,6 @@ if (EMPTY_SECRET.test(text)) {
   console.log('generated BETTER_AUTH_SECRET in .env')
 }
 
-// compose.yaml publishes Postgres on POSTGRES_PORT; DATABASE_URL has to point at the same port.
 process.loadEnvFile('.env')
 const port = process.env.POSTGRES_PORT || '54329'
 const url = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : undefined
@@ -57,7 +52,6 @@ step(
   'Is Docker running? If a port is taken, set POSTGRES_PORT (and the port in DATABASE_URL), MAILPIT_SMTP_PORT ' +
     '(and the port in SMTP_URL) or MAILPIT_HTTP_PORT in .env.',
 )
-// The same migrator as deploys (advisory lock, JSON logs with the failing statement's error).
 step(
   'node scripts/migrate.ts',
   [process.execPath, 'scripts/migrate.ts'],

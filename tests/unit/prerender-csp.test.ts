@@ -10,7 +10,6 @@ describe('inlineSourceHashes', () => {
       '<!DOCTYPE html><html><head><style>a{color:red}</style><script src="/x.js"></script></head>' +
       '<body><script nonce="n">self.$_TSR = {"a":"</b>"}</script><script>\r\nlet é = 1</script></body></html>'
     expect(inlineSourceHashes(html)).toEqual({
-      // The HTML parser normalizes CRLF to LF before the browser hashes the text.
       script: [hash('self.$_TSR = {"a":"</b>"}'), hash('\nlet é = 1')],
       style: [hash('a{color:red}')],
     })

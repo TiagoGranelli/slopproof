@@ -1,15 +1,3 @@
-// Keyboard use: Tab reaches every control in reading order with a visible focus indicator and then goes
-// past the page's last control (no trap, see `tabThrough`); the one deliberate trap is a modal dialog. What an
-// action does to focus and what it announces is in keyboard-actions.spec.ts. Pointer-free, so skipped on touch
-// projects.
-//
-// What a tab-order row pins down. Every row walks the whole page, so every stop must show its focus and Tab must
-// get past the last one. The order is checked exactly only where the order is the product: the skip link and the
-// header come first, and the footer's theme choice comes last, on every page. Between them a row lists the
-// controls its state is about, in order, and other stops may come among them. So a feature that adds a section to
-// a page (a comment field under each post) breaks no row, of that state or any other. The price: an extra control
-// that should not be there passes here, so a control that must not be a Tab stop (a disabled button) goes in
-// `never`, and what each control is stays with axe (a11y.spec.ts) and the component tests.
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { expectTabStops, tabOrder, tabThrough } from './support/a11y.ts'
@@ -28,22 +16,15 @@ import {
 
 test.skip(({ isMobile }) => isMobile, 'keyboard navigation is a desktop concern')
 
-// Every page starts with the skip link and the header, whose account links depend on the session, and ends with
-// the footer's theme choice: one Tab stop for the radio group, on its checked radio.
 const NAV = ['link "Skip to content"', `link "${APP_NAME}"`, 'link "About"']
 const SIGNED_OUT = [...NAV, 'link "Sign in"']
 const SIGNED_IN = [...NAV, 'link "Dashboard"', 'link "Account"', 'button "Sign out"']
 const FOOTER = ['radio "System"']
 
-// Links are Tab stops in every engine here. Safari leaves them out by default ("Press Tab to highlight each item"),
-// but Playwright's WebKit 1.63 includes them, as `pnpm ci:local verify` showed.
-
-/** A row: the header the page starts with, its own controls in order, and what must not be a stop. */
 type Row = { controls: Array<string>; footer?: Array<string>; header: Array<string>; never?: Array<string> }
 
 test.describe('tab order', () => {
   const pages: Array<[string, (page: Page, author: Author) => Promise<void>, Row]> = [
-    // The seed project publishes more than a page of posts (seed.setup.ts), so `/` always ends in Load more.
     [
       'home',
       async (page) => {
@@ -63,7 +44,6 @@ test.describe('tab order', () => {
     ],
     [
       'about',
-      // Prerendered: the header asks who is signed in once hydrated, and shows Dashboard until it knows.
       async (page) => {
         await visit(page, '/about')
         await expect(
@@ -77,7 +57,6 @@ test.describe('tab order', () => {
       async (page) => {
         await visit(page, '/login')
       },
-      // The open server (APP_URL) has open sign-up, so the page links to it.
       {
         controls: [
           'textbox "Email"',
@@ -135,7 +114,6 @@ test.describe('tab order', () => {
     ],
     [
       'account',
-      // A new account, so this browser holds its only session and the list has no Sign out buttons.
       async (page) => {
         await signIn(page, await createAccount())
         await visit(page, '/account')
@@ -151,7 +129,6 @@ test.describe('tab order', () => {
           'button "Delete account"',
         ],
         header: SIGNED_IN,
-        // Disabled without other sessions.
         never: ['button "Sign out other sessions"'],
       },
     ],
@@ -187,7 +164,6 @@ test.describe('tab order', () => {
           'button "Delete post: Second"',
         ],
         header: SIGNED_IN,
-        // Disabled until there is text.
         never: ['button "Publish"'],
       },
     ],
@@ -246,20 +222,17 @@ test.describe('focus traps', () => {
     author,
     page,
   }) => {
-    // A document of its own: the dialog's scroll lock needs the SSR page's nonce (not /about's hash policy).
     const { post } = await dashboardWithMyPost(page, author)
     const remove = post.getByRole('button', { name: /^Delete post/ })
     await remove.focus()
     await page.keyboard.press('Enter')
     const dialog = page.getByRole('alertdialog', { name: 'Delete this post?' })
-    // The dialog loads on demand: it opens with focus on Keep it.
     await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused()
     const stops: Array<string> = []
     for (let press = 0; press < 3; press++) {
       await page.keyboard.press('Tab')
       stops.push((await page.locator(':focus').textContent()) ?? '')
     }
-    // A modal dialog is the one deliberate trap: focus cycles through its own buttons.
     expect(stops).toEqual(['Delete', 'Keep it', 'Delete'])
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)

@@ -1,7 +1,3 @@
-// Content-Security-Policy in the browser. Every E2E test fails on a violation (./fixtures.ts, through
-// ./support/app.ts); these tests prove that the collector works and walk every page and navigation kind
-// under both policies: the SSR nonce policy with 'strict-dynamic' and the hash policy of the prerendered
-// /about.
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { dashboardWithMyPost, expect, expectHydrated, signIn, test, visit } from './support/app.ts'
@@ -9,19 +5,15 @@ import { dashboardWithMyPost, expect, expectHydrated, signIn, test, visit } from
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
 
-/** On the home page, rendered: its URL and its page heading. */
 const expectHome = async (page: Page) => {
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 }
 
 test('blocks and reports markup injected into a page', async ({ cspViolations, page }) => {
-  // Simulates stored XSS: the server's response, with its real policy, plus inline code without the nonce.
   await page.route('/', async (route) => {
-    // Playwright's fetch cannot decode zstd, which Firefox accepts and the edge then uses (`TEST_EDGE=1`).
     const response = await route.fetch({ headers: { ...route.request().headers(), 'accept-encoding': 'gzip' } })
     const injected = '<script>window.injected = true</script><style>body { color: red }</style>'
-    // The body is passed decoded, so the edge's Content-Encoding must not describe it.
     const { 'content-encoding': _encoding, 'content-length': _length, ...headers } = response.headers()
     await route.fulfill({
       body: (await response.text()).replace('</main>', `${injected}</main>`),
@@ -40,7 +32,6 @@ test('blocks and reports markup injected into a page', async ({ cspViolations, p
 test('SSR pages load every module and route chunk under the nonce policy', async ({ author, page }) => {
   const response = await visit(page, '/')
   expect(response?.headers()['content-security-policy']).toContain("'strict-dynamic'")
-  // Client-side navigation loads each route's chunks through dynamic import and Vite's preload helper.
   await navLink(page, 'About').click()
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible()
   await navLink(page, 'Sign in').click()
@@ -74,13 +65,10 @@ test('opening a delete dialog after returning from a reloaded prerendered page t
   page,
 }) => {
   const { post } = await dashboardWithMyPost(page, author)
-  // Visiting /about and reloading switches the document to /about's hash-based CSP (style-src 'self', no nonce).
   await navLink(page, 'About').click()
   await expect(page.getByRole('heading', { level: 1, name: 'About' })).toBeVisible()
   await page.reload()
   await expectHydrated(page)
-  // Going back returns to /dashboard inside that same hash-CSP document; Radix AlertDialog's scroll lock
-  // must still apply without injecting an inline <style> element that CSP blocks.
   await page.goBack()
   await expect(page).toHaveURL(/\/dashboard$/)
   await post.getByRole('button', { name: /^Delete post:/ }).click()

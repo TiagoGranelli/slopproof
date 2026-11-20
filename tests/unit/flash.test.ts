@@ -1,5 +1,3 @@
-// flashMessage: the one-time message a redirect leaves in history state. History state is not trusted input: only
-// a known code shows anything.
 import { describe, expect, it } from 'vitest'
 import { FLASH_MESSAGES, flashMessage } from '#/lib/flash.ts'
 

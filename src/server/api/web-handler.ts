@@ -17,7 +17,6 @@ import { SessionLookup } from './session-lookup.ts'
 
 const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1()
 
-/** A response that fails its own schema is logged by kind and field paths, never by value. */
 const describeSchemaDefect = (defect: HttpApiError.HttpApiSchemaError): Error => {
   const paths = formatIssues(defect.cause.issue).issues.map((issue) => issuePath(issue).join('.'))
   return Object.assign(
@@ -37,10 +36,6 @@ const logDefect = (request: HttpServerRequest.HttpServerRequest, cause: Cause.Ca
   })
 }
 
-// Defects (bugs, unreachable database, a response that does not match its schema) become an empty
-// 500 for the client; the cause goes to the log. Without this, Effect renders some defects by
-// themselves: a response that fails to encode would reach the client as an empty 400.
-// Responses default to no-store: /api/me/* is per-user and must never be kept by shared caches.
 const ServerMiddleware = HttpRouter.middleware(
   (httpEffect) =>
     Effect.gen(function* () {
@@ -63,8 +58,6 @@ const ServerMiddleware = HttpRouter.middleware(
   { global: true },
 )
 
-// Better Auth's session of the request's cookie, looked up once per incoming request (requestSession). Only the
-// fields CurrentUser declares reach the handlers. This is where Better Auth's plain string becomes a UserId.
 const SessionLookupLive = Layer.succeed(SessionLookup, {
   userOf: (headers) =>
     Effect.tryPromise(() => requestSession(headers)).pipe(
@@ -78,7 +71,6 @@ const SessionLookupLive = Layer.succeed(SessionLookup, {
 const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: '/api/openapi.json' }).pipe(
   Layer.provide(ApiHandlers),
   Layer.provide([
-    // The services the handlers read, each over the app's Postgres pool.
     Layer.mergeAll(DatabaseHealth.layer, PostsRepo.layer).pipe(Layer.provide(Database.layer)),
     AuthenticationLive.pipe(Layer.provide(SessionLookupLive)),
     RequestValidationLive,
@@ -87,13 +79,9 @@ const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: '/api/openapi.json' }).
   Layer.merge(ServerMiddleware),
 )
 
-// Logging goes through ../log.ts only (sanitized JSON lines). Effect's logger stays at its default and
-// is not used: the router's request logger is disabled because the Nitro plugin
-// src/server/nitro/http.ts logs every request once, and defects are logged by ServerMiddleware above.
 const { dispose, handler } = HttpRouter.toWebHandler(ApiLive.pipe(Layer.provide(HttpServer.layerServices)), {
   disableLogger: true,
 })
 onShutdown('effect-api', dispose)
 
-/** Web-standard `(Request) => Promise<Response>` for every `/api/*` route except `/api/auth/*`. */
 export const apiHandler = handler

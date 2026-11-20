@@ -1,5 +1,3 @@
-// Exercises the generated SDK against the running app and a real, freshly migrated Postgres.
-// global-setup.ts starts the server and creates two test authors.
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createClient } from '#/sdk/client/index.ts'
@@ -46,10 +44,8 @@ describe('me', () => {
 })
 
 describe('security', () => {
-  // The CSRF check in src/start.ts runs before routing, so it answers for any /api path and method.
   const attempts: Array<[string, Record<string, string>]> = [
     ['cross-site fetch metadata', { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }],
-    // Older browsers and non-browser clients send no Sec-Fetch-Site: Origin alone must decide.
     ['a foreign Origin without fetch metadata', { origin: 'https://evil.example' }],
     ['no Origin, Referer or fetch metadata', {}],
   ]
@@ -71,7 +67,6 @@ describe('security', () => {
       headers: { 'content-type': 'application/json', cookie: authorCookie, origin: appUrl },
       method: 'POST',
     })
-    // GET is the only method of /api/me: the router, not the CSRF check, refuses it.
     expect(res.status).not.toBe(403)
     expect(res.status).toBeGreaterThanOrEqual(400)
   })
@@ -80,7 +75,6 @@ describe('security', () => {
     const home = await fetch(appUrl)
     expect(home.headers.get('x-content-type-options')).toBe('nosniff')
     expect(home.headers.get('x-frame-options')).toBe('DENY')
-    // Public, but rendered per request with a nonce and a header that names whoever is signed in: never stored.
     expect(home.headers.get('cache-control')).toBe('private, no-store')
     const dashboard = await fetch(`${appUrl}/dashboard`, { headers: { cookie: authorCookie } })
     expect(dashboard.status).toBe(200)

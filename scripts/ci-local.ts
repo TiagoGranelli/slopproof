@@ -1,12 +1,3 @@
-// The faithful local CI: the same `pnpm ci:<job>` scripts as .github/workflows/ci.yml. The container jobs run in
-// .github/compose.ci.yaml (the Playwright image with Postgres and Mailpit, CPU, memory and /dev/shm limits), each
-// in a fresh `runner` container on one copy of the checkout; the host jobs drive Docker themselves and run here.
-// Usage: pnpm ci:local [job ...]   (default: every job, in CI order)
-//   Container jobs: static supply-chain drift build verify lighthouse. Host jobs: workflows secrets docker.
-//   verify and lighthouse need build, which is added when missing (CI's `needs: build`).
-// Env: CI_LOCAL_CPUS (default 4, a GitHub-hosted runner), CI_LOCAL_MEMORY (6g), CI_LOCAL_SHM (2g),
-//      CI_DOCKER_PREFIX (default <package name>-ci) names the compose project and the pnpm store volume.
-// Reports (test-results, playwright-report, lighthouse-report) land in test-results/ci-local/<job>/.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -33,9 +24,7 @@ const git = (...args: Array<string>) => spawnSync('git', args, { encoding: 'utf8
 const TOP = git('rev-parse', '--show-toplevel').trim()
 const RESULTS = resolve('test-results/ci-local')
 const PROJECT = `${dockerPrefix()}-local-${process.pid}`
-/** `pnpm@<version>[+<hash>]` in package.json#packageManager. */
 const { packageManager } = JSON.parse(readFileSync('package.json', 'utf8')) as { packageManager: string }
-/** What .github/compose.ci.yaml interpolates. */
 const env = {
   ...process.env,
   CI_DOCKER_PREFIX: dockerPrefix(),
@@ -45,7 +34,6 @@ const env = {
   PNPM_VERSION: packageManager.replace(/^pnpm@/, '').replace(/\+.*$/, ''),
 }
 
-/** `docker compose` on this run's project; the exit code, with the terminal attached unless `input` is given. */
 const compose = (args: Array<string>, input?: string) =>
   spawnSync('docker', ['compose', '-p', PROJECT, '-f', '.github/compose.ci.yaml', ...args], {
     env,
@@ -53,20 +41,12 @@ const compose = (args: Array<string>, input?: string) =>
     stdio: [input === undefined ? 'inherit' : 'pipe', 'inherit', 'inherit'],
   }).status ?? 1
 
-/**
- * One step in a fresh runner container: the command, then its peak memory and reports in RESULTS/<step>/
- * (.github/compose.ci.yaml's entrypoint). `input` goes to the command's stdin.
- */
 const inRunner = (step: string, command: Array<string>, input?: string) => {
   const noTty = input === undefined ? [] : ['-T']
   const owner = ['-e', `STEP=${step}`, '-e', `HOST_UID=${process.getuid?.() ?? 0}`]
   return compose(['run', '--rm', ...noTty, ...owner, 'runner', ...command], input)
 }
 
-/**
- * The checkout CI would get, in the `work` volume: HEAD and its parent (jobs diff against HEAD^), with the files
- * as they are on disk on top (tracked and untracked ones that are not ignored), then a frozen install.
- */
 const COPY_CHECKOUT = [
   `git clone --quiet --depth 2 "file://${TOP}" .`,
   'find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +',
@@ -90,7 +70,6 @@ const timed = (job: string, run: () => number): Row => {
   return { job, peakBytes, seconds, status }
 }
 
-/** Builds the runner image and installs the checkout in it: the first row of the results. */
 const prepareRunner = () => {
   spawnSync('docker', ['volume', 'create', `${dockerPrefix()}-pnpm-store`], { stdio: 'ignore' })
   if (compose(['build', 'runner']) !== 0) {
@@ -138,19 +117,16 @@ try {
 }
 for (const job of plan.filter((j) => HOST_JOBS.has(j))) {
   console.log(`\n▶ ci:${job} (host)`)
-  // tinyexec starts pnpm's .cmd shim on Windows too (docs/operations.md, "Development platforms").
   rows.push(timed(job, () => xSync('pnpm', [`ci:${job}`], { nodeOptions: { stdio: 'inherit' } }).exitCode ?? 1))
 }
 
 const gib = (bytes: number | undefined) => (bytes === undefined ? 'n/a' : `${(bytes / 1024 ** 3).toFixed(2)} GiB`)
-/** A job's exit status in words: 2 is Lighthouse's "the machine was too slow to judge". */
 const outcome = (status: number) => {
   if (status === 0) {
     return 'ok'
   }
   return status === 2 ? 'INCONCLUSIVE' : `FAIL (${status})`
 }
-/** 1 when a job failed, else 2 when one was inconclusive, else 0. */
 const runStatus = (statuses: Array<number>) => {
   if (statuses.some((status) => status !== 0 && status !== 2)) {
     return 1

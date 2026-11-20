@@ -3,8 +3,6 @@ import { cn } from 'cn'
 import { Slot } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
-// radix-nova's button, trimmed to the variants and sizes this app uses: every class in this file ships in the
-// render-blocking stylesheet of every page, used or not. `pnpm exec shadcn add button --overwrite` restores the rest.
 const buttonVariants = cva(
   'inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all select-none active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50',
   {

@@ -17,18 +17,10 @@ import { IPV6_SUBNET } from './http/client-address.ts'
 import { log } from './log.ts'
 import { authMail } from './mail/auth-mail.ts'
 
-/**
- * Better Auth's /delete-user checks the password only when one is sent: without it, a session younger than
- * `freshAge` (a day) is enough, and a `token` takes the deletion-by-mail path this app does not use. That is its
- * documented design (https://www.better-auth.com/docs/concepts/users-accounts#delete-user, 1.7.6), not a bug. Both are
- * refused here, before the endpoint runs, whoever calls it; the password itself is then verified by the
- * endpoint (INVALID_PASSWORD).
- */
 const requirePasswordToDelete = createAuthMiddleware(async (ctx) => {
   if (ctx.path !== '/delete-user') {
     return
   }
-  // Better Auth types the body as `any`: read it as unknown and check each field.
   const body: unknown = ctx.body
   const { password, token }: { password?: unknown; token?: unknown } =
     typeof body === 'object' && body !== null ? body : {}
@@ -39,14 +31,7 @@ const requirePasswordToDelete = createAuthMiddleware(async (ctx) => {
 
 export const auth = betterAuth({
   advanced: {
-    // Better Auth's own deferred work and the mail senders (./mail/auth-mail.ts) run after the response;
-    // shutdown waits for them.
     backgroundTasks: { handler: runInBackground },
-    // Every request reaches Better Auth with the TCP peer as the last X-Forwarded-For hop
-    // (./http/forwarded-for.ts). Hops inside TRUSTED_PROXIES are skipped from the right; the first address
-    // outside them is the client. With no trusted proxies the header holds only the peer.
-    // IPv6 clients are recorded and rate-limited by their /64 network (./http/client-address.ts): one subscriber
-    // usually holds a whole /64 and could otherwise rotate through fresh buckets. Clients in one /64 share one.
     ipAddress: {
       ipAddressHeaders: ['x-forwarded-for'],
       ipv6Subnet: IPV6_SUBNET,
@@ -57,49 +42,32 @@ export const auth = betterAuth({
   basePath: AUTH_BASE_PATH,
   baseURL: env.appUrl,
   database: drizzleAdapter(db, { provider: 'pg', schema }),
+  disabledPaths: env.authSignUp === 'open' ? [] : ['/sign-up/email'],
   emailAndPassword: {
+    autoSignIn: false,
     enabled: true,
     maxPasswordLength: PASSWORD_MAX_LENGTH,
     minPasswordLength: PASSWORD_MIN_LENGTH,
-    sendResetPassword: authMail.resetPassword,
-    // No session before the address is verified. `pnpm user:create` marks its accounts verified: the operator
-    // vouches for the address. Sign-up then answers the same for new and existing emails (no enumeration),
-    // and the owner of an existing one gets a heads-up instead.
-    autoSignIn: false,
     onExistingUserSignUp: authMail.existingAccount,
     requireEmailVerification: true,
-    // A reset proves control of the mailbox, not of the sessions: end them all.
     revokeSessionsOnPasswordReset: true,
+    sendResetPassword: authMail.resetPassword,
   },
   emailVerification: {
+    autoSignInAfterVerification: false,
+    sendOnSignIn: true,
     sendOnSignUp: true,
     sendVerificationEmail: authMail.verifyEmail,
-    // A sign-in with the right password but an unverified address sends a fresh link.
-    sendOnSignIn: true,
-    // Following the link verifies the address; signing in stays a separate, rate-limited step.
-    autoSignInAfterVerification: false,
   },
+  hooks: { before: requirePasswordToDelete },
   logger: {
     level: env.isProduction ? 'warn' : 'info',
     log: (level, message, ...args) => log(level, message, { error: args[0], source: 'better-auth' }),
   },
-  secret: Redacted.value(env.authSecret),
-  // Deletion needs the password (requirePasswordToDelete below); the user's rows go with it (foreign key cascade).
-  hooks: { before: requirePasswordToDelete },
-  user: { deleteUser: { enabled: true } },
-  // AUTH_SIGN_UP=closed (the default) keeps public sign-up off: accounts come from `pnpm user:create`, which
-  // writes through Better Auth's internal adapter. disabledPaths answers 404 before anything else runs, on top of
-  // the endpoint allowlist (./http/auth-endpoints.ts). See docs/decisions/0003-sign-up-policy.md.
-  disabledPaths: env.authSignUp === 'open' ? [] : ['/sign-up/email'],
-  // Built-in rules still apply on top of this default: /sign-in/* allows 3 requests per 10 s per IP.
-  // Counters live in the app's rate_limit table, so every instance shares them: ./auth-rate-limit.ts, one atomic
-  // upsert per request, shared with the business API's write limit. A customStorage wins over `storage`, which
-  // stays unset so Better Auth does not claim the table.
-  // /get-session is a read that every page guard makes, so it is not counted. Neither are requests the endpoint
-  // allowlist answers with 404 (Better Auth counts before plugins run), so invented paths cannot fill the table.
+  onAPIError: { throw: true },
+  plugins: [endpointAllowlist(), tanstackStartCookies()],
   rateLimit: {
-    // Better Auth takes the first key that matches the path (`Object.keys(customRules).find`), so /get-session
-    // must come before the catch-all.
+    // Better Auth matches the first key in customRules, so /get-session must precede the catch-all.
     // oxlint-disable-next-line perfectionist/sort-objects
     customRules: { '/get-session': false, '/**': (request, rule) => (isExposedEndpoint(request) ? rule : false) },
     customStorage: postgresRateLimitStorage,
@@ -107,12 +75,8 @@ export const auth = betterAuth({
     max: 100,
     window: 60,
   },
-  // Unexpected errors (e.g. database down) are thrown to src/server/http/auth-handler.ts, which logs
-  // them as JSON without query parameters and answers an empty 500. Auth failures still answer normally.
-  onAPIError: { throw: true },
-  // tanstackStartCookies must stay the last plugin: it forwards Set-Cookie through TanStack Start.
-  plugins: [endpointAllowlist(), tanstackStartCookies()],
+  secret: Redacted.value(env.authSecret),
+  user: { deleteUser: { enabled: true } },
 })
 
-// Expired sessions and verification tokens are deleted periodically; Better Auth only removes them lazily.
 scheduleAuthCleanup()

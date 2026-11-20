@@ -1,8 +1,3 @@
-// The shared list plumbing on real Postgres, on a table of its own built from the shared columns
-// (src/server/db/schema/columns.ts): keyset pages (src/server/db/keyset.ts) that never skip or repeat a row, even
-// rows written in the same microsecond, in the order and with the sort keys of the api layer's fake
-// (tests/api/memory-keyset.ts); the uuidv7 id; and the text CHECK. The posts table has its own checks
-// (post-schema.test.ts).
 import { inArray } from 'drizzle-orm'
 import { PgDialect, getTableConfig, pgTable, text } from 'drizzle-orm/pg-core'
 import { Effect } from 'effect'
@@ -30,7 +25,6 @@ const note = pgTable(
 )
 const notes = keyset(note)
 
-/** The table's CHECK as SQL text, rendered from the shared helper, so the test runs the constraint it defines. */
 const checkSql = () => {
   const [bodyCheck] = getTableConfig(note).checks
   return new PgDialect().sqlToQuery(bodyCheck!.value).sql
@@ -53,7 +47,6 @@ afterAll(async () => {
   await pool.end()
 })
 
-/** One page of the notes, as a repository reads it. */
 const pageAfter = (cursor: PageCursor | undefined, limit: number) =>
   Effect.runPromise(
     query(db, (client) =>
@@ -66,7 +59,6 @@ const pageAfter = (cursor: PageCursor | undefined, limit: number) =>
     ),
   ).then((rows) => toPage(rows, limit, (row) => row))
 
-/** Every note, read page by page until the last. */
 const readAll = async (limit: number) => {
   const seen: Array<{ body: string; cursorAt: string; id: string }> = []
   let cursor: PageCursor | undefined
@@ -80,7 +72,6 @@ const readAll = async (limit: number) => {
 
 describe('keyset pages', () => {
   it('read every row once, newest first, with ties in one microsecond broken by id, as the fake orders them', async () => {
-    // Three in one microsecond, two a microsecond apart within one millisecond, one a second later.
     await pool.query(
       `insert into keyset_test_note (author_id, body, created_at)
          select $1, 'note ' || n, timestamptz '2000-01-01 00:00:00.000100' + make_interval(secs => s)
@@ -97,7 +88,6 @@ describe('keyset pages', () => {
   })
 })
 
-/** Inserts a note with `body`: 'ok', or the SQLSTATE Postgres refuses it with. */
 const sqlState = (body: string) =>
   pool
     .query(`insert into keyset_test_note (author_id, body) values ($1, $2)`, [author.id, body])

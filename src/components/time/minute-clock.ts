@@ -11,13 +11,8 @@ const refresh = () => {
   }
 }
 
-/** The browser's current time, refreshed on mount and when the tab regains focus: `useSyncExternalStore`'s snapshot. */
 export const readMinuteClock = (): number => now
 
-/**
- * For `useSyncExternalStore`: refreshes relative times ("5 minutes ago") when the first subscriber mounts and
- * whenever the tab becomes visible, regains focus or returns from bfcache, without background timers.
- */
 export function subscribeToMinuteClock(listener: () => void): () => void {
   if (listeners.size === 0) {
     now = Date.now()

@@ -1,6 +1,3 @@
-// axe (WCAG 2.2 AA + best practices) on every page and UI state the app has. To cover a new page or state, add
-// one entry to STATES: a name and the steps that reach it (helpers in ./support/app.ts); its landmark snapshot goes
-// in ./landmarks.spec.ts.
 import type { APIRequestContext, Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { expectAccessible } from './support/a11y.ts'
@@ -104,7 +101,6 @@ const STATES = {
     await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
   },
   'home, loading': async ({ page }) => {
-    // The pending screen replaces a navigation that takes longer than a second.
     await visit(page, '/about')
     await page.route('**/api/posts', () => {})
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: APP_NAME }).click()

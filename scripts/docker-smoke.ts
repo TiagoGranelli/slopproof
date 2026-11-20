@@ -1,11 +1,3 @@
-// The production path end to end with Docker only, through the adopters' own recipe: deploy/compose.production.yaml
-// plus deploy/compose.smoke.yaml (PgBouncer in transaction mode, the image built here, ephemeral ports). It builds
-// the image (prerender included), scans it with grype, runs the bundled migrator three times at once through the
-// pooler (exactly one run applies the migrations) and once directly (it must apply nothing), creates the first
-// account with the bundled create-user, brings the stack up, checks it through the edge (pages, then signing in as
-// that account) and stops the app gracefully. `down -v` removes everything it started, except grype's database volume.
-// CI's `docker` job and `pnpm ci:docker`.
-// Usage: node scripts/docker-smoke.ts   (env: CI_DOCKER_PREFIX, KEEP_SMOKE_IMAGE=1)
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -14,23 +6,13 @@ import { dockerPrefix, IMAGES } from './images.ts'
 
 const PROJECT = `${dockerPrefix()}-smoke-${process.pid}`
 const IMAGE = `${PROJECT}-app:smoke`
-/** grype's vulnerability database, kept between runs (about 200 MB; `docker volume rm` to reclaim). */
 const GRYPE_DB = `${dockerPrefix()}-grype-db`
-/** APP_URL in deploy/compose.smoke.yaml: the origin the checks send, whatever port Docker published. */
 const ORIGIN = 'http://localhost:8080'
 const MIGRATIONS = (JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as { entries: Array<unknown> })
   .entries.length
-/**
- * Below Docker's default stop timeout (10 s), after which a stop is a kill. srvx drains in-flight requests for up
- * to 5 s (SERVER_SHUTDOWN_TIMEOUT) and then exits even if a timer is still pending, so a timer that outlives the
- * shutdown makes the stop take about 6 s. TanStack Form's devtools connect loop is such a timer, which is why
- * production builds swap its event client out (TanStack/form#2132, src/lib/no-devtools-event-client.ts); with it
- * gone, `docker compose stop` takes about 2 s. The margin up to 8 s absorbs slow CI runners.
- */
 const MAX_STOP_MS = 8000
 
 const secret = () => randomBytes(24).toString('hex')
-/** What compose.production.yaml interpolates (deploy.env on a real server). */
 const env = {
   ...process.env,
   APP_DB_PASSWORD: secret(),
@@ -41,7 +23,6 @@ const env = {
 }
 const COMPOSE = ['compose', '-p', PROJECT, '-f', 'deploy/compose.production.yaml', '-f', 'deploy/compose.smoke.yaml']
 
-/** `docker compose <args>` on the smoke project; returns stdout, throws with stderr when it fails. */
 const compose = (args: Array<string>, input?: string) => {
   const run = spawnSync('docker', [...COMPOSE, ...args], { encoding: 'utf8', env, input, maxBuffer: 64 * 2 ** 20 })
   if (run.status !== 0) {
@@ -52,7 +33,6 @@ const compose = (args: Array<string>, input?: string) => {
   return run.stdout.trim()
 }
 
-/** `docker compose <args>` without blocking, for runs that must overlap. Resolves with stdout. */
 const composeAsync = (args: Array<string>) =>
   new Promise<string>((done, reject) => {
     const child = spawn('docker', [...COMPOSE, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -75,10 +55,6 @@ const step = async <T>(name: string, run: () => T | Promise<T>): Promise<T> => {
   return value
 }
 
-/**
- * grype over the built image, from the Docker daemon: a high or critical vulnerability with a released fix
- * fails, unless an ignore rule in .config/grype.yaml gives the reason it does not apply. Returns grype's exit code.
- */
 const scanImage = () =>
   spawnSync(
     'docker',
@@ -89,7 +65,6 @@ const scanImage = () =>
     { stdio: 'inherit' },
   ).status
 
-/** The `applied` count of the migrator's last log line. */
 const appliedBy = (output: string) => {
   const last = JSON.parse(output.split('\n').at(-1) ?? '{}') as { applied?: number; msg?: string }
   if (last.msg !== 'migrations applied') {
@@ -98,11 +73,9 @@ const appliedBy = (output: string) => {
   return last.applied
 }
 
-/** One run of the image's migrator (the `migrate` service), with `env` (NAME=value) on top of its own. */
 const migrateOnce = (...overrides: Array<string>) =>
   composeAsync(['run', '--rm', '--no-deps', ...overrides.flatMap((e) => ['--env', e]), 'migrate'])
 
-/** Three runs at once through the pooler: exactly one applies the migrations. */
 const migrateConcurrently = async () => {
   const outputs = await Promise.all([1, 2, 3].map(() => migrateOnce()))
   for (const output of outputs) {
@@ -114,7 +87,6 @@ const migrateConcurrently = async () => {
   }
 }
 
-/** MIGRATION_DATABASE_URL (direct) wins over DATABASE_URL (the pooler), and finds nothing to do. */
 const migrateDirectly = async () => {
   const direct = await migrateOnce(`MIGRATION_DATABASE_URL=postgres://app:${env.APP_DB_PASSWORD}@db:5432/app`)
   console.log(`  direct: ${direct}`)
@@ -131,13 +103,11 @@ const migrateDirectly = async () => {
 
 const account = { email: 'first@example.test', password: randomBytes(18).toString('base64url') }
 
-/** The bundled create-user in the app's container, through the pooler, the password on stdin. */
 const createFirstAccount = () => {
   const command = ['node', '.output/create-user.mjs', account.email, 'First User']
   console.log(`  ${compose(['run', '--rm', '--no-deps', '-T', 'app', ...command], `${account.password}\n`)}`)
 }
 
-/** What the edge changed on the home page: its compression and its Cache-Control. */
 const homeProblems = async (base: string): Promise<Array<string>> => {
   const problems: Array<string> = []
   const home = await fetch(base, { headers: { 'accept-encoding': 'gzip' } })
@@ -225,7 +195,6 @@ let failed = false
 let scanStatus: number | null = 0
 try {
   await step(`build ${IMAGE}`, () => compose(['build', 'migrate']))
-  // Reported now, failed at the end: the rest of the smoke test still runs.
   scanStatus = await step('scan the image for fixable vulnerabilities (grype)', scanImage)
   await step('start Postgres and PgBouncer (transaction mode)', () => compose(['up', '--detach', '--wait', 'pooler']))
   await step('migrate: three runs at once through the pooler', migrateConcurrently)

@@ -6,7 +6,6 @@ import { getSignUpPolicy } from '#/lib/auth.functions.ts'
 import { getSession } from '#/lib/session.functions.ts'
 
 export const Route = createFileRoute('/sign-up')({
-  // With AUTH_SIGN_UP=closed the page does not exist (404), like the endpoint behind it.
   beforeLoad: async () => {
     const [policy, session] = await Promise.all([getSignUpPolicy(), getSession()])
     if (!policy.open) {

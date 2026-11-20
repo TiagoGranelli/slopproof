@@ -1,4 +1,3 @@
-// safeRedirect decides where `?redirect=` may send a user after sign-in. Pure function: no app needed.
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { safeRedirect } from '#/features/auth/utils/safe-redirect.ts'
@@ -31,7 +30,6 @@ describe('safeRedirect', () => {
     ['encoded backslash', '/%5Cevil.example'],
     ['lower-case encoded backslash', '/%5cevil.example'],
     ['malformed percent-encoding', '/%E0%A4%A'],
-    // Found by the properties below: each is //evil.example once something decodes the path one more time.
     ['an encoded tab before the host', '/%09/evil.example'],
     ['an encoded newline before the host', '/%0a/evil.example'],
     ['a dot segment that appears once decoded', '/.%2F%2Fevil.example'],
@@ -74,10 +72,8 @@ describe('safeRedirect', () => {
 
 const ORIGIN = 'http://app.invalid'
 
-// The `javascript:` scheme, assembled so that no script URL literal sits in the source (eslint/no-script-url).
 const SCRIPT_SCHEME = ['java', 'script:'].join('')
 
-/** Paths assembled from the pieces that make open redirects: slashes, dots, encodings, hosts and schemes. */
 const hostile = fc
   .array(
     fc.oneof(
@@ -91,7 +87,6 @@ const hostile = fc
   .map((parts) => `/${parts.join('')}`)
 const inputs = fc.oneof(hostile, fc.string(), fc.webPath(), fc.webUrl())
 
-/** Paths just under the length limit with characters that parsing percent-encodes, which makes them longer. */
 const nearTheLimit = fc
   .string({ maxLength: 2047, minLength: 1990, unit: fc.constantFrom('a', 'b', ' ', '"', '<', '>', '`', '{', '}') })
   .map((text) => `/a${text}`.slice(0, 2048))
@@ -113,7 +108,6 @@ describe('safeRedirect properties', () => {
         const url = new URL(target, ORIGIN)
         expect(url.origin).toBe(ORIGIN)
         expect(url.pathname.startsWith('//'), target).toBe(false)
-        // Something downstream that decodes the path once more must still land on this site.
         const decoded = new URL(decodeOnce(url.pathname), ORIGIN)
         expect(decoded.origin, target).toBe(ORIGIN)
         expect(decoded.pathname.startsWith('//'), target).toBe(false)
@@ -144,8 +138,6 @@ describe('safeRedirect properties', () => {
     )
   })
 
-  // Its own property with fewer runs: fast-check builds each of these 2,000-character strings one character at a
-  // time, and 1,000 of them took 6 s on a Windows CI runner, past the test timeout.
   it('is idempotent near the length limit, where encoding makes a path longer', () => {
     fc.assert(
       fc.property(nearTheLimit, (input) => {

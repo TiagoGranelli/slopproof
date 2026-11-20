@@ -1,4 +1,3 @@
-// Post editor state machine: explicit examples plus fast-check model-based command sequences (`fc.commands` / `fc.modelRun`).
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
@@ -29,10 +28,8 @@ interface EditorReal {
 const assertEditorInvariants = (model: EditorModel, real: EditorReal) => {
   const { state } = real
   expect(state.status).toBe(model.status)
-  // Never more than one save in flight.
   expect(model.inFlightSaves).toBeLessThanOrEqual(1)
   expect(state.status === 'saving').toBe(model.inFlightSaves === 1)
-  // Open states never target the Edit button for focus return.
   expect(isPostEditorOpen(state) && shouldReturnFocusToEdit(state)).toBe(false)
   if (state.status === 'viewing') {
     expect(state.focusTarget).toBe(model.focusTarget)

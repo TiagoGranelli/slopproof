@@ -1,6 +1,3 @@
-// Better Auth's rate limit on Postgres (src/server/auth.ts, src/server/auth-rate-limit.ts): counters shared in the
-// rate_limit table and incremented atomically, /get-session and endpoints outside the allowlist not counted.
-// Production only.
 import { Pool } from 'pg'
 import { afterAll, describe, expect, it } from 'vitest'
 import { appUrl, databaseUrl, clientIps, postSignIn, sharedUsers } from './helpers.ts'
@@ -27,13 +24,11 @@ describe('auth rate limit', () => {
     )
     const statuses = attempts.map((res) => res.status).toSorted((a, b) => a - b)
     expect(statuses).toEqual([401, 401, 401, 429, 429, 429, 429, 429, 429, 429])
-    // One shared row counts every attempt in the window (src/server/auth-rate-limit.ts); 3 were admitted.
     expect(await counters(ip)).toEqual([{ count: 10, key: `${ip}|/sign-in/email` }])
   })
 
   it('does not count /get-session', async () => {
     const ip = nextIp()
-    // Above the default of 100 requests per minute.
     const statuses = await Promise.all(
       Array.from({ length: 110 }, async () => {
         const res = await fetch(`${appUrl}/api/auth/get-session`, { headers: { 'x-forwarded-for': ip } })

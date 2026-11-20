@@ -1,5 +1,3 @@
-// createQueryClient (src/lib/query-client.ts): mutations declare their cache effects in `meta`, and its
-// MutationCache performs them in the order the UI relies on, keeping the mutation pending until the refetch ends.
 import { type InfiniteData, InfiniteQueryObserver, MutationObserver } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { createQueryClient } from '#/lib/query-client.ts'
@@ -16,7 +14,6 @@ const setup = async () => {
     },
     queryKey: [name],
   })
-  // Three pages each; only `mine` has an observer (on screen), `public` and `other` are inactive.
   for (const name of ['public', 'mine', 'other']) {
     await queryClient.infiniteQuery(list(name))
     queryClient.setQueryData<InfiniteData<string, number>>([name], {
@@ -49,8 +46,6 @@ describe('createQueryClient', () => {
     await mutation.mutate(undefined)
     events.push('resolved')
 
-    // The on-screen list refetches every page it holds; the public one only its first, although inactive; the
-    // inactive `other` is only marked stale.
     expect(events).toEqual([
       'caller onSuccess',
       'fetch public 0',

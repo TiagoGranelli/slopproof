@@ -5,9 +5,6 @@ import { ResendVerificationForm } from '#/features/auth/components/resend-verifi
 import { VerifyEmailForm } from '#/features/auth/components/verify-email-form.tsx'
 import { tokenFromSearch } from '#/features/auth/utils/token-search.ts'
 
-// Opened from the confirmation email (src/server/mail/auth-messages.ts). Loading the page only shows the
-// "Confirm email" button; the address is confirmed when it is pressed (a POST), so a mail scanner or link
-// preview that follows the link confirms nothing.
 export const Route = createFileRoute('/verify-email')({
   component: VerifyEmail,
   validateSearch: tokenFromSearch,

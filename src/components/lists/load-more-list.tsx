@@ -8,20 +8,13 @@ import {
 } from '#/components/lists/load-more-machine.ts'
 import { Button } from '#/components/ui/button.tsx'
 
-/** The part of a suspense infinite query over `{ items, nextCursor }` pages that the list reads. */
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
   'data' | 'fetchNextPage' | 'hasNextPage'
 >
 
-/**
- * A paged list with a "Load more" button driven by `load-more-machine` (`idle`, `loading`, `error`, `exhausted`).
- * After a page loads, focus moves to its first new item via ref callback once committed, so keyboard and screen
- * reader users continue reading where the new items start instead of staying on a button below them.
- */
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
   empty: string
-  /** Names the items in the button and its error: `posts` gives "Load more posts". */
   noun: string
   pages: Pages<Item>
   renderItem: (entry: Item) => ReactNode
@@ -42,7 +35,6 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   }
 
   const loadMore = async () => {
-    // aria-disabled rather than disabled while loading: a disabled button would drop keyboard focus.
     if (view.status === 'loading' || view.status === 'exhausted') {
       return
     }

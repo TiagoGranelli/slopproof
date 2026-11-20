@@ -1,12 +1,10 @@
 import { fieldIssue } from '#/lib/api-error.ts'
 
-/** Why a post save could not complete: a field validation issue, a schema chunk load failure, or a form-level error. */
 export type PostEditorError =
   | { readonly kind: 'field'; readonly message: string }
   | { readonly error: unknown; readonly kind: 'form' }
   | { readonly kind: 'schema'; readonly message: string }
 
-/** Explicit states of an inline post editor. */
 export type PostEditorState =
   | { readonly focusTarget: 'edit-button' | 'none'; readonly status: 'viewing' }
   | {
@@ -24,10 +22,8 @@ export type PostEditorState =
     }
   | { readonly focusTarget: 'edit-button'; readonly restoredBody: string; readonly status: 'cancelled' }
 
-/** Active states where the edit form is mounted in place of the read-only card. */
 export type OpenPostEditorState = Extract<PostEditorState, { readonly status: 'editing' | 'save-failed' | 'saving' }>
 
-/** Every event the post editor state chart handles. */
 export type PostEditorEvent =
   | { readonly canEdit: boolean; readonly savedBody: string; readonly type: 'OPEN' }
   | { readonly draft: string; readonly type: 'DRAFT_CHANGED' }
@@ -38,20 +34,16 @@ export type PostEditorEvent =
   | { readonly type: 'CANCEL' }
   | { readonly type: 'FOCUS_RETURNED' }
 
-/** Initial state when a post card mounts: viewing without moving focus. */
 export const INITIAL_POST_EDITOR_STATE: PostEditorState = { focusTarget: 'none', status: 'viewing' }
 
-/** Maps an API or network save error onto a field error or a form-level alert. */
 export const classifyPostSaveError = (error: unknown): PostEditorError => {
   const issue = fieldIssue(error, 'body')
   return issue !== undefined ? { kind: 'field', message: issue } : { error, kind: 'form' }
 }
 
-/** True when the inline editor form should be shown in place of the read-only card. */
 export const isPostEditorOpen = (state: PostEditorState): state is OpenPostEditorState =>
   state.status === 'editing' || state.status === 'saving' || state.status === 'save-failed'
 
-/** True when the read-only card should move focus back to its Edit button on commit. */
 export const shouldReturnFocusToEdit = (state: PostEditorState): boolean =>
   state.status === 'cancelled' || (state.status === 'viewing' && state.focusTarget === 'edit-button')
 
@@ -161,7 +153,6 @@ const transitionSaveFailed = (
   }
 }
 
-/** Pure state transition function for the inline post editor. */
 export const transitionPostEditor = (state: PostEditorState, event: PostEditorEvent): PostEditorState => {
   switch (state.status) {
     case 'viewing':

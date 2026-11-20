@@ -10,22 +10,12 @@ import {
   AlertDialogTitle,
 } from '#/components/ui/alert-dialog.tsx'
 
-/** What a Delete button removes, as its label and its dialog name it. */
 export interface DeletedItem {
-  /** What deleting it means, under the dialog's title. */
   readonly consequence: string
-  /** Names the kind of item: `post` gives "Delete post: …" and "Delete this post?". */
   readonly noun: string
-  /** The item's text: quoted in the dialog, and its start names the button for screen readers. */
   readonly text: string
 }
 
-/**
- * The question Delete asks (ConfirmDeleteButton loads it on demand): an alert dialog (Radix: focus trapped inside,
- * Escape and Keep it close it). Keep it has the initial focus, so Enter alone never deletes. On close, focus goes
- * back to `returnFocus`, and only then does a confirmed deletion start, so focus is on a button that exists while
- * the request runs.
- */
 export function ConfirmDeleteDialog(props: {
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
@@ -38,7 +28,6 @@ export function ConfirmDeleteDialog(props: {
     <AlertDialog onOpenChange={props.onOpenChange} open={props.open}>
       <AlertDialogContent
         onCloseAutoFocus={(event) => {
-          // Opened without a Radix trigger, so Radix does not know where focus came from.
           event.preventDefault()
           props.returnFocus.current?.focus()
           if (!confirmed.current) {

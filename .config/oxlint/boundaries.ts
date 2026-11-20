@@ -7,7 +7,6 @@ const SPAWN_SELECTOR = {
     'CallExpression:matches([callee.name=/^(spawn|spawnSync|execFile|execFileSync)$/], [callee.property.name=/^(spawn|spawnSync|execFile|execFileSync)$/])[arguments.0.value=/^(pnpm|npm|npx|yarn)$|^node_modules/]',
 } as const
 
-/** Syntax rules enforced across all of `src/**`, including the raw API routes. */
 const SRC_CORE_SELECTORS = [
   SPAWN_SELECTOR,
   {
@@ -26,7 +25,6 @@ const SRC_CORE_SELECTORS = [
       'import.meta.env.VITE_* is compiled into the browser bundle, so its value is public. Read server configuration through src/server/env.ts.',
     selector: "MemberExpression[object.object.type='MetaProperty'][object.property.name='env'][property.name=/^VITE_/]",
   },
-  // React effect hooks and member-accessed/imported timers (ADR 0017; bare timer globals are in overrides.ts).
   {
     message:
       'useEffect runs after paint and on every dependency change; agents misjudge its timing. Derive during render, handle it in the event handler, use a ref callback for DOM work, or useSyncExternalStore for subscriptions.',
@@ -89,9 +87,7 @@ const TEST_SELECTORS = [
   },
 ] as const
 
-/** Repository rules per directory, as syntax selectors and restricted imports. */
 export const boundaries: Array<OxlintOverride> = [
-  // Repository rules as syntax selectors. Each list repeats the selectors of the wider globs above it.
   {
     files: ['src/**'],
     rules: {
@@ -99,7 +95,6 @@ export const boundaries: Array<OxlintOverride> = [
     },
   },
   {
-    // An id is a string to the API and a brand to the compiler (src/contract/ids.ts).
     files: ['src/contract/**'],
     rules: {
       'eslint-js/no-restricted-syntax': [
@@ -115,7 +110,6 @@ export const boundaries: Array<OxlintOverride> = [
     },
   },
   {
-    // Only the two raw routes below serve HTTP themselves; everything else goes through the API contract.
     files: ['src/routes/**'],
     rules: {
       'eslint-js/no-restricted-syntax': [
@@ -145,7 +139,6 @@ export const boundaries: Array<OxlintOverride> = [
     },
   },
   {
-    // The two raw routes: the Effect API and Better Auth. A third one is a reviewed edit here, with its reason.
     files: ['src/routes/api/$.ts', 'src/routes/api/auth/$.ts'],
     rules: {
       'eslint-js/no-restricted-syntax': ['error', ...SRC_CORE_SELECTORS],
@@ -158,7 +151,6 @@ export const boundaries: Array<OxlintOverride> = [
     },
   },
   {
-    // Layers that wait for a browser or a server.
     files: ['tests/component/**', 'tests/integration/**', 'tests/e2e/**'],
     rules: {
       'eslint-js/no-restricted-syntax': [
@@ -174,11 +166,9 @@ export const boundaries: Array<OxlintOverride> = [
     },
   },
   {
-    // Playwright's own rules: oxlint's vitest rules do not recognize Playwright's `test`.
     files: ['tests/e2e/**'],
     rules: {
       'playwright/no-focused-test': 'error',
-      // A skip that depends on the browser takes a condition: `test.skip(({ isMobile }) => isMobile, 'reason')`.
       'playwright/no-skipped-test': ['error', { allowConditional: true, disallowFixme: true }],
       'playwright/no-wait-for-timeout': 'error',
     },

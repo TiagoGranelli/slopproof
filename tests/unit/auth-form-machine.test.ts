@@ -1,4 +1,3 @@
-// Auth form state machine: explicit examples plus fast-check model-based command sequences (`fc.commands` / `fc.modelRun`).
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { AuthActionError } from '#/features/auth/api/auth-action.ts'
@@ -31,7 +30,6 @@ interface AuthFormReal {
 const assertAuthFormInvariants = (model: AuthFormModel, real: AuthFormReal) => {
   const { state } = real
   expect(state.status).toBe(model.status)
-  // Never more than one validation or submission in flight.
   expect(model.inFlight).toBeLessThanOrEqual(1)
   expect(isAuthFormBusy(state)).toBe(model.inFlight === 1)
   if (state.status === 'field-error') {

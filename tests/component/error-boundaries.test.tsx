@@ -1,5 +1,3 @@
-// Where failures stop: the route-level errorComponent of /dashboard and /account (their loaders), and
-// SectionErrorBoundary, which keeps one failing part of a page from taking down the rest.
 import { Suspense } from 'react'
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'

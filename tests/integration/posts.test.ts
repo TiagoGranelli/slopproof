@@ -1,5 +1,3 @@
-// The example's posts through the generated SDK against the running app and a real, freshly migrated Postgres:
-// CRUD, validation, author isolation, and CSRF on each write, against the running app (`pnpm test`).
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Json } from '#/contract/json.ts'
 import { createClient } from '#/sdk/client/index.ts'
@@ -13,7 +11,6 @@ let other: ReturnType<typeof sdkClient>
 let authorCookie: string
 type Account = Awaited<ReturnType<typeof createUser>>
 type Users = { author: Account; other: Account }
-// This file's own accounts: other files run in parallel, and their posts would show up in what these two own.
 let users: Users
 
 beforeAll(async () => {
@@ -43,7 +40,6 @@ describe('posts', () => {
     expect(error).toMatchObject({ _tag: 'Unauthorized' })
   })
 
-  // With our Origin, so the CSRF check passes and authentication is what refuses them (not a 403).
   it('rejects every write without a session, or with a forged one, as Unauthorized', async () => {
     const post = await create(author, `401 target ${crypto.randomUUID()}`)
     for (const cookie of [undefined, 'better-auth.session_token=forged.token']) {
@@ -73,7 +69,6 @@ describe('posts', () => {
 
     const updated = await myPostsUpdate({ body: { body: 'edited' }, client: author, path: { id } })
     expect(updated.data).toMatchObject({ authorName: users.author.name, body: 'edited', id })
-    // An edit moves updatedAt (the column the UI marks "edited" from) and leaves createdAt, the sort key, alone.
     expect(updated.data!.createdAt).toBe(created.createdAt)
     expect(Date.parse(updated.data!.updatedAt)).toBeGreaterThan(Date.parse(created.updatedAt))
     const listed = (await myPostsList({ client: author })).data!.items.find((p) => p.id === id)
@@ -89,7 +84,6 @@ describe('posts', () => {
   })
 
   it('returns documented validation errors', async () => {
-    // A NUL reaches Postgres as a 500 unless the contract refuses it (src/contract/stored-text.ts).
     for (const body of ['', '   ', 'x'.repeat(281), 'before\u0000after']) {
       const invalid = await myPostsCreate({ body: { body }, client: author })
       expect(invalid.response?.status, JSON.stringify(body)).toBe(400)
@@ -124,7 +118,6 @@ describe('author isolation', () => {
     expect(remove.response?.status).toBe(404)
     expect(remove.error).toMatchObject({ _tag: 'PostNotFound', id: theirs.id })
 
-    // Still there, unchanged, and still theirs.
     const own = await myPostsList({ client: other })
     expect(own.data!.items.find((p) => p.id === theirs.id)).toEqual(theirs)
     const pub = await publicPostsList({ client: anonymous })
@@ -176,7 +169,6 @@ describe('author isolation', () => {
 describe('csrf on post writes', () => {
   const attempts: Array<[string, Record<string, string>]> = [
     ['cross-site fetch metadata', { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }],
-    // Older browsers and non-browser clients send no Sec-Fetch-Site: Origin alone must decide.
     ['a foreign Origin without fetch metadata', { origin: 'https://evil.example' }],
     ['no Origin, Referer or fetch metadata', {}],
   ]

@@ -9,7 +9,6 @@ interface Recipient {
 
 const signature = `\n\n— ${APP_NAME}`
 
-/** An absolute link to one of the app's pages, with the token in the query string when there is one. */
 type LinkTo = (path: string, token?: string) => string
 
 const verifyEmail = (linkTo: LinkTo, to: Recipient, token: string): MailMessage => ({
@@ -40,19 +39,12 @@ const existingAccount = (linkTo: LinkTo, to: Recipient): MailMessage => ({
   to: to.email,
 })
 
-/** The account emails, each addressed to one recipient. */
 interface AuthMessages {
   readonly existingAccount: (to: Recipient) => MailMessage
   readonly resetPassword: (to: Recipient, token: string) => MailMessage
   readonly verifyEmail: (to: Recipient, token: string) => MailMessage
 }
 
-/**
- * The account emails, as plain text. Links point at the app's own pages (/verify-email, /reset-password) with
- * the token in the query string; those pages call Better Auth. `appUrl` is the public origin (APP_URL).
- *
- * @example authMessages('https://app.example.com').verifyEmail({ name: 'Ada', email: 'ada@example.com' }, token)
- */
 export const authMessages = (appUrl: string): AuthMessages => {
   const linkTo: LinkTo = (path, token) => {
     const url = new URL(path, appUrl)

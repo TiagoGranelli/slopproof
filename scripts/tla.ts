@@ -1,7 +1,3 @@
-// Runs TLC over every TLA+ spec in specs/ that has a matching .cfg.
-// Downloads a pinned tla2tools.jar with SHA-256 verification into ~/.cache/tla2tools (never committed).
-// Uses native `java` when available, otherwise falls back to a pinned JRE container via Docker.
-// Usage: pnpm verify:tla [spec-name ...]
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

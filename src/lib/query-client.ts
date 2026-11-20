@@ -6,26 +6,15 @@ import {
   type QueryKey,
 } from '@tanstack/react-query'
 
-/** A query a mutation makes stale, and how to bring it back. */
 export interface Invalidation {
-  /** An infinite list that is cut back to its first page before the refetch, instead of refetching every page. */
   readonly firstPageOnly?: boolean
-  /**
-   * Refetch it even while nothing on screen reads it, so a cached route renders it fresh on the next visit
-   * instead of first showing the old data. Otherwise only an active query refetches (the rest when next read).
-   */
   readonly inactiveToo?: boolean
   readonly queryKey: QueryKey
 }
 
-/** What a mutation declares in `meta`; the MutationCache below acts on it. A type, not an interface: TanStack Query
- * only takes a `Record<string, unknown>`, which an interface is not assignable to. */
 type CacheEffects = {
-  /** Cleared before the caller's `onSuccess` (a different user, or none, from now on). */
   readonly clearsCache?: boolean
-  /** Refetched after the caller's `onSuccess`; the mutation stays pending until they are fresh. */
   readonly invalidates?: ReadonlyArray<Invalidation>
-  /** Also invalidate after this failure (the error says the cache is stale, such as a post already deleted). */
   readonly invalidatesOnError?: (error: unknown) => boolean
 }
 
@@ -67,12 +56,6 @@ const createMutationCache = (getClient: () => QueryClient, onClear?: () => void)
     },
   })
 
-/**
- * The app's QueryClient (src/router.tsx, and the component tests). Mutations never invalidate by hand: they
- * declare `meta.clearsCache` and `meta.invalidates`, and this cache performs them. TanStack Query awaits the
- * cache's `onSuccess` before the mutation's own and its `onSettled` after, which gives the order the UI needs:
- * clear, then the caller's `onSuccess` (reset a form, navigate), then the refetch.
- */
 export function createQueryClient(
   config: QueryClientConfig = {},
   options: { readonly onClear?: () => void } = {},

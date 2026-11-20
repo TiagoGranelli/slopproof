@@ -16,7 +16,6 @@ const SYSTEMS: ReadonlyArray<[RegExp, string]> = [
 
 const first = (list: ReadonlyArray<[RegExp, string]>, text: string) => list.find(([pattern]) => pattern.test(text))?.[1]
 
-/** "Firefox on Linux" from a User-Agent header, or a generic label when it is missing or unknown. */
 export function describeDevice(userAgent: string | null): string {
   if (!userAgent) {
     return 'Unknown device'
@@ -29,15 +28,10 @@ export function describeDevice(userAgent: string | null): string {
   return browser ?? system ?? 'Unknown device'
 }
 
-/** A session's client address: IPv4 as it is, an IPv6 network (CIDR, as the server lists it) labelled as one. */
 export function describeAddress(address: string): string {
   return address.includes('/') ? `IPv6 network ${address}` : address
 }
 
-/**
- * An ISO timestamp as "2026-09-27 14:05 UTC". Fixed format and zone, so the server-rendered text and the
- * hydrated text are identical whatever the visitor's locale.
- */
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {

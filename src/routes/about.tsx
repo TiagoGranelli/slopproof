@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Page } from '#/components/layouts/page.tsx'
 import { pageTitle } from '#/config/app.ts'
 
-// Finite static page: prerendered at build time (see nitro.prerender.routes in vite.config.ts).
 export const Route = createFileRoute('/about')({
   component: About,
   head: () => ({ meta: [{ title: pageTitle('About') }] }),

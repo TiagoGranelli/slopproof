@@ -1,20 +1,10 @@
-// Accessibility assertions for E2E specs: an axe scan that fails on any violation, and a keyboard walk that
-// records every Tab stop with its accessible name and whether its focus is visible.
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 
-/** WCAG 2.0, 2.1 and 2.2 at levels A and AA, plus axe's best practices. */
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice']
 
-/**
- * Scans the page as it is now and fails on any violation, listing each rule with the offending selectors.
- * `state` names the UI state in the failure message and in the attached report, e.g. 'dashboard, editing'.
- */
 export async function expectAccessible(page: Page, state: string) {
-  // Scan the state as it settles, not a frame of a transition: a button that becomes enabled fades in from
-  // `disabled:opacity-50`, and its colors fail contrast until the fade ends. Infinite animations (a loading
-  // pulse) never finish and are part of the state, so they are not waited for.
   await page.evaluate(async () => {
     for (;;) {
       const running = document
@@ -38,25 +28,10 @@ export async function expectAccessible(page: Page, state: string) {
 }
 
 export type TabStop = {
-  /** Role and accessible name, e.g. `button "Sign out"`, from Playwright's ARIA snapshot. */
   name: string
-  /** The element shows a focus indicator: a non-zero outline or a box-shadow ring. */
   visibleFocus: boolean
 }
 
-/**
- * Presses Tab (Shift+Tab with `backwards`) from the current focus until focus has gone past every control
- * of the page, and returns every stop on the way. Fails if focus comes back to a control it already left (a
- * focus trap), if focus is lost to the document on the way, or after `max` presses. A trap is found by the
- * repeated control, not by counting presses, so a page that gains controls (a comment field under each post)
- * needs no new limit.
- *
- * "Past every control" is a temporary, focusable sentinel at the very end of `body` (at the very start when
- * going backwards): what the browser does once Tab leaves the last control differs and is not part of the
- * page. Chromium moves focus to its own UI and `document.activeElement` becomes `body`; Firefox under
- * Playwright keeps focus on the last control and `document.hasFocus()` stays true, which looks exactly like
- * a trap. Focus that reaches the sentinel has left every control in the page's own order, in every engine.
- */
 export async function tabThrough(
   page: Page,
   options: { backwards?: boolean; max?: number } = {},
@@ -80,10 +55,8 @@ export async function tabThrough(
   }
 }
 
-/** The controls a walk has stopped on so far, kept in the page: a locator cannot tell two elements apart. */
 type WalkState = { tabWalkSeen?: WeakSet<Element> }
 
-/** Presses Tab (or Shift+Tab) until focus reaches the sentinel of `tabThrough`, and returns the stops on the way. */
 const walkToSentinel = async (page: Page, { backwards, max }: { backwards: boolean; max: number }) => {
   const stops: Array<TabStop> = []
   const walked = () => stops.map((stop) => stop.name).join(' → ')
@@ -104,7 +77,6 @@ const walkToSentinel = async (page: Page, { backwards, max }: { backwards: boole
   throw new Error(`focus did not get past the page after ${max} key presses: ${walked()}`)
 }
 
-/** Where focus is now: a control, as a tab stop; the sentinel of `tabThrough`; or nowhere (lost to the document). */
 const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) | 'sentinel' | 'lost'> => {
   const focused = page.locator(':focus')
   if ((await focused.count()) === 0) {
@@ -123,7 +95,6 @@ const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) |
     return 'sentinel'
   }
   const snapshot = await focused.ariaSnapshot()
-  // `- button "Sign out"`, or YAML-quoted when the name has a colon: `- 'button "Edit post: First"'`.
   const [, role, label] = /^- '?([\w-]+)(?: "((?:[^"\\]|\\.)*)")?/.exec(snapshot) ?? []
   const visibleFocus = await focused.evaluate((element) => {
     const style = getComputedStyle(element)
@@ -133,10 +104,6 @@ const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) |
   return { again: visit === 'again', name: label === undefined ? `${role}` : `${role} "${label}"`, visibleFocus }
 }
 
-/**
- * Tab stops from the top of the page. Focus starts on a temporary, untabbable element before everything
- * else (blurring would not do: the browser resumes Tab from the last focused element).
- */
 export async function tabOrder(page: Page, max?: number) {
   await page.evaluate(() => {
     const start = Object.assign(document.createElement('span'), { id: 'tab-order-start', tabIndex: -1 })
@@ -150,11 +117,6 @@ export async function tabOrder(page: Page, max?: number) {
   }
 }
 
-/**
- * The Tab stops a walk must have: exactly `first` at the start and exactly `last` at the end (the site header and
- * footer, whose order is the product), and `inOrder` in that order between them, with any other stops among them.
- * No stop may be one of `never` (a control that must not be a Tab stop yet), and every stop shows its focus.
- */
 export function expectTabStops(
   stops: Array<TabStop>,
   expected: { first: Array<string>; inOrder: Array<string>; last: Array<string>; never?: Array<string> },
@@ -175,7 +137,6 @@ export function expectTabStops(
   ).toEqual([])
 }
 
-/** The part of `wanted` that `names` holds in the same order, others between them allowed: all of it on a match. */
 const inOrderWithin = (names: Array<string>, wanted: Array<string>) => {
   let found = 0
   for (const name of names) {
@@ -196,10 +157,6 @@ const ACCOUNT_LINKS = {
     - link "Sign in"`,
 }
 
-/**
- * What every page starts with, as an ARIA snapshot: the skip link, then the site header with the main
- * navigation, whose account links depend on `session`; the page's own `main` follows.
- */
 export const siteHeader = (session: keyof typeof ACCOUNT_LINKS) => `
 - link "Skip to content"
 - banner:
@@ -207,7 +164,6 @@ export const siteHeader = (session: keyof typeof ACCOUNT_LINKS) => `
     - link "${APP_NAME}"
     - link "About"${ACCOUNT_LINKS[session]}`
 
-/** The footer every page ends with: what the app is and the theme choice. */
 export const SITE_FOOTER = `
 - contentinfo:
   - paragraph

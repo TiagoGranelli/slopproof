@@ -7,10 +7,6 @@ import { AuthForm, useAuthFormController } from '#/features/auth/components/auth
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.DeleteAccountFields))
 
-/**
- * Deletes the account and everything it owns. Two confirmations: the password (checked by Better Auth) and an explicit
- * checkbox, so neither a stray click nor an unattended signed-in browser is enough.
- */
 export function DeleteAccountForm() {
   const navigate = useNavigate()
   const remove = useDeleteAccount({

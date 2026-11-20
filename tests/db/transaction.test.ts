@@ -1,6 +1,3 @@
-// Database.transaction (src/server/db/client.ts) against real Postgres: commit, rollback on a typed failure, a
-// defect and an interruption, and nested use joining the outer transaction. The writes go through PostsRepo,
-// so this also proves that a repository built outside the transaction sends its statements inside it.
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Cause, Data, Deferred, Effect, Exit, Fiber, Layer } from 'effect'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -28,7 +25,6 @@ beforeEach(() => {
   logged.length = 0
 })
 
-/** Bodies of `author`'s posts among `bodies` that are committed, read outside any transaction. */
 const committed = async (...bodies: Array<string>) =>
   (
     await pool.query<{ body: string }>('select body from post where author_id = $1 and body = any($2) order by body', [
@@ -47,7 +43,6 @@ const publish = (...bodies: Array<string>) =>
 
 const unique = (label: string) => `${label} ${crypto.randomUUID()}`
 const control = () => logged.filter((sql) => /^(begin|commit|rollback|savepoint)/i.test(sql))
-/** Every checked-out connection went back to the pool. */
 const expectReleased = () => expect(pool.totalCount - pool.idleCount).toBe(0)
 
 describe('Database.transaction', () => {
@@ -67,7 +62,6 @@ describe('Database.transaction', () => {
         publish(body).pipe(Effect.andThen(Effect.fail(new Refused({ reason: 'after the insert' })))),
       ).pipe(Effect.flip),
     )
-    // Still a typed failure (not a defect): `flip` turns it into the success value.
     expect(Exit.isSuccess(failed) && failed.value).toEqual(new Refused({ reason: 'after the insert' }))
     expect(Exit.isSuccess(failed) && failed.value._tag).toBe('Refused')
     expect(await committed(body)).toEqual([])
@@ -96,10 +90,8 @@ describe('Database.transaction', () => {
           ),
         )
         yield* Deferred.await(written)
-        // Written inside the transaction, invisible outside it.
         expect(yield* Effect.promise(() => committed(body))).toEqual([])
         yield* Fiber.interrupt(fiber)
-        // No polling: the interrupt waited for the ROLLBACK.
         expect(control()).toEqual(['begin', 'rollback'])
         return yield* Fiber.await(fiber)
       }),
@@ -124,7 +116,6 @@ describe('Database.transaction', () => {
     expect(await committed(inner, outer)).toEqual([])
     expect(control()).toEqual(['begin', 'rollback'])
 
-    // And when everything succeeds, the inner writes commit with the outer ones.
     logged.length = 0
     await run(Database.transaction(Effect.andThen(Database.transaction(publish(inner)), publish(outer))))
     expect(await committed(inner, outer)).toEqual([inner, outer].toSorted())

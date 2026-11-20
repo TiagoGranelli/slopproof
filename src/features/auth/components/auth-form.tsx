@@ -13,7 +13,6 @@ import {
 } from '#/features/auth/utils/auth-form-machine.ts'
 import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
-/** State machine handle shared between an account form and the AuthForm shell. */
 export interface AuthFormController {
   readonly dispatch: Dispatch<AuthFormEvent>
   readonly onSubmitInvalid: () => void
@@ -24,10 +23,6 @@ export interface AuthFormController {
 const toAuthError = (error: unknown): Error =>
   error instanceof Error ? error : new Error('Authentication action failed')
 
-/**
- * Owns the explicit state machine (`auth-form-machine`) for an account form:
- * `idle -> validating -> submitting -> succeeded | field-error | form-error`.
- */
 export function useAuthFormController(
   options: { readonly fieldCodes?: AuthFieldCodes; readonly initialError?: Error | null } = {},
 ): AuthFormController {
@@ -54,25 +49,12 @@ const loadSchemaIfNeeded = async (schema: { load: () => Promise<void> } | undefi
         .catch(() => false)
     : true
 
-/**
- * The shell of an account form made with useAppForm and driven by `auth-form-machine` (`useAuthFormController`).
- * Without an `action` the button stays disabled until hydration; while validating or submitting the button is
- * `aria-disabled` so keyboard focus stays on it and further submits are ignored.
- */
 export function AuthForm(props: {
-  /**
-   * Where the browser posts the form itself before hydration (a server function's `url` that takes FormData).
-   * With it the button works from the first paint; without it, it waits for hydration.
-   */
   action?: string
   children?: ReactNode
-  /** State machine controller from useAuthFormController. */
   controller: AuthFormController
-  /** The form from useAppForm; its onSubmit invokes controller.submitAction. */
   form: { handleSubmit: () => Promise<void> }
-  /** Prefix for the ids this form gives its alert. */
   id: string
-  /** The fields' schema (lazyFormSchema): loaded on the first focus or input, and awaited by a submit. */
   schema?: { load: () => Promise<void> }
   submitLabel: string
   submitVariant?: 'default' | 'destructive'
@@ -111,7 +93,6 @@ export function AuthForm(props: {
       aria-describedby={describedBy(formErrorMessage && errorId)}
       className="grid gap-3"
       method="post"
-      // Once hydrated the fields show the schema's messages; before that, only the browser's own checks run.
       noValidate={hydrated}
       onSubmit={(event) => {
         event.preventDefault()
