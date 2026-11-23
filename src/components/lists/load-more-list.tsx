@@ -8,16 +8,7 @@ import { Button } from '#/components/ui/button.tsx'
 
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  | 'data'
-  | 'error'
-  | 'dataUpdatedAt'
-  | 'fetchNextPage'
-  | 'fetchStatus'
-  | 'hasNextPage'
-  | 'isFetchingNextPage'
-  | 'isFetchNextPageError'
-  | 'isRefetchError'
-  | 'refetch'
+  'data' | 'dataUpdatedAt' | 'fetchNextPage' | 'fetchStatus' | 'hasNextPage' | 'isFetchingNextPage' | 'refetch'
 >
 
 const loadMoreLabel = (noun: string, pages: Pick<Pages<unknown>, 'fetchStatus' | 'isFetchingNextPage'>) => {
@@ -54,6 +45,18 @@ const usePaginationButton = () => {
   return { attachButton, button }
 }
 
+interface LoadMoreFailure {
+  readonly data: unknown
+  readonly dataUpdatedAt: number
+  readonly error: unknown
+}
+
+const failureOf = (settled: LoadMoreFailure): LoadMoreFailure => ({
+  data: settled.data,
+  dataUpdatedAt: settled.dataUpdatedAt,
+  error: settled.error,
+})
+
 const readIdlePageState = (queryClient: QueryClient, queryKey: QueryKey) => {
   const current = queryClient.getQueryState<InfiniteData<unknown>>(queryKey)
   if (!current?.data || current.fetchStatus !== 'idle') {
@@ -73,7 +76,7 @@ const requestAppend = async <Item extends { readonly id: string }>(
   if (current.needsRefresh) {
     const refreshed = await pages.refetch()
     if (refreshed.isRefetchError) {
-      return { failedAt: refreshed.dataUpdatedAt }
+      return { failure: failureOf(refreshed) }
     }
     current = readCurrent()
     if (!refreshed.isSuccess || current?.needsRefresh !== false) {
@@ -82,7 +85,7 @@ const requestAppend = async <Item extends { readonly id: string }>(
   }
   const fetched = await pages.fetchNextPage()
   if (fetched.isFetchNextPageError) {
-    return { failedAt: fetched.dataUpdatedAt }
+    return { failure: failureOf(fetched) }
   }
   return fetched.isSuccess ? { appendedId: firstAppendedItemId(current.pageCount, fetched.data.pages) } : null
 }
@@ -101,11 +104,11 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: LoadMo
   const queryClient = useQueryClient()
   const items = pages.data.pages.flatMap((page) => page.items)
   const [focusId, dispatch] = useReducer(transitionLoadMore, null)
-  const [failedAt, setFailedAt] = useState<number | null>(null)
+  const [failure, setFailure] = useState<LoadMoreFailure | null>(null)
   const mounted = useRef<symbol | null>(null)
   const { attachButton, button } = usePaginationButton()
   const busy = pages.fetchStatus !== 'idle'
-  const loadFailed = pages.isFetchNextPageError || (pages.isRefetchError && pages.dataUpdatedAt === failedAt)
+  const shownFailure = failure?.data === pages.data && failure.dataUpdatedAt === pages.dataUpdatedAt ? failure : null
 
   const attachList = useCallback((node: HTMLDivElement | null) => {
     mounted.current = node ? Symbol('mounted list') : null
@@ -132,8 +135,8 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: LoadMo
     if (outcome === null || mounted.current !== mount) {
       return
     }
-    if (outcome.failedAt !== undefined) {
-      setFailedAt(outcome.failedAt)
+    if (outcome.failure) {
+      setFailure(outcome.failure)
     } else if (outcome.appendedId !== null) {
       dispatch({ focusId: outcome.appendedId, type: 'FOCUS_APPENDED' })
     }
@@ -173,7 +176,7 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: LoadMo
           {loadMoreLabel(noun, pages)}
         </Button>
       ) : null}
-      {!busy && loadFailed ? <ApiErrorAlert action={`load more ${noun}`} error={pages.error} /> : null}
+      {!busy && shownFailure ? <ApiErrorAlert action={`load more ${noun}`} error={shownFailure.error} /> : null}
     </div>
   )
 }
