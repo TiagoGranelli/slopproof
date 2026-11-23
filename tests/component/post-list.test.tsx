@@ -42,6 +42,37 @@ const mockPages = (
   return cursors
 }
 
+const LOAD_MORE_FAILED = 'Could not load more posts. Try again.'
+
+const unavailable = () => new HttpResponse('', { status: 503 })
+
+const expectAlert = async (text: string | null) => {
+  const alert = page.getByRole('alert')
+  if (text === null) {
+    await expect.element(alert).not.toBeInTheDocument()
+    return
+  }
+  await expect.element(alert).toHaveTextContent(text)
+}
+
+const renderWithOutages = async () => {
+  const down = { firstPage: true, nextPage: true }
+  const cursors = mockPages(
+    () => (down.nextPage ? unavailable() : HttpResponse.json(secondPage)),
+    () => (down.firstPage ? unavailable() : HttpResponse.json(firstPage)),
+  )
+  const queryClient = testQueryClient()
+  const { queryKey } = getPublicPostsQueryOptions()
+  queryClient.setQueryData(queryKey, listPages(firstPage))
+  await renderInApp(<PublicPosts />, { queryClient })
+  const backgroundRefresh = async (alertText: string | null) => {
+    await queryClient.refetchQueries({ queryKey })
+    await expect.element(loadMore()).toBeEnabled()
+    await expectAlert(alertText)
+  }
+  return { backgroundRefresh, cursors, down }
+}
+
 describe('PostList', () => {
   it('shows the empty message in place of the list', async () => {
     await renderList(listPage([]))
@@ -130,6 +161,31 @@ describe('PostList', () => {
     await expect.element(items().nth(2)).toHaveFocus()
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
     expect(cursors).toEqual([CURSOR, null, null, CURSOR])
+  })
+
+  it('stays silent when a background refresh fails before any Load more attempt', async () => {
+    const outage = await renderWithOutages()
+    await outage.backgroundRefresh(null)
+    expect(outage.cursors).toEqual([null])
+  })
+
+  it('keeps a Load more failure visible through failed background refreshes until the list recovers', async () => {
+    const outage = await renderWithOutages()
+    outage.down.firstPage = false
+    await loadMore().click()
+    await expectAlert(LOAD_MORE_FAILED)
+
+    outage.down.firstPage = true
+    await outage.backgroundRefresh(LOAD_MORE_FAILED)
+    await loadMore().click()
+    await expect.element(loadMore()).toBeEnabled()
+    await expectAlert(LOAD_MORE_FAILED)
+    await outage.backgroundRefresh(LOAD_MORE_FAILED)
+
+    outage.down.firstPage = false
+    outage.down.nextPage = false
+    await outage.backgroundRefresh(null)
+    expect(outage.cursors).toEqual([CURSOR, null, null, null, null])
   })
 
   it('shows a rejected cursor as a failure of Load more', async () => {
