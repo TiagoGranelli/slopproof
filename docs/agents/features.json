@@ -179,6 +179,8 @@
       "src/features/posts/components/my-post-list.tsx",
       "src/features/posts/components/my-post.tsx",
       "src/features/posts/components/post-composer.tsx",
+      "src/features/posts/components/post-list.tsx",
+      "src/components/lists/load-more-list.tsx",
       "src/features/posts/utils/post-draft-schema.ts",
       "src/features/posts/utils/post-draft.ts",
       "src/features/posts/utils/post-editor-machine.ts",
@@ -191,7 +193,7 @@
       "src/server/posts/repo.ts",
       "src/server/db/schema/posts.ts"
     ],
-    "purpose": "Signed-in author dashboard for creating, listing, editing, and deleting posts.",
+    "purpose": "Signed-in author dashboard for publishing, editing, deleting, and loading more posts after refreshing invalidated pages.",
     "routes": ["/dashboard"],
     "tests": [
       "tests/unit/id-brands.test.ts",

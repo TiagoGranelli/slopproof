@@ -43,12 +43,14 @@ and React Query owns fetch state. These flows use no effects or timers.
   `DeleteAccountForm`, `VerifyEmailForm`, `ResendVerificationForm`).
 - **Load-more pagination** (`src/components/lists/load-more-machine.ts`). React Query's fetch status keeps
   the button focusable and blocks activation during a refresh, a page fetch, or a fetch paused while offline.
-  The label shows “Loading more…” for an active next-page fetch and “Refreshing…” for other busy states.
+  The label shows “Waiting for connection…” while paused, “Loading more…” during an active next-page fetch,
+  and “Refreshing…” during an active refresh.
   The click handler also requires the current query to be idle, guarding against clicks before React renders the
-  busy state. A paused refresh can resume on reconnect without a click replacing it with a request for the old
-  cursor. Each accepted click requests one page with the current cursor. Only a next-page failure shows a Load
-  more error. If the list is still mounted when the request appends a page, the reducer records the first item's
-  ID and clears it after focus moves there.
+  busy state. An invalidated or errored query refreshes first. The same click requests the next page if the
+  refresh succeeds, a next cursor remains, and the list is still mounted. Only a next-page failure shows a Load
+  more error. When a page is appended, the reducer records its first item's ID and clears it after the focus
+  check. Focus moves to that item if the button still has focus or the final page removed the button and focus
+  fell back to the document body.
 
 We chose plain typed reducers over XState v5 (`xstate`). The flows have flat state and add no production
 dependencies. TypeScript and `typescript/switch-exhaustiveness-check` enforce exhaustiveness, and all three
@@ -62,7 +64,8 @@ The post editor and auth form use `fast-check` (`4.10.2`) with `fc.commands` / `
 counts and empty appended pages. All three flows have `fc.commands` / `fc.asyncModelRun` tests driving the
 rendered components in Chromium (`tests/component/post-editor-properties.test.tsx`,
 `tests/component/auth-form-properties.test.tsx`, `tests/component/load-more-properties.test.tsx`).
-`tests/component/dashboard-posts.test.tsx` exercises pagination during refresh, offline pauses, and navigation.
+`tests/component/dashboard-posts.test.tsx` exercises pagination during refresh, reconnect after a failed
+publish refresh, offline status text, focus retained in the composer, and navigation.
 These suites run inside `pnpm test:fast` and `pnpm check`.
 
 ### 3. TLA+ specifications and TLC runner (`pnpm verify:tla`)

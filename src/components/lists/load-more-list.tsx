@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import type { InfiniteData, QueryKey, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
+import type { InfiniteData, QueryClient, QueryKey, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
 import { useCallback, useReducer, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
@@ -8,8 +8,64 @@ import { Button } from '#/components/ui/button.tsx'
 
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  'data' | 'error' | 'fetchNextPage' | 'fetchStatus' | 'hasNextPage' | 'isFetchingNextPage' | 'isFetchNextPageError'
+  | 'data'
+  | 'error'
+  | 'fetchNextPage'
+  | 'fetchStatus'
+  | 'hasNextPage'
+  | 'isFetchingNextPage'
+  | 'isFetchNextPageError'
+  | 'refetch'
 >
+
+const loadMoreLabel = (noun: string, pages: Pick<Pages<unknown>, 'fetchStatus' | 'isFetchingNextPage'>) => {
+  if (pages.fetchStatus === 'paused') {
+    return 'Waiting for connection…'
+  }
+  if (pages.fetchStatus === 'idle') {
+    return `Load more ${noun}`
+  }
+  return pages.isFetchingNextPage ? `Loading more ${noun}…` : `Refreshing ${noun}…`
+}
+
+const ownsPaginationFocus = (owner: Document, button: HTMLButtonElement | null, hasNextPage: boolean) => {
+  const { activeElement, body } = owner
+  return (
+    (activeElement === button && button !== null) ||
+    (!hasNextPage && (activeElement === body || activeElement === null))
+  )
+}
+
+const readIdlePageState = (queryClient: QueryClient, queryKey: QueryKey) => {
+  const current = queryClient.getQueryState<InfiniteData<unknown>>(queryKey)
+  if (!current?.data || current.fetchStatus !== 'idle') {
+    return null
+  }
+  return { needsRefresh: current.isInvalidated || current.status === 'error', pageCount: current.data.pages.length }
+}
+
+const requestAppend = async <Item extends { readonly id: string }>(
+  pages: Pages<Item>,
+  readCurrent: () => ReturnType<typeof readIdlePageState>,
+  isStillMounted: () => boolean,
+) => {
+  let current = readCurrent()
+  if (!current) {
+    return null
+  }
+  if (current.needsRefresh) {
+    const refreshed = await pages.refetch()
+    current = readCurrent()
+    if (!isStillMounted() || !refreshed.isSuccess || current?.needsRefresh !== false) {
+      return null
+    }
+  }
+  const fetched = await pages.fetchNextPage()
+  if (!isStillMounted() || !fetched.isSuccess) {
+    return null
+  }
+  return firstAppendedItemId(current.pageCount, fetched.data.pages)
+}
 
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
   empty: string
@@ -24,11 +80,8 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   const items = pages.data.pages.flatMap((page) => page.items)
   const [focusId, dispatch] = useReducer(transitionLoadMore, null)
   const mounted = useRef<symbol | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
   const busy = pages.fetchStatus !== 'idle'
-  let buttonLabel = `Load more ${noun}`
-  if (busy) {
-    buttonLabel = pages.isFetchingNextPage ? `Loading more ${noun}…` : `Refreshing ${noun}…`
-  }
 
   const attachList = useCallback((node: HTMLDivElement | null) => {
     mounted.current = node ? Symbol('mounted list') : null
@@ -38,23 +91,23 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
     if (!node) {
       return
     }
-    node.focus()
+    if (ownsPaginationFocus(node.ownerDocument, button.current, pages.hasNextPage)) {
+      node.focus()
+    }
     dispatch({ type: 'FOCUS_APPLIED' })
   }
 
   const loadMore = async () => {
     const mount = mounted.current
-    const current = queryClient.getQueryState<Pages<Item>['data']>(queryKey)
-    if (!mount || busy || !pages.hasNextPage || !current?.data || current.fetchStatus !== 'idle') {
+    if (!mount || busy || !pages.hasNextPage) {
       return
     }
-    const pageCount = current.data.pages.length
-    const fetched = await pages.fetchNextPage()
-    if (mounted.current !== mount || !fetched.isSuccess) {
-      return
-    }
-    const appendedId = firstAppendedItemId(pageCount, fetched.data.pages)
-    if (appendedId !== null) {
+    const appendedId = await requestAppend(
+      pages,
+      () => readIdlePageState(queryClient, queryKey),
+      () => mounted.current === mount,
+    )
+    if (appendedId !== null && mounted.current === mount) {
       dispatch({ focusId: appendedId, type: 'FOCUS_APPENDED' })
     }
   }
@@ -86,10 +139,11 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
           aria-disabled={busy || undefined}
           className="justify-self-center"
           onClick={() => void loadMore()}
+          ref={button}
           type="button"
           variant="outline"
         >
-          {buttonLabel}
+          {loadMoreLabel(noun, pages)}
         </Button>
       ) : null}
       {!busy && pages.isFetchNextPageError ? <ApiErrorAlert action={`load more ${noun}`} error={pages.error} /> : null}

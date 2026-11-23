@@ -39,12 +39,12 @@ function Notes(props: { source: Source }) {
   )
 }
 
-const renderNotes = async (seeded: NotePage, answer: () => Promise<NotePage>) => {
+const renderNotes = async (seeded: NotePage, answer: Source) => {
   const cursors: Array<string> = []
   const queryClient = testQueryClient()
   const source: Source = (cursor) => {
     cursors.push(cursor)
-    return answer()
+    return answer(cursor)
   }
   queryClient.setQueryData(notesQuery(source).queryKey, listPages(seeded))
   await renderInApp(<Notes source={source} />, { queryClient })
@@ -80,11 +80,16 @@ describe('LoadMoreList', () => {
     expect(cursors).toEqual([CURSOR])
   })
 
-  it('reports a failure, keeps the loaded items and focus, and retries', async () => {
-    let fail = true
-    const cursors = await renderNotes(first, () =>
-      fail ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve(second),
-    )
+  it('keeps the loaded items and focus on failure, then refreshes and appends on retry', async () => {
+    const refreshedCursor = 'refreshed-cursor'
+    const newest = note('just added')
+    const refreshed = listPage([newest, ...first.items], refreshedCursor)
+    const cursors = await renderNotes(first, (cursor) => {
+      if (cursor === '') {
+        return Promise.resolve(refreshed)
+      }
+      return cursor === refreshedCursor ? Promise.resolve(second) : Promise.reject(new TypeError('Failed to fetch'))
+    })
     await loadMore().click()
     await expect
       .element(page.getByRole('alert'))
@@ -92,10 +97,14 @@ describe('LoadMoreList', () => {
     await expect.element(loadMore()).toHaveFocus()
     expect(items().elements()).toHaveLength(2)
 
-    fail = false
     await loadMore().click()
-    await expect.element(items().nth(2)).toHaveFocus()
+    await expect.element(items().nth(3)).toHaveFocus()
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
-    expect(cursors).toEqual([CURSOR, CURSOR])
+    expect(
+      items()
+        .elements()
+        .map((entry) => entry.textContent),
+    ).toEqual(['just added', 'newest', 'newer', 'older', 'oldest'])
+    expect(cursors).toEqual([CURSOR, '', refreshedCursor])
   })
 })

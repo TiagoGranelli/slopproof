@@ -8,15 +8,23 @@ import { api, held, listPage, post, worker } from './api-mocks.ts'
 import { afterRendering, pressAndKeepFocus, renderInApp } from './test-utils.tsx'
 
 const renderDashboard = () => renderInApp(null, { route: { path: '/dashboard', route: Route }, url: '/dashboard' })
-const loadMore = () => page.getByRole('button', { name: /^(Load(ing)? more|Refreshing) posts/ })
+const loadMore = () =>
+  page.getByRole('button', { name: /^(?:(?:Load(?:ing)? more|Refreshing) posts|Waiting for connection)/ })
+const composer = () => page.getByRole('textbox', { name: 'New post' })
 const edit = (body: string) => page.getByRole('button', { name: `Edit post: ${body}` })
 const draft = () => page.getByRole('textbox', { name: 'Edit post' })
 const save = () => page.getByRole('button', { exact: true, name: 'Save' })
 const items = () => page.getByTestId('my-posts').getByRole('listitem')
 const clickLoadMore = () => (loadMore().element() as HTMLButtonElement).click()
 
+const goOffline = () => {
+  const wasOnline = onlineManager.isOnline()
+  onTestFinished(() => onlineManager.setOnline(wasOnline))
+  onlineManager.setOnline(false)
+}
+
 const publish = async (body: string) => {
-  await page.getByRole('textbox', { name: 'New post' }).fill(body)
+  await composer().fill(body)
   await page.getByRole('button', { exact: true, name: 'Publish' }).click()
   await expect.element(page.getByRole('status')).toHaveTextContent('Post published.')
 }
@@ -47,7 +55,7 @@ const mockPublishingAcrossPageBoundary = () => {
   return pendingFailure
 }
 
-const mockPublishingDuringLoad = (refreshSucceeds = false, onPublish?: () => void) => {
+const mockPublishingDuringLoad = (refreshSucceeds = () => false, onPublish?: () => void) => {
   const nextPage = held()
   const refresh = held()
   const nextPageStarted = Promise.withResolvers<undefined>()
@@ -78,19 +86,13 @@ const mockPublishingDuringLoad = (refreshSucceeds = false, onPublish?: () => voi
       if (listed) {
         refreshStarted.resolve(undefined)
         await refresh.wait()
-        return refreshSucceeds ? HttpResponse.json(refreshedPage) : HttpResponse.error()
+        return refreshSucceeds() ? HttpResponse.json(refreshedPage) : HttpResponse.error()
       }
       listed = true
       return HttpResponse.json(firstPage)
     }),
   )
-  return {
-    cursors,
-    nextPage,
-    nextPageStarted: nextPageStarted.promise,
-    refresh,
-    refreshStarted: refreshStarted.promise,
-  }
+  return { cursors, nextPage, nextPageStarted, refresh, refreshStarted }
 }
 
 const mockOverlappingSaves = (original: ReturnType<typeof post>) => {
@@ -140,7 +142,7 @@ describe('dashboard posts', () => {
     const { queryClient } = await renderDashboard()
     await pressAndKeepFocus(loadMore())
     await publish('Just published')
-    await refreshStarted
+    await refreshStarted.promise
     await afterRendering()
     await expect.element(loadMore()).toHaveAttribute('aria-disabled', 'true')
     refresh.release()
@@ -154,11 +156,11 @@ describe('dashboard posts', () => {
   })
 
   it('waits for a publish refresh before loading more from the refreshed cursor', async () => {
-    const { nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
+    const { nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(() => true)
     await renderDashboard()
-    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted])
+    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted.promise])
     await publish('Just published')
-    await refreshStarted
+    await refreshStarted.promise
     await expect.element(loadMore()).toBeDisabled()
     clickLoadMore()
     await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
@@ -171,11 +173,9 @@ describe('dashboard posts', () => {
   })
 
   it('keeps the publish refresh paused offline and shows the new post on reconnect', async () => {
-    const { cursors, nextPage, refresh } = mockPublishingDuringLoad(true, () => onlineManager.setOnline(false))
+    const { cursors, nextPage, refresh } = mockPublishingDuringLoad(() => true, goOffline)
     const { queryClient } = await renderDashboard()
     const queryKey = getMyPostsQueryOptions().queryKey
-    const wasOnline = onlineManager.isOnline()
-    onTestFinished(() => onlineManager.setOnline(wasOnline))
     nextPage.release()
     refresh.release()
 
@@ -189,12 +189,58 @@ describe('dashboard posts', () => {
     expect(cursors).toEqual([])
   })
 
-  it('keeps the published post on return without paginating after leaving during the refresh', async () => {
-    const { cursors, nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
-    const { queryClient, router } = await renderDashboard()
-    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted])
+  it('refreshes an invalidated list after reconnect before requesting the next page', async () => {
+    let recovered = false
+    const { cursors, nextPage, refresh } = mockPublishingDuringLoad(() => recovered)
+    const { queryClient } = await renderDashboard()
+    nextPage.release()
+    refresh.release()
     await publish('Just published')
-    await refreshStarted
+    await expect.poll(() => queryClient.getQueryState(getMyPostsQueryOptions().queryKey)?.status).toBe('error')
+    goOffline()
+    await pressAndKeepFocus(loadMore())
+    recovered = true
+    onlineManager.setOnline(true)
+    await expect.element(loadMore()).not.toBeInTheDocument()
+    expect.soft(cursors).toEqual(['new-cursor'])
+    expect(
+      items()
+        .elements()
+        .map((entry) => entry.querySelector('p')?.textContent),
+    ).toEqual(['Just published', 'Newest post', 'Older post'])
+  })
+
+  it('keeps focus in the composer when a paused next page finishes after reconnect', async () => {
+    const { nextPage } = mockPublishingDuringLoad()
+    await renderDashboard()
+    goOffline()
+    await pressAndKeepFocus(loadMore())
+    await composer().fill('Draft in progress')
+    nextPage.release()
+    onlineManager.setOnline(true)
+    await expect.element(loadMore()).not.toBeInTheDocument()
+    await expect.element(items().nth(1)).toMatchTextContent(/^Stale page/)
+    await afterRendering()
+    expect(composer().element()).toHaveFocus()
+  })
+
+  it('labels the paused next-page action as waiting for connection', async () => {
+    const { nextPage } = mockPublishingDuringLoad()
+    await renderDashboard()
+    goOffline()
+    await pressAndKeepFocus(loadMore())
+    expect.soft(loadMore().element()).toHaveTextContent('Waiting for connection…')
+    nextPage.release()
+    onlineManager.setOnline(true)
+    await expect.element(items().nth(1)).toMatchTextContent(/^Stale page/)
+  })
+
+  it('keeps the published post on return without paginating after leaving during the refresh', async () => {
+    const { cursors, nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(() => true)
+    const { queryClient, router } = await renderDashboard()
+    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted.promise])
+    await publish('Just published')
+    await refreshStarted.promise
     await afterRendering()
     clickLoadMore()
     await router.navigate({ to: '/about' })
@@ -208,14 +254,14 @@ describe('dashboard posts', () => {
   })
 
   it('blocks Load more during a background refresh and uses the refreshed cursor after it settles', async () => {
-    const { cursors, nextPage, refresh, refreshStarted } = mockPublishingDuringLoad(true)
+    const { cursors, nextPage, refresh, refreshStarted } = mockPublishingDuringLoad(() => true)
     const { queryClient } = await renderDashboard()
     const queryKey = getMyPostsQueryOptions().queryKey
     nextPage.release()
     await queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
     const pendingRefresh = queryClient.refetchQueries({ queryKey, stale: true, type: 'active' })
     clickLoadMore()
-    await refreshStarted
+    await refreshStarted.promise
     await expect.element(page.getByRole('button', { name: 'Refreshing posts…' })).toBeDisabled()
     refresh.release()
     await pendingRefresh

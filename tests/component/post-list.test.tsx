@@ -27,12 +27,13 @@ const CURSOR = 'cursor-after-page-1'
 const firstPage = listPage([post({ body: 'newest' }), post({ body: 'newer' })], CURSOR)
 const secondPage = listPage([post({ body: 'older' }), post({ body: 'oldest' })])
 
-const nextPage = (respond: () => Promise<Response> | Response) => {
+const mockPages = (respondToNextPage: () => Promise<Response> | Response) => {
   const cursors: Array<string | null> = []
   worker.use(
     api.publicPostsList(({ request }) => {
-      cursors.push(new URL(request.url).searchParams.get('cursor'))
-      return respond()
+      const cursor = new URL(request.url).searchParams.get('cursor')
+      cursors.push(cursor)
+      return cursor === CURSOR ? respondToNextPage() : HttpResponse.json(firstPage)
     }),
   )
   return cursors
@@ -56,7 +57,7 @@ describe('PostList', () => {
 
   it('loads the next page with the cursor, busy meanwhile, then focuses its first post', async () => {
     const response = held()
-    const cursors = nextPage(async () => {
+    const cursors = mockPages(async () => {
       await response.wait()
       return HttpResponse.json(secondPage)
     })
@@ -83,7 +84,7 @@ describe('PostList', () => {
     ['an outage', () => new HttpResponse('', { status: 503 }), 'Could not load more posts. Try again.'],
   ])('reports %s, keeps the loaded posts and focus, and retries', async (_, failure, message) => {
     let fail = true
-    const cursors = nextPage(() => (fail ? failure() : HttpResponse.json(secondPage)))
+    const cursors = mockPages(() => (fail ? failure() : HttpResponse.json(secondPage)))
     await renderList(firstPage)
     await loadMore().click()
 
@@ -97,7 +98,12 @@ describe('PostList', () => {
     await loadMore().click()
     await expect.element(items().nth(2)).toHaveFocus()
     await expect.element(page.getByRole('alert')).not.toBeInTheDocument()
-    expect(cursors).toEqual([CURSOR, CURSOR])
+    expect(
+      items()
+        .elements()
+        .map((entry) => entry.querySelector('p')?.textContent),
+    ).toEqual(['newest', 'newer', 'older', 'oldest'])
+    expect(cursors).toEqual([CURSOR, null, CURSOR])
   })
 
   it('shows a rejected cursor as a failure of Load more', async () => {
