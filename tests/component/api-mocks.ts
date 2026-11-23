@@ -4,10 +4,12 @@
 // Account actions are server functions outside the contract (src/lib/auth.functions.ts); `auth` mocks them
 // through their component-test stub (tests/component/stubs/auth-functions.ts), typed by their AuthOutcome.
 import type { InfiniteData } from '@tanstack/react-query'
-import { http, HttpResponse, type HttpHandler, type JsonBodyType } from 'msw'
+import { http, HttpResponse } from 'msw'
+import type { HttpHandler, JsonBodyType } from 'msw'
 import { setupWorker } from 'msw/browser'
 import type { AuthOutcome } from '#/lib/auth.functions.ts'
-import { createMswHandlers, type MswHandlerFactories } from '#/sdk/msw.gen.ts'
+import { createMswHandlers } from '#/sdk/msw.gen.ts'
+import type { MswHandlerFactories } from '#/sdk/msw.gen.ts'
 import type {
   MeGetErrors,
   MyPostsCreateErrors,
@@ -18,7 +20,8 @@ import type {
   PublicPostsListErrors,
   SystemReadyErrors,
 } from '#/sdk/types.gen.ts'
-import { type AuthFunctionName, authFunctionPath } from './stubs/auth-functions.ts'
+import { authFunctionPath } from './stubs/auth-functions.ts'
+import type { AuthFunctionName } from './stubs/auth-functions.ts'
 
 /** Started and reset by tests/component/setup.ts. Add handlers per test with `worker.use(...)`. */
 export const worker = setupWorker()
@@ -68,7 +71,9 @@ const pendingReleases = new Set<() => void>()
 /** A response that waits until `release()`, to observe pending states. */
 export const held = () => {
   let release!: () => void
-  const released = new Promise<void>((resolve) => (release = resolve))
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
   pendingReleases.add(release)
   return { release, wait: () => released }
 }

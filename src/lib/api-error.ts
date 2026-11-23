@@ -90,6 +90,7 @@ export function describeApiError(error: unknown, action: string): ApiErrorView {
   }
   // TypeScript cannot relate a union member to its own entry of a mapped table (microsoft/TypeScript#30581), so
   // the entry is widened to the whole union here; the table's type checks each entry against its own tag.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const describe = DESCRIBE_TAG[error._tag] as Describe<TaggedApiError['_tag']>
   return describe(error, action)
 }

@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef } from 'react'
+import type { ReactNode } from 'react'
 
 /**
  * What an account form shows once it succeeded, in place of (or next to) the form. The submit button the user

@@ -1,7 +1,8 @@
 // The columns and the text CHECK every table of user content shares (post; the next one alike), so a new table
 // declares only what is its own. Not a table: index.ts does not export it, and drizzle-kit reads no DDL from it.
 import { sql } from 'drizzle-orm'
-import { type AnyPgColumn, check, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { check, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import type { UserId } from '../../../contract/ids.ts'
 import { user } from './auth.ts'
 

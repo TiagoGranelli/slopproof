@@ -1,9 +1,11 @@
 // PostsRepo in memory for the api layer (./harness.ts), with the real repository's contract.
 import { Layer } from 'effect'
-import { PostId, type UserId } from '#/contract/ids.ts'
+import { PostId } from '#/contract/ids.ts'
+import type { UserId } from '#/contract/ids.ts'
 import type { Post } from '#/contract/posts.ts'
 import { PostsRepo } from '#/server/posts/repo.ts'
-import { memoryQuery, type RepoOptions } from './memory-db.ts'
+import { memoryQuery } from './memory-db.ts'
+import type { RepoOptions } from './memory-db.ts'
 import { memoryClock, memoryPage } from './memory-keyset.ts'
 
 /** A stored post: the public fields, its owner, and its sort key at Postgres's microsecond precision. */

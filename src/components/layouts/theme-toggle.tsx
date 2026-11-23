@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react'
-import { readThemeChoice, saveThemeChoice, type ThemeChoice } from '#/lib/theme.ts'
+import { readThemeChoice, saveThemeChoice } from '#/lib/theme.ts'
+import type { ThemeChoice } from '#/lib/theme.ts'
 
 const CHOICES: ReadonlyArray<{ value: ThemeChoice; label: string }> = [
   { value: 'system', label: 'System' },

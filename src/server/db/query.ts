@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { Data, Effect } from 'effect'
-import { Database, type Db } from './client.ts'
+import { Database } from './client.ts'
+import type { Db } from './client.ts'
 
 /** A statement failed (Postgres unreachable, a constraint): the handlers turn it into a defect, an empty 500. */
 export class DbError extends Data.TaggedError('DbError')<{ readonly cause: unknown }> {}

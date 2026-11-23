@@ -7,8 +7,10 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { assertFreshBuild } from './build-freshness.ts'
-import { edgePeers, type RunningEdge, startEdge } from './edge.ts'
-import { type ServerProcess, spawnServer, waitForServer } from './server-process.ts'
+import { edgePeers, startEdge } from './edge.ts'
+import type { RunningEdge } from './edge.ts'
+import { spawnServer, waitForServer } from './server-process.ts'
+import type { ServerProcess } from './server-process.ts'
 import { resetTestDatabase } from './test-db.ts'
 
 if (existsSync('.env')) process.loadEnvFile('.env')

@@ -1,7 +1,8 @@
 // The two servers each test runner tests (the global setups in tests/integration and tests/e2e): the open one,
 // with sign-up open and mail to Mailpit, and the shipped defaults next to it on the same database and accounts.
 // Each is a startApp (scripts/app-server.ts).
-import { LOOPBACK, type RunningApp, startApp } from './app-server.ts'
+import { LOOPBACK, startApp } from './app-server.ts'
+import type { RunningApp } from './app-server.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 type User = RunningApp['user']

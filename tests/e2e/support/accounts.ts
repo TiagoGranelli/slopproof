@@ -2,7 +2,8 @@
 // signed-in browser, and form sign-in. The open server under test has AUTH_SIGN_UP=open and sends its mail
 // to Mailpit (MAILPIT_URL).
 import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
-import { type Author, createAuthor, expect, followLink, nextClientIp, signIn, visit } from './app.ts'
+import { createAuthor, expect, followLink, nextClientIp, signIn, visit } from './app.ts'
+import type { Author } from './app.ts'
 
 /** Same default as playwright.config.ts. */
 const appUrl = process.env.APP_URL ?? 'http://localhost:3000'

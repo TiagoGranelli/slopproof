@@ -19,21 +19,23 @@ import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import { post, user } from '#/server/db/schema/index.ts'
-import { type RunningApp, startApp } from './app-server.ts'
-import { type FormFactor, judge, type Page, PAGES, type PerformanceBar } from './lighthouse-policy.ts'
-import { exitCodeOf, type PageOutcome, progressLine, writeReport } from './lighthouse-report.ts'
+import { startApp } from './app-server.ts'
+import type { RunningApp } from './app-server.ts'
+import { judge, PAGES } from './lighthouse-policy.ts'
+import type { FormFactor, Page, PerformanceBar } from './lighthouse-policy.ts'
+import { exitCodeOf, progressLine, writeReport } from './lighthouse-report.ts'
+import type { PageOutcome } from './lighthouse-report.ts'
 import {
-  type Chrome,
   chromeFlags,
   failingAudits,
   findChromium,
   keepMedianReport,
-  type Lhr,
   runLighthouse,
   SHM_BYTES,
   SMALL_SHM,
   summarizeRuns,
 } from './lighthouse-runs.ts'
+import type { Chrome, Lhr } from './lighthouse-runs.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 const OUT = 'lighthouse-report'

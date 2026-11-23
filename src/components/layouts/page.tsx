@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect } from 'react'
+import { useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { FlashMessage } from '#/components/layouts/flash-message.tsx'
 import { cn } from '#/lib/utils.ts'
 

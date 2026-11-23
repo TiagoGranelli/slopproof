@@ -16,7 +16,8 @@ import {
   signInWithForm,
   signUpWithForm,
 } from './support/accounts.ts'
-import { type Author, expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
+import { expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
+import type { Author } from './support/app.ts'
 
 /** Better Auth's own sign-in endpoint refuses `account` until its address is confirmed. */
 const expectApiSignInUnverified = async (request: APIRequestContext, account: Author) => {

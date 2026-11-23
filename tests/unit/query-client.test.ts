@@ -1,6 +1,7 @@
 // createQueryClient (src/lib/query-client.ts): mutations declare their cache effects in `meta`, and its
 // MutationCache performs them in the order the UI relies on, keeping the mutation pending until the refetch ends.
-import { type InfiniteData, InfiniteQueryObserver, MutationObserver } from '@tanstack/react-query'
+import { InfiniteQueryObserver, MutationObserver } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { createQueryClient } from '#/lib/query-client.ts'
 

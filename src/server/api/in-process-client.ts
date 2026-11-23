@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { getRequestHeader } from '@tanstack/react-start/server'
-import { type Client, createClient } from '#/sdk/client/index.ts'
+import { createClient } from '#/sdk/client/index.ts'
+import type { Client } from '#/sdk/client/index.ts'
 import { env } from '../env.ts'
 import { apiHandler } from './web-handler.ts'
 

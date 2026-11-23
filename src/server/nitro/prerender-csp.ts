@@ -1,7 +1,8 @@
 // Build time only: vite.config.ts calls this from Nitro's `prerender:generate` hook for every prerendered
 // HTML page. It never runs in the server bundle.
 import { createHash } from 'node:crypto'
-import { type DefaultTreeAdapterTypes, defaultTreeAdapter, parse } from 'parse5'
+import { defaultTreeAdapter, parse } from 'parse5'
+import type { DefaultTreeAdapterTypes } from 'parse5'
 
 type ParentNode = DefaultTreeAdapterTypes.ParentNode
 type Element = DefaultTreeAdapterTypes.Element
@@ -19,6 +20,8 @@ function* elementsOf(parent: ParentNode): Generator<Element> {
     if (!isElement(node)) continue
     yield node
     yield* elementsOf(node)
+    // parse5 attaches a document fragment to template nodes in its default tree adapter.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     if (node.tagName === 'template') yield* elementsOf((node as DefaultTreeAdapterTypes.Template).content)
   }
 }

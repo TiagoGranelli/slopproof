@@ -1,15 +1,13 @@
 import { useHydrated } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { FieldError } from '#/components/form/field-error.tsx'
 import { describedBy, focusFirstInvalid } from '#/components/form/field-messages.ts'
 import { loadOnInteraction, useSchemaSubmit } from '#/components/form/lazy-schema.ts'
 import { ServerIssues } from '#/components/form/server-issues.ts'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  type AuthFieldCodes,
-  authFieldIssues,
-  describeAuthFailure,
-} from '#/features/auth/utils/describe-auth-failure.ts'
+import { authFieldIssues, describeAuthFailure } from '#/features/auth/utils/describe-auth-failure.ts'
+import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
 /**
  * The server's failure, split: the part about one field goes next to that field, which then takes focus so the

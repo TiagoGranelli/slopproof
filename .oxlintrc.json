@@ -83,18 +83,12 @@
       }
     ],
     "typescript/no-floating-promises": "error",
-    "typescript/no-misused-promises": [
-      "error",
-      {
-        "checksVoidReturn": {
-          "attributes": false
-        }
-      }
-    ],
+    "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
     "typescript/switch-exhaustiveness-check": "error",
-    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-unsafe-type-assertion": "error",
     "typescript/consistent-return": "off",
+    "eslint/no-promise-executor-return": "error",
 
     // pedantic, turned off. Style preferences that would rewrite correct code, or rules that fight a library's shape.
     "typescript/prefer-readonly-parameter-types": "off",
@@ -103,8 +97,6 @@
     "import/max-dependencies": "off",
     "typescript/strict-void-return": "off",
     "unicorn/explicit-length-check": "off",
-    // `new Promise((resolve) => setTimeout(resolve, ms))` is the idiom it flags.
-    "eslint/no-promise-executor-return": "off",
     "unicorn/no-useless-undefined": "off",
     // Its fix changes behavior: `Number.parseFloat("2px")` is 2, `Number("2px")` is NaN (CSS values in tests/e2e).
     "unicorn/prefer-number-coercion": "off",
@@ -144,7 +136,7 @@
     ],
     "typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": true }],
     "typescript/prefer-nullish-coalescing": ["error", { "ignorePrimitives": { "string": true, "boolean": true } }],
-    "eslint/eqeqeq": ["error", "always", { "null": "ignore" }],
+    "eslint/eqeqeq": "error",
 
     // Mistakes agents make: type escapes, dead conditions, suppressed checks, leftovers.
     "typescript/no-unnecessary-condition": "error",
@@ -158,6 +150,7 @@
     "typescript/no-require-imports": "error",
     "typescript/use-unknown-in-catch-callback-variable": "error",
     "typescript/consistent-type-imports": "error",
+    "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
     "typescript/no-import-type-side-effects": "error",
     "typescript/dot-notation": "error",
     "typescript/consistent-type-assertions": "error",
@@ -177,6 +170,15 @@
     "eslint/no-console": "error",
     "eslint/no-empty": ["error", { "allowEmptyCatch": false }],
     "eslint/no-warning-comments": ["error", { "terms": ["todo", "fixme", "xxx", "hack"] }],
+    "eslint/no-regex-spaces": "error",
+    "eslint/no-useless-assignment": "error",
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "oxc/bad-bitwise-operator": "error",
+    "import/export": "error",
+    "jsx-a11y/alt-text": "error",
+    "react/no-unknown-property": "error",
+    "react/require-render-return": "error",
     "react/no-danger": "error",
     "react/button-has-type": "error",
     "react/jsx-no-target-blank": "error",
@@ -413,6 +415,7 @@
         "vitest/prefer-hooks-on-top": "error",
         "vitest/require-mock-type-parameters": "error",
         "vitest/no-conditional-expect": "error",
+        "vitest/require-awaited-expect-poll": "error",
         // pedantic: flags every `??`, ternary and callback in a test body (29 findings, none a hidden branch of the
         // test itself). no-conditional-expect above catches the harmful case: an assertion that may not run.
         "vitest/no-conditional-in-test": "off",
@@ -433,7 +436,10 @@
     {
       "files": ["scripts/**", "tests/**"],
       "rules": {
-        "no-await-in-loop": "off"
+        "no-await-in-loop": "off",
+        // Existing tooling and fixtures use test doubles and assertions over reports, manifests and wire payloads.
+        // Keep the assertion gate on for application code and other TypeScript entry points.
+        "typescript/no-unsafe-type-assertion": "off"
       }
     },
     {

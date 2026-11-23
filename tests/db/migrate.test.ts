@@ -4,6 +4,7 @@
 // The same script behind PgBouncer in transaction mode is covered by `pnpm ci:docker` (scripts/docker-smoke.ts).
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { setTimeout as delay } from 'node:timers/promises'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate as drizzleMigrate } from 'drizzle-orm/node-postgres/migrator'
 import { Client, Pool } from 'pg'
@@ -89,7 +90,7 @@ describe('scripts/migrate.ts', () => {
     )()
     // A long transaction on a table the migration needs; it ends after a while.
     const release = await hold(`lock table ${table} in access exclusive mode`)
-    const released = new Promise((resolve) => setTimeout(resolve, 1_500)).then(release)
+    const released = delay(1_500).then(release)
     const run = await migrate({ DATABASE_URL: url, MIGRATE_DDL_LOCK_TIMEOUT: '300ms' })
     await released
     expect(run.code).toBe(0)
@@ -121,7 +122,7 @@ describe('scripts/migrate.ts', () => {
     await admin.query(`alter database "${database}" set idle_in_transaction_session_timeout = '200ms'`)
     await admin.end()
     const release = await hold(`select pg_advisory_xact_lock(${LOCK_KEY})`)
-    const released = new Promise((resolve) => setTimeout(resolve, 1_000)).then(release)
+    const released = delay(1_000).then(release)
     const run = await migrate({ DATABASE_URL: url })
     await released
     expect(run.code).toBe(0)

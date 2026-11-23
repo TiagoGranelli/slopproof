@@ -17,6 +17,8 @@ export type ShutdownStep = (typeof STEPS)[number]
 // globalThis, where both copies find the same ones.
 const REGISTRY = Symbol.for('app.shutdown')
 const DRAINING = Symbol.for('app.draining')
+// Only this module writes these two symbol-keyed properties across the bundles.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const shared = globalThis as { [REGISTRY]?: Map<ShutdownStep, Cleanup>; [DRAINING]?: boolean }
 const registry = (shared[REGISTRY] ??= new Map<ShutdownStep, Cleanup>())
 

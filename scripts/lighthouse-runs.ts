@@ -3,7 +3,8 @@
 import { copyFileSync, existsSync, readFileSync, statfsSync } from 'node:fs'
 import { computeMedianRun } from 'lighthouse/core/lib/median-run.js'
 import { xSync } from 'tinyexec'
-import { type Category, type FormFactor, type Measured, type Metric, median, REPORTED } from './lighthouse-policy.ts'
+import { median, REPORTED } from './lighthouse-policy.ts'
+import type { Category, FormFactor, Measured, Metric } from './lighthouse-policy.ts'
 
 /** The parts of a Lighthouse report (LHR) the gate reads. */
 export type Lhr = {
@@ -105,7 +106,7 @@ export const runLighthouse = (run: LighthouseRun): Lhr => {
 
 export const score = (lhr: Lhr, category: Category): number | null => {
   const value = lhr.categories[category]?.score
-  return value == null ? null : Math.round(value * 100)
+  return typeof value === 'number' ? Math.round(value * 100) : null
 }
 
 export type ScoreRange = { median: number; min: number; max: number }

@@ -2,7 +2,8 @@
 // script. The numbers are from the CI run whose mobile scores fell to 99 (ADR 0011): the navigation commit ran
 // 31.9 ms on the 2-vCPU runner, against 5-10 ms on an 8-core development machine.
 import { describe, expect, it } from 'vitest'
-import { type Lhr, preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
+import { preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
+import type { Lhr } from '../../scripts/lighthouse-runs.ts'
 
 const report = (requests: Record<string, unknown>[], tasks: Record<string, unknown>[]): Lhr => ({
   finalDisplayedUrl: 'https://localhost/',

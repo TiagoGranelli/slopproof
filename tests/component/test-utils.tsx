@@ -1,9 +1,9 @@
 // Renders a component the way the app does: inside a TanStack Router (memory history, so links and
 // navigation work without touching the page URL) and a TanStack Query client. Network calls go to the MSW
 // worker (tests/component/api-mocks.ts).
-import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import {
-  type AnyRoute,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -12,6 +12,7 @@ import {
   RouterContextProvider,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { AnyRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
@@ -146,7 +147,9 @@ export async function expectFocusedStatus(title: string) {
  * became disabled while it updates the rendering, so a focus assertion made only after this can see that loss.
  */
 export const afterRendering = () =>
-  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
 
 /**
  * Presses a pending action's button with the keyboard (focus it, then Enter), waits until it is pending and

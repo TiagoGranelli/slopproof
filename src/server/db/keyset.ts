@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only'
-import { desc, sql, type SQL } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import type { PgColumn } from 'drizzle-orm/pg-core'
 import { POSTS_PAGE_DEFAULT } from '#/contract/limits.ts'
 import type { PageCursor } from '#/contract/pages.ts'

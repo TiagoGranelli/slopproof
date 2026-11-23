@@ -11,10 +11,12 @@
 // With `tls`, the edge serves https://localhost:<port> with a certificate from Caddy's internal CA, over
 // HTTP/2 and HTTP/3 as production does with a public certificate. This process then trusts that CA for its
 // own requests, and `certificateSpki` lets a browser trust exactly the served key (scripts/edge-certificate.ts).
-import { type ChildProcess, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { readRootCertificate, servedCertificateSpki, trustCertificateAuthority } from './edge-certificate.ts'
 import { dockerPrefix, IMAGES } from './images.ts'
 import { spawnToLog } from './process-log.ts'
@@ -120,7 +122,9 @@ const edgeCommand = (runtime: string, container: CaddyContainer): { command: str
  * The same cleanup runs if this process exits first.
  */
 const edgeStopper = (child: ChildProcess, container: string | undefined, dataHome: string | undefined) => {
-  const exited = new Promise<void>((done) => child.once('exit', () => done()))
+  const exited = new Promise<void>((done) => {
+    child.once('exit', () => done())
+  })
   const cleanUp = () => {
     if (container) spawnSync('docker', ['rm', '--force', container], { stdio: 'ignore' })
     if (dataHome) rmSync(dataHome, { recursive: true, force: true })
@@ -131,8 +135,7 @@ const edgeStopper = (child: ChildProcess, container: string | undefined, dataHom
       if (container) spawnSync('docker', ['stop', '--timeout', '5', container], { stdio: 'ignore' })
       else child.kill('SIGTERM')
       const killer = setTimeout(() => child.kill('SIGKILL'), 10_000)
-      await exited
-      clearTimeout(killer)
+      await exited.finally(() => clearTimeout(killer))
     }
     cleanUp()
     process.off('exit', cleanUp)
@@ -197,7 +200,7 @@ const waitForEdge = async (edge: LaunchedEdge): Promise<EdgePoll> => {
     if (exit !== null) throw new Error(`the edge (${edge.command}) exited with ${exit}; see ${edge.logFile}`)
     poll = await pollEdge(edge, poll.certificateSpki)
     if (poll.ready) return poll
-    await new Promise((r) => setTimeout(r, 250))
+    await delay(250)
   }
   return poll
 }

@@ -22,7 +22,7 @@ const serializeError = (error: unknown, depth = 0): unknown => {
     const { constructor, _tag: tag } = error as { constructor?: { name: string }; _tag?: unknown }
     return { type: constructor?.name ?? 'Object', ...(typeof tag === 'string' ? { _tag: tag } : {}) }
   }
-  const code = (error as { code?: unknown }).code
+  const code = 'code' in error ? error.code : undefined
   return {
     name: error.name,
     message: firstLine(error.message),

@@ -1,5 +1,6 @@
 // The shutdown steps (src/server/lifecycle.ts): one at a time, in a fixed order whatever the registration order,
 // so the Postgres pool never closes under a background task that still queries it.
+import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isDraining, onShutdown, runShutdown, setDraining } from '#/server/lifecycle.ts'
 import { captureLog } from './process-fakes.ts'
@@ -10,7 +11,7 @@ describe('runShutdown', () => {
     const events: string[] = []
     const step = (name: string, ms: number) => async () => {
       events.push(`${name} start`)
-      await new Promise((resolve) => setTimeout(resolve, ms))
+      await delay(ms)
       events.push(`${name} end`)
     }
     // Registered in the order the modules happen to load, not the order they must close in.

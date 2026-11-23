@@ -1,5 +1,6 @@
 import { useQueryErrorResetBoundary } from '@tanstack/react-query'
-import { type ErrorComponentProps, Link, useRouter } from '@tanstack/react-router'
+import { Link, useRouter } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Page } from '#/components/layouts/page.tsx'
@@ -27,9 +28,9 @@ export function RouteError({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          onClick={async () => {
+          onClick={() => {
             reset()
-            await router.invalidate()
+            void router.invalidate().catch(reportError)
           }}
         >
           Try again

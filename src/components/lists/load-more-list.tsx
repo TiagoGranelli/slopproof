@@ -1,5 +1,6 @@
 import type { InfiniteData, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 

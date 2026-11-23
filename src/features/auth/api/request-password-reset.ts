@@ -1,4 +1,5 @@
-import { type AuthMutationConfig, type DataOf, useAuthMutation } from '#/features/auth/api/auth-action.ts'
+import { useAuthMutation } from '#/features/auth/api/auth-action.ts'
+import type { AuthMutationConfig, DataOf } from '#/features/auth/api/auth-action.ts'
 import { requestPasswordReset } from '#/lib/auth.functions.ts'
 
 type RequestPasswordResetInput = DataOf<typeof requestPasswordReset>

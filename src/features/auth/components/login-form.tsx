@@ -6,7 +6,8 @@ import { AuthActionError } from '#/features/auth/api/auth-action.ts'
 import { useSignIn } from '#/features/auth/api/sign-in.ts'
 import { AuthForm } from '#/features/auth/components/auth-form.tsx'
 import { safeRedirect } from '#/features/auth/utils/safe-redirect.ts'
-import { type AuthFailure, signInFromForm } from '#/lib/auth.functions.ts'
+import { signInFromForm } from '#/lib/auth.functions.ts'
+import type { AuthFailure } from '#/lib/auth.functions.ts'
 
 const schema = lazyFormSchema(() => import('#/lib/account-input.ts').then((module) => module.SignInInput))
 

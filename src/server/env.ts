@@ -47,7 +47,8 @@ const readCidrList = (name: string): string[] => {
     .map((entry) => entry.trim())
     .filter(Boolean)
   for (const entry of entries) {
-    // `split` always returns at least one element.
+    // A string separator always leaves at least one element, even when the input is empty.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const [address, prefix, ...rest] = entry.split('/') as [string, ...string[]]
     const family = isIP(address)
     const bits = family === 4 ? 32 : 128
