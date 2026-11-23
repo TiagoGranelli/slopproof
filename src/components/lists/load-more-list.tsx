@@ -8,7 +8,7 @@ import { Button } from '#/components/ui/button.tsx'
 
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  'data' | 'error' | 'fetchNextPage' | 'hasNextPage' | 'isFetching' | 'isFetchNextPageError'
+  'data' | 'error' | 'fetchNextPage' | 'fetchStatus' | 'hasNextPage' | 'isFetchingNextPage' | 'isFetchNextPageError'
 >
 
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
@@ -24,7 +24,11 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   const items = pages.data.pages.flatMap((page) => page.items)
   const [focusId, dispatch] = useReducer(transitionLoadMore, null)
   const mounted = useRef<symbol | null>(null)
-  const loading = pages.isFetching
+  const busy = pages.fetchStatus !== 'idle'
+  let buttonLabel = `Load more ${noun}`
+  if (busy) {
+    buttonLabel = pages.isFetchingNextPage ? `Loading more ${noun}…` : `Refreshing ${noun}…`
+  }
 
   const attachList = useCallback((node: HTMLDivElement | null) => {
     mounted.current = node ? Symbol('mounted list') : null
@@ -41,7 +45,7 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   const loadMore = async () => {
     const mount = mounted.current
     const current = queryClient.getQueryState<Pages<Item>['data']>(queryKey)
-    if (!mount || loading || !pages.hasNextPage || !current?.data || current.fetchStatus === 'fetching') {
+    if (!mount || busy || !pages.hasNextPage || !current?.data || current.fetchStatus !== 'idle') {
       return
     }
     const pageCount = current.data.pages.length
@@ -79,18 +83,16 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
       </ul>
       {pages.hasNextPage ? (
         <Button
-          aria-disabled={loading || undefined}
+          aria-disabled={busy || undefined}
           className="justify-self-center"
           onClick={() => void loadMore()}
           type="button"
           variant="outline"
         >
-          {loading ? `Loading more ${noun}…` : `Load more ${noun}`}
+          {buttonLabel}
         </Button>
       ) : null}
-      {!loading && pages.isFetchNextPageError ? (
-        <ApiErrorAlert action={`load more ${noun}`} error={pages.error} />
-      ) : null}
+      {!busy && pages.isFetchNextPageError ? <ApiErrorAlert action={`load more ${noun}`} error={pages.error} /> : null}
     </div>
   )
 }

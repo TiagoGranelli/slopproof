@@ -1,5 +1,6 @@
+import { onlineManager } from '@tanstack/react-query'
 import { HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { page } from 'vitest/browser'
 import { getMyPostsQueryOptions } from '#/features/posts/api/get-my-posts.ts'
 import { Route } from '#/routes/_authed/dashboard.tsx'
@@ -7,7 +8,7 @@ import { api, held, listPage, post, worker } from './api-mocks.ts'
 import { afterRendering, pressAndKeepFocus, renderInApp } from './test-utils.tsx'
 
 const renderDashboard = () => renderInApp(null, { route: { path: '/dashboard', route: Route }, url: '/dashboard' })
-const loadMore = () => page.getByRole('button', { name: /^Load(ing)? more posts/ })
+const loadMore = () => page.getByRole('button', { name: /^(Load(ing)? more|Refreshing) posts/ })
 const edit = (body: string) => page.getByRole('button', { name: `Edit post: ${body}` })
 const draft = () => page.getByRole('textbox', { name: 'Edit post' })
 const save = () => page.getByRole('button', { exact: true, name: 'Save' })
@@ -46,7 +47,7 @@ const mockPublishingAcrossPageBoundary = () => {
   return pendingFailure
 }
 
-const mockPublishingDuringLoad = (refreshSucceeds = false) => {
+const mockPublishingDuringLoad = (refreshSucceeds = false, onPublish?: () => void) => {
   const nextPage = held()
   const refresh = held()
   const nextPageStarted = Promise.withResolvers<undefined>()
@@ -57,7 +58,10 @@ const mockPublishingDuringLoad = (refreshSucceeds = false) => {
   const cursors: Array<string> = []
   let listed = false
   worker.use(
-    api.myPostsCreate({ body: publishedPost }),
+    api.myPostsCreate(() => {
+      onPublish?.()
+      return HttpResponse.json(publishedPost)
+    }),
     api.myPostsList(async ({ request }) => {
       const cursor = new URL(request.url).searchParams.get('cursor')
       if (cursor !== null) {
@@ -166,6 +170,25 @@ describe('dashboard posts', () => {
     await expect.element(items().nth(2)).toHaveFocus()
   })
 
+  it('keeps the publish refresh paused offline and shows the new post on reconnect', async () => {
+    const { cursors, nextPage, refresh } = mockPublishingDuringLoad(true, () => onlineManager.setOnline(false))
+    const { queryClient } = await renderDashboard()
+    const queryKey = getMyPostsQueryOptions().queryKey
+    const wasOnline = onlineManager.isOnline()
+    onTestFinished(() => onlineManager.setOnline(wasOnline))
+    nextPage.release()
+    refresh.release()
+
+    await publish('Just published')
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('paused')
+    await afterRendering()
+    expect.soft(loadMore().element()).toHaveAttribute('aria-disabled', 'true')
+    clickLoadMore()
+    onlineManager.setOnline(true)
+    await expect.element(items().nth(0)).toMatchTextContent(/^Just published/)
+    expect(cursors).toEqual([])
+  })
+
   it('keeps the published post on return without paginating after leaving during the refresh', async () => {
     const { cursors, nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
     const { queryClient, router } = await renderDashboard()
@@ -193,7 +216,7 @@ describe('dashboard posts', () => {
     const pendingRefresh = queryClient.refetchQueries({ queryKey, stale: true, type: 'active' })
     clickLoadMore()
     await refreshStarted
-    await expect.element(page.getByRole('button', { name: 'Loading more posts…' })).toBeDisabled()
+    await expect.element(page.getByRole('button', { name: 'Refreshing posts…' })).toBeDisabled()
     refresh.release()
     await pendingRefresh
     await expect.element(loadMore()).toBeEnabled()
