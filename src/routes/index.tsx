@@ -13,10 +13,11 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const posts = useSuspenseInfiniteQuery(getPublicPostsQueryOptions())
+  const options = getPublicPostsQueryOptions()
+  const posts = useSuspenseInfiniteQuery(options)
   return (
     <Page title="Latest posts">
-      <PostList empty="No posts yet." pages={posts} testId="public-posts" />
+      <PostList empty="No posts yet." pages={posts} queryKey={options.queryKey} testId="public-posts" />
     </Page>
   )
 }

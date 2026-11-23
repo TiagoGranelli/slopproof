@@ -1,6 +1,7 @@
 import { HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
+import { getMyPostsQueryOptions } from '#/features/posts/api/get-my-posts.ts'
 import { Route } from '#/routes/_authed/dashboard.tsx'
 import { api, held, listPage, post, worker } from './api-mocks.ts'
 import { afterRendering, pressAndKeepFocus, renderInApp } from './test-utils.tsx'
@@ -11,6 +12,7 @@ const edit = (body: string) => page.getByRole('button', { name: `Edit post: ${bo
 const draft = () => page.getByRole('textbox', { name: 'Edit post' })
 const save = () => page.getByRole('button', { exact: true, name: 'Save' })
 const items = () => page.getByTestId('my-posts').getByRole('listitem')
+const clickLoadMore = () => (loadMore().element() as HTMLButtonElement).click()
 
 const publish = async (body: string) => {
   await page.getByRole('textbox', { name: 'New post' }).fill(body)
@@ -52,14 +54,15 @@ const mockPublishingDuringLoad = (refreshSucceeds = false) => {
   const firstPage = listPage([post({ body: 'Newest post' })], 'old-cursor')
   const publishedPost = post({ body: 'Just published' })
   const refreshedPage = listPage([publishedPost, ...firstPage.items], 'new-cursor')
-  let published = false
+  const cursors: Array<string> = []
+  let listed = false
   worker.use(
-    api.myPostsCreate(() => {
-      published = true
-      return HttpResponse.json(publishedPost)
-    }),
+    api.myPostsCreate({ body: publishedPost }),
     api.myPostsList(async ({ request }) => {
       const cursor = new URL(request.url).searchParams.get('cursor')
+      if (cursor !== null) {
+        cursors.push(cursor)
+      }
       if (cursor === 'new-cursor') {
         return HttpResponse.json(listPage([post({ body: 'Older post' })]))
       }
@@ -68,15 +71,22 @@ const mockPublishingDuringLoad = (refreshSucceeds = false) => {
         await nextPage.wait()
         return HttpResponse.json(listPage([post({ body: 'Stale page' })]))
       }
-      if (published) {
+      if (listed) {
         refreshStarted.resolve(undefined)
         await refresh.wait()
         return refreshSucceeds ? HttpResponse.json(refreshedPage) : HttpResponse.error()
       }
+      listed = true
       return HttpResponse.json(firstPage)
     }),
   )
-  return { nextPage, nextPageStarted: nextPageStarted.promise, refresh, refreshStarted: refreshStarted.promise }
+  return {
+    cursors,
+    nextPage,
+    nextPageStarted: nextPageStarted.promise,
+    refresh,
+    refreshStarted: refreshStarted.promise,
+  }
 }
 
 const mockOverlappingSaves = (original: ReturnType<typeof post>) => {
@@ -128,10 +138,11 @@ describe('dashboard posts', () => {
     await publish('Just published')
     await refreshStarted
     await afterRendering()
-    expect.soft(loadMore().element().getAttribute('aria-disabled')).toBeNull()
+    await expect.element(loadMore()).toHaveAttribute('aria-disabled', 'true')
     refresh.release()
     await expect.poll(() => queryClient.isFetching()).toBe(0)
     await afterRendering()
+    await expect.element(loadMore()).toBeEnabled()
     expect.soft(page.getByRole('alert').elements()).toHaveLength(0)
     await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
     await expect.element(items().nth(0)).not.toHaveFocus()
@@ -141,18 +152,54 @@ describe('dashboard posts', () => {
   it('waits for a publish refresh before loading more from the refreshed cursor', async () => {
     const { nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
     await renderDashboard()
-    await pressAndKeepFocus(loadMore())
-    await nextPageStarted
+    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted])
     await publish('Just published')
     await refreshStarted
-    await loadMore().click()
-    await expect.element(loadMore()).toHaveTextContent('Loading more posts…')
+    await expect.element(loadMore()).toBeDisabled()
+    clickLoadMore()
     await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
     refresh.release()
     nextPage.release()
     await expect.element(items().nth(0)).toMatchTextContent(/^Just published/)
-    await expect.element(items().nth(2)).toMatchTextContent(/^Older post/)
+    await expect.element(items().nth(2)).not.toBeInTheDocument()
+    await loadMore().click()
     await expect.element(items().nth(2)).toHaveFocus()
+  })
+
+  it('keeps the published post on return without paginating after leaving during the refresh', async () => {
+    const { cursors, nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
+    const { queryClient, router } = await renderDashboard()
+    await Promise.all([pressAndKeepFocus(loadMore()), nextPageStarted])
+    await publish('Just published')
+    await refreshStarted
+    await afterRendering()
+    clickLoadMore()
+    await router.navigate({ to: '/about' })
+    await expect.element(page.getByTestId('my-posts')).not.toBeInTheDocument()
+    nextPage.release()
+    refresh.release()
+    await expect.poll(() => queryClient.isMutating()).toBe(0)
+    await router.navigate({ to: '/dashboard' })
+    expect.soft(cursors).toEqual(['old-cursor'])
+    await expect.element(items().nth(0)).toMatchTextContent(/^Just published/)
+  })
+
+  it('blocks Load more during a background refresh and uses the refreshed cursor after it settles', async () => {
+    const { cursors, nextPage, refresh, refreshStarted } = mockPublishingDuringLoad(true)
+    const { queryClient } = await renderDashboard()
+    const queryKey = getMyPostsQueryOptions().queryKey
+    nextPage.release()
+    await queryClient.invalidateQueries({ queryKey, refetchType: 'none' })
+    const pendingRefresh = queryClient.refetchQueries({ queryKey, stale: true, type: 'active' })
+    clickLoadMore()
+    await refreshStarted
+    await expect.element(page.getByRole('button', { name: 'Loading more posts…' })).toBeDisabled()
+    refresh.release()
+    await pendingRefresh
+    await expect.element(loadMore()).toBeEnabled()
+    await loadMore().click()
+    await expect.element(items().nth(2)).toHaveFocus()
+    expect(cursors).toEqual(['new-cursor'])
   })
 
   it('announces the saved post and restores focus while the list is still refetching', async () => {

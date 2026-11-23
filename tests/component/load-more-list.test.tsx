@@ -25,12 +25,14 @@ const notesQuery = (source: Source) =>
   })
 
 function Notes(props: { source: Source }) {
-  const pages = useSuspenseInfiniteQuery(notesQuery(props.source))
+  const options = notesQuery(props.source)
+  const pages = useSuspenseInfiniteQuery(options)
   return (
     <LoadMoreList
       empty="No notes yet."
       noun="notes"
       pages={pages}
+      queryKey={options.queryKey}
       renderItem={(shown) => <p>{shown.text}</p>}
       testId="notes"
     />

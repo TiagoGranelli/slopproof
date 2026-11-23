@@ -9,8 +9,9 @@ import { api, apiError, held, post, listPage, listPages, worker } from './api-mo
 import { pressAndKeepFocus, renderInApp, testQueryClient } from './test-utils.tsx'
 
 function PublicPosts() {
-  const pages = useSuspenseInfiniteQuery(getPublicPostsQueryOptions())
-  return <PostList empty="No posts yet." pages={pages} testId="public-posts" />
+  const options = getPublicPostsQueryOptions()
+  const pages = useSuspenseInfiniteQuery(options)
+  return <PostList empty="No posts yet." pages={pages} queryKey={options.queryKey} testId="public-posts" />
 }
 
 const renderList = (first: PostPage) => {

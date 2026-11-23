@@ -75,19 +75,19 @@ const failPageCommand: fc.AsyncCommand<RenderedListModel, RenderedListReal> = {
 }
 
 function PropertyNotes(props: { source: () => Promise<NotePage> }) {
-  const pages = useSuspenseInfiniteQuery(
-    infiniteQueryOptions({
-      getNextPageParam: nextPage,
-      initialPageParam: firstPage,
-      queryFn: () => props.source(),
-      queryKey: ['property-notes'],
-    }),
-  )
+  const options = infiniteQueryOptions({
+    getNextPageParam: nextPage,
+    initialPageParam: firstPage,
+    queryFn: () => props.source(),
+    queryKey: ['property-notes'],
+  })
+  const pages = useSuspenseInfiniteQuery(options)
   return (
     <LoadMoreList
       empty="No notes yet."
       noun="notes"
       pages={pages}
+      queryKey={options.queryKey}
       renderItem={(entry) => <p>{entry.text}</p>}
       testId="property-notes"
     />

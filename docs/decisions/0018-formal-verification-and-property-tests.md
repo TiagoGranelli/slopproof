@@ -41,11 +41,12 @@ and React Query owns fetch state. These flows use no effects or timers.
   `useAuthFormController` in `src/features/auth/components/auth-form.tsx` and used by all eight account forms
   (`LoginForm`, `SignUpForm`, `ForgotPasswordForm`, `ResetPasswordForm`, `ChangePasswordForm`,
   `DeleteAccountForm`, `VerifyEmailForm`, `ResendVerificationForm`).
-- **Load-more pagination** (`src/components/lists/load-more-machine.ts`). React Query's next-page busy and error
-  flags drive button feedback. The reducer tracks the current request token and the ID of the first item in an
-  appended page, so a superseded request cannot move focus. A click during a refresh shows the busy label and
-  joins the refresh. If the refresh succeeds without appending a page and more pages remain, pagination uses
-  the refreshed cursor. A refresh failure leaves the button available and does not surface a Load more error.
+- **Load-more pagination** (`src/components/lists/load-more-machine.ts`). React Query's fetching flag drives the
+  busy label and keeps the button focusable during a refresh or page fetch. The click handler also checks the
+  current query state so it can ignore a click before React renders the busy state. Each accepted click requests
+  one page with the current cursor. Only a next-page failure shows a Load more error. If the list is still
+  mounted when the request appends a page, the reducer records the first item's ID and clears it after focus
+  moves there.
 
 We chose plain typed reducers over XState v5 (`xstate`). The flows have flat state and add no production
 dependencies. TypeScript and `typescript/switch-exhaustiveness-check` enforce exhaustiveness, and all three
@@ -53,12 +54,14 @@ reducers sit in `COVERAGE_GATE` (`vitest.config.ts`) at 100% lines and branches.
 
 ### 2. Model-based property tests in `pnpm check`
 
-Using `fast-check` (`4.10.2`, already installed), add `fc.commands` / `fc.modelRun` tests for every pure machine
-(`tests/unit/post-editor-machine.test.ts`, `tests/unit/auth-form-machine.test.ts`,
-`tests/unit/load-more-machine.test.ts`) and `fc.commands` / `fc.asyncModelRun` browser tests driving the rendered
-components in Chromium (`tests/component/post-editor-properties.test.tsx`,
-`tests/component/auth-form-properties.test.tsx`, `tests/component/load-more-properties.test.tsx`). These run
-inside `pnpm test:fast` and `pnpm check`.
+The post editor and auth form use `fast-check` (`4.10.2`) with `fc.commands` / `fc.modelRun`
+(`tests/unit/post-editor-machine.test.ts`, `tests/unit/auth-form-machine.test.ts`). The Load more unit suite
+(`tests/unit/load-more-machine.test.ts`) uses a reducer example and an `fc.property` check for unchanged page
+counts and empty appended pages. All three flows have `fc.commands` / `fc.asyncModelRun` tests driving the
+rendered components in Chromium (`tests/component/post-editor-properties.test.tsx`,
+`tests/component/auth-form-properties.test.tsx`, `tests/component/load-more-properties.test.tsx`).
+`tests/component/dashboard-posts.test.tsx` exercises pagination during refresh and navigation. These suites
+run inside `pnpm test:fast` and `pnpm check`.
 
 ### 3. TLA+ specifications and TLC runner (`pnpm verify:tla`)
 
