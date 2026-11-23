@@ -12,11 +12,8 @@ import { POST_MAX_LENGTH } from '#/contract/limits.ts'
 import { useUpdatePost } from '#/features/posts/api/update-post.ts'
 import { PostCard } from '#/features/posts/components/post-card.tsx'
 import { postDraftSchema } from '#/features/posts/utils/post-draft-schema.ts'
-import {
-  classifyPostSaveError,
-  type OpenPostEditorState,
-  type PostEditorEvent,
-} from '#/features/posts/utils/post-editor-machine.ts'
+import { classifyPostSaveError } from '#/features/posts/utils/post-editor-machine.ts'
+import type { OpenPostEditorState, PostEditorEvent } from '#/features/posts/utils/post-editor-machine.ts'
 import type { Post } from '#/sdk/types.gen.ts'
 
 interface EditPostProps {

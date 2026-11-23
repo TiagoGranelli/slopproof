@@ -1,10 +1,5 @@
-import {
-  type InfiniteData,
-  MutationCache,
-  QueryClient,
-  type QueryClientConfig,
-  type QueryKey,
-} from '@tanstack/react-query'
+import { MutationCache, QueryClient } from '@tanstack/react-query'
+import type { InfiniteData, QueryClientConfig, QueryKey } from '@tanstack/react-query'
 
 export interface Invalidation {
   readonly firstPageOnly?: boolean

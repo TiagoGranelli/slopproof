@@ -1,16 +1,10 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
-import {
-  type Category,
-  type FormFactor,
-  type Metric,
-  PAGES,
-  POLICY,
-  REPORTED,
-  type Verdict,
-} from './lighthouse-policy.ts'
-import { LANTERN_TASK_THRESHOLD_MS, type RunsSummary, type ScoreRange } from './lighthouse-runs.ts'
+import { PAGES, POLICY, REPORTED } from './lighthouse-policy.ts'
+import type { Category, FormFactor, Metric, Verdict } from './lighthouse-policy.ts'
+import { LANTERN_TASK_THRESHOLD_MS } from './lighthouse-runs.ts'
+import type { RunsSummary, ScoreRange } from './lighthouse-runs.ts'
 
 export type PageOutcome = {
   failingAudits: Array<string>

@@ -1,6 +1,8 @@
-import { type QueryClient, queryOptions, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
-import { getSession, isPrerendering, type SignedInSession } from '#/lib/session.functions.ts'
+import { getSession, isPrerendering } from '#/lib/session.functions.ts'
+import type { SignedInSession } from '#/lib/session.functions.ts'
 
 const sessionQueryOptions = () =>
   queryOptions({ queryFn: () => getSession(), queryKey: ['auth', 'session'], staleTime: Number.POSITIVE_INFINITY })

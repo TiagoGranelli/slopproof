@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type AuditItem, type Lhr, preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
+import { preloadTaskMs } from '../../scripts/lighthouse-runs.ts'
+import type { AuditItem, Lhr } from '../../scripts/lighthouse-runs.ts'
 
 const report = (requests: Array<AuditItem>, tasks: Array<AuditItem>): Lhr => ({
   audits: {

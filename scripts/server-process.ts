@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { resolve as resolvePath } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { spawnToLog, tail } from './process-log.ts'
 
 export type ServerExit = { code: number | null; signal: NodeJS.Signals | null }
@@ -17,14 +18,15 @@ const SERVER_FLAGS = [
 ]
 
 const stopper = (child: ChildProcess): ServerProcess['stop'] => {
-  const exited = new Promise<ServerExit>((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })))
+  const exited = new Promise<ServerExit>((resolve) => {
+    child.once('exit', (code, signal) => resolve({ code, signal }))
+  })
   return async () => {
     const started = performance.now()
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGTERM')
       const killer = setTimeout(() => child.kill('SIGKILL'), 10_000)
-      await exited
-      clearTimeout(killer)
+      await exited.finally(() => clearTimeout(killer))
     }
     return { ms: Math.round(performance.now() - started), ...(await exited) }
   }
@@ -52,7 +54,7 @@ export const waitForServer = async (server: ChildProcess, directUrl: string, log
     if (await answersReady(directUrl)) {
       return
     }
-    await new Promise((r) => setTimeout(r, 250))
+    await delay(250)
   }
   throw new Error(`server did not become ready in 30 s. Log (${logFile}):\n${tail(logFile)}`)
 }

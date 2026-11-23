@@ -4,12 +4,10 @@ import {
   classifyPostSaveError,
   INITIAL_POST_EDITOR_STATE,
   isPostEditorOpen,
-  type PostEditorError,
-  type PostEditorEvent,
-  type PostEditorState,
   shouldReturnFocusToEdit,
   transitionPostEditor,
 } from '#/features/posts/utils/post-editor-machine.ts'
+import type { PostEditorError, PostEditorEvent, PostEditorState } from '#/features/posts/utils/post-editor-machine.ts'
 
 interface EditorModel {
   draft: string

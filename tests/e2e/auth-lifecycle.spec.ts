@@ -13,7 +13,8 @@ import {
   signInWithForm,
   signUpWithForm,
 } from './support/accounts.ts'
-import { type Author, expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
+import { expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
+import type { Author } from './support/app.ts'
 
 const expectApiSignInUnverified = async (request: APIRequestContext, account: Author) => {
   const early = await request.post('/api/auth/sign-in/email', {

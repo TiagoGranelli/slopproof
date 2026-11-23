@@ -1,11 +1,14 @@
-import { type ChildProcess, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { xSync } from 'tinyexec'
-import { LOOPBACK, type RunningApp, startApp } from './app-server.ts'
+import { LOOPBACK, startApp } from './app-server.ts'
+import type { RunningApp } from './app-server.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 const TIME_LIMIT = process.env.BOMBADIL_TIME_LIMIT || '15s'
@@ -107,7 +110,7 @@ const waitForDebugger = async (debuggerUrl: string, child: ChildProcess): Promis
     if (response?.ok) {
       return
     }
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await delay(100)
   }
   throw new Error(`Timed out waiting for Chromium remote debugger at ${debuggerUrl}`)
 }
@@ -123,7 +126,9 @@ const chromeArgs = (port: number, userDataDir: string): Array<string> => [
 
 const stopChrome = (child: ChildProcess, userDataDir: string) => async (): Promise<void> => {
   child.kill('SIGTERM')
-  await new Promise((resolve) => child.once('exit', resolve))
+  await new Promise((resolve) => {
+    child.once('exit', resolve)
+  })
   rmSync(userDataDir, { force: true, recursive: true })
 }
 

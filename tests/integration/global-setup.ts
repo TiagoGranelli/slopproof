@@ -1,5 +1,6 @@
 import type { TestProject } from 'vitest/node'
-import { startTestServers, type TestServers } from '../../scripts/test-servers.ts'
+import { startTestServers } from '../../scripts/test-servers.ts'
+import type { TestServers } from '../../scripts/test-servers.ts'
 
 declare module 'vitest' {
   export interface ProvidedContext {

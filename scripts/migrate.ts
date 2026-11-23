@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { setTimeout as delay } from 'node:timers/promises'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { Client } from 'pg'
 
@@ -67,7 +68,7 @@ const pendingMigrations = async (client: Client): Promise<Array<Migration>> => {
     `select created_at from ${TABLE} order by created_at desc limit 1`,
   )
   const last = rows[0]?.created_at
-  return migrations.filter((migration) => last == null || Number(last) < migration.folderMillis)
+  return migrations.filter((migration) => last === null || last === undefined || Number(last) < migration.folderMillis)
 }
 
 const applyMigration = async (client: Client, migration: Migration) => {
@@ -120,7 +121,7 @@ const migrateWithRetries = async (client: Client, attemptNumber = 1): Promise<Co
     }
     const lockTimeout = DDL_LOCK_WAIT
     log('info', 'migration waited too long for a table lock, retrying', { attempt: attemptNumber, lockTimeout })
-    await new Promise((resolve) => setTimeout(resolve, 1000 * attemptNumber))
+    await delay(1000 * attemptNumber)
     return migrateWithRetries(client, attemptNumber + 1)
   }
 }

@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { Data, Effect } from 'effect'
-import { Database, type Db } from './client.ts'
+import { Database } from './client.ts'
+import type { Db } from './client.ts'
 
 export class DbError extends Data.TaggedError('DbError')<{ readonly cause: unknown }> {}
 

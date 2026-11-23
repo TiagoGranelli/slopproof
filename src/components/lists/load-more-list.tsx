@@ -1,5 +1,6 @@
 import type { InfiniteData, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
-import { useReducer, type ReactNode } from 'react'
+import { useReducer } from 'react'
+import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import {
   initialLoadMoreState,

@@ -1,16 +1,12 @@
 import { useHydrated } from '@tanstack/react-router'
-import { type Dispatch, type ReactNode, useReducer } from 'react'
+import { useReducer } from 'react'
+import type { Dispatch, ReactNode } from 'react'
 import { describedBy, focusFirstInvalid } from '#/components/form/field-messages.ts'
 import { loadOnInteraction, SCHEMA_LOAD_FAILED } from '#/components/form/lazy-schema.ts'
 import { ServerIssues } from '#/components/form/server-issues.ts'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  type AuthFormEvent,
-  type AuthFormState,
-  initialAuthFormState,
-  isAuthFormBusy,
-  transitionAuthForm,
-} from '#/features/auth/utils/auth-form-machine.ts'
+import { initialAuthFormState, isAuthFormBusy, transitionAuthForm } from '#/features/auth/utils/auth-form-machine.ts'
+import type { AuthFormEvent, AuthFormState } from '#/features/auth/utils/auth-form-machine.ts'
 import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
 export interface AuthFormController {

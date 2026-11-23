@@ -1,13 +1,8 @@
 import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { AuthActionError } from '#/features/auth/api/auth-action.ts'
-import {
-  type AuthFormEvent,
-  type AuthFormState,
-  initialAuthFormState,
-  isAuthFormBusy,
-  transitionAuthForm,
-} from '#/features/auth/utils/auth-form-machine.ts'
+import { initialAuthFormState, isAuthFormBusy, transitionAuthForm } from '#/features/auth/utils/auth-form-machine.ts'
+import type { AuthFormEvent, AuthFormState } from '#/features/auth/utils/auth-form-machine.ts'
 import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
 const FIELD_CODES: AuthFieldCodes = {

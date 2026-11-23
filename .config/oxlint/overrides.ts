@@ -197,6 +197,7 @@ export const overrides: Array<OxlintOverride> = [
         },
       ],
       'vitest/prefer-hooks-on-top': 'error',
+      'vitest/require-awaited-expect-poll': 'error',
       'vitest/require-mock-type-parameters': 'error',
       'vitest/valid-expect': [
         'error',
@@ -211,6 +212,7 @@ export const overrides: Array<OxlintOverride> = [
     files: ['scripts/**', 'tests/**'],
     rules: {
       'no-await-in-loop': 'off',
+      'typescript/no-unsafe-type-assertion': 'off',
     },
   },
   {

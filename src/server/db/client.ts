@@ -1,9 +1,11 @@
 import '@tanstack/react-start/server-only'
 import type { ExtractTablesWithRelations } from 'drizzle-orm'
-import { drizzle, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres'
 import type { PgDatabase } from 'drizzle-orm/pg-core'
 import { Context, Effect, Exit, Layer, Option, Redacted } from 'effect'
-import { Pool, type PoolConfig } from 'pg'
+import { Pool } from 'pg'
+import type { PoolConfig } from 'pg'
 import { env } from '../env.ts'
 import { onShutdown } from '../lifecycle.ts'
 import { log } from '../log.ts'
@@ -78,4 +80,6 @@ const transactionExit = <A, E>(database: Db, body: (tx: Db) => Promise<Exit.Exit
       }
       return exit
     })
+    // A RollbackError holds the body's own Exit, so its type is `Exit<A, E>`.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     .catch((error: unknown) => (error instanceof RollbackError ? (error.exit as Exit.Exit<A, E>) : Exit.die(error)))

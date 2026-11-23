@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type Feature, checkFeatures, featuresForPath, loadFeatures } from '../../scripts/features.ts'
+import { checkFeatures, featuresForPath, loadFeatures } from '../../scripts/features.ts'
+import type { Feature } from '../../scripts/features.ts'
 
 const sampleFeature = (overrides: Partial<Feature> = {}): Feature => ({
   apiOperations: [],

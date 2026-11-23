@@ -59,6 +59,8 @@ export function describeApiError(error: unknown, action: string): ApiErrorView {
   if (!isTaggedApiError(error) || !Object.hasOwn(DESCRIBE_TAG, error._tag)) {
     return { message: `Could not ${action}. Try again.`, signIn: false }
   }
+  // TypeScript cannot relate a union member to its own entry of a mapped table (microsoft/TypeScript#30581).
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const describe = DESCRIBE_TAG[error._tag] as Describe<TaggedApiError['_tag']>
   return describe(error, action)
 }

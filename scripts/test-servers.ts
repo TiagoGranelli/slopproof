@@ -1,4 +1,5 @@
-import { LOOPBACK, type RunningApp, startApp } from './app-server.ts'
+import { LOOPBACK, startApp } from './app-server.ts'
+import type { RunningApp } from './app-server.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 type User = RunningApp['user']

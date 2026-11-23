@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { PostId, type UserId } from '#/contract/ids.ts'
+import { PostId } from '#/contract/ids.ts'
+import type { UserId } from '#/contract/ids.ts'
 import type { PageCursor } from '#/contract/pages.ts'
 import type { PostPage } from '#/contract/posts.ts'
 import { pool } from '#/server/db/client.ts'

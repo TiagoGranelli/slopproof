@@ -1,7 +1,9 @@
-import { type ChildProcess, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { readRootCertificate, servedCertificateSpki, trustCertificateAuthority } from './edge-certificate.ts'
 import { dockerPrefix, IMAGES } from './images.ts'
 import { spawnToLog } from './process-log.ts'
@@ -98,12 +100,16 @@ const stopEdge = async (child: ChildProcess, container: string | undefined, exit
     child.kill('SIGTERM')
   }
   const killer = setTimeout(() => child.kill('SIGKILL'), 10_000)
-  await exited
-  clearTimeout(killer)
+  await exited.finally(() => clearTimeout(killer))
 }
 
+const childExit = (child: ChildProcess) =>
+  new Promise<void>((done) => {
+    child.once('exit', () => done())
+  })
+
 const edgeStopper = (child: ChildProcess, container: string | undefined, dataHome: string | undefined) => {
-  const exited = new Promise<void>((done) => child.once('exit', () => done()))
+  const exited = childExit(child)
   const cleanUp = () => {
     if (container) {
       spawnSync('docker', ['rm', '--force', container], { stdio: 'ignore' })
@@ -180,7 +186,7 @@ const waitForEdge = async (edge: LaunchedEdge): Promise<EdgePoll> => {
     if (poll.ready) {
       return poll
     }
-    await new Promise((r) => setTimeout(r, 250))
+    await delay(250)
   }
   return poll
 }

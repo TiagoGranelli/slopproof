@@ -2,11 +2,10 @@ import * as fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
   initialLoadMoreState,
-  type LoadMoreEvent,
-  type LoadMoreState,
   reconcileLoadMoreState,
   transitionLoadMore,
 } from '#/components/lists/load-more-machine.ts'
+import type { LoadMoreEvent, LoadMoreState } from '#/components/lists/load-more-machine.ts'
 
 interface LoadMoreModel {
   focusIndex: number | null

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { type PostId, UserId } from '#/contract/ids.ts'
+import { UserId } from '#/contract/ids.ts'
+import type { PostId } from '#/contract/ids.ts'
 import { post } from '#/server/db/schema/posts.ts'
 
 describe('id brands', () => {

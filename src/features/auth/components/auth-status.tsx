@@ -1,4 +1,5 @@
-import { useId, type ReactNode } from 'react'
+import { useId } from 'react'
+import type { ReactNode } from 'react'
 
 const focusOnMount = (element: HTMLOutputElement | null) => {
   element?.focus()

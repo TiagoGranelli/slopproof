@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
-import { type AnyPgColumn, check, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { check, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import type { UserId } from '../../../contract/ids.ts'
 import { user } from './auth.ts'
 

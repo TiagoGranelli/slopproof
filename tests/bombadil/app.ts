@@ -1,5 +1,7 @@
-import { always, type Formula } from '@antithesishq/bombadil'
-import { type Action, actions, extract, type Fingerprint, getFingerprint } from '@antithesishq/bombadil/browser'
+import { always } from '@antithesishq/bombadil'
+import type { Formula } from '@antithesishq/bombadil'
+import { actions, extract, getFingerprint } from '@antithesishq/bombadil/browser'
+import type { Action, Fingerprint } from '@antithesishq/bombadil/browser'
 import { back, forward, inputs, reload, scroll, waitOnce } from '@antithesishq/bombadil/browser/defaults/actions'
 import {
   noConsoleErrors,

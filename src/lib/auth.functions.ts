@@ -14,7 +14,8 @@ import {
   TokenInput,
 } from '#/lib/account-input.ts'
 import { env } from '#/server/env.ts'
-import { type AuthEndpointResult, type AuthErrorCode, callAuthEndpoint } from '#/server/http/auth-handler.ts'
+import { callAuthEndpoint } from '#/server/http/auth-handler.ts'
+import type { AuthEndpointResult, AuthErrorCode } from '#/server/http/auth-handler.ts'
 import { displayClientAddress } from '#/server/http/client-address.ts'
 
 export type AuthFailureCode = AuthErrorCode | 'RATE_LIMITED' | 'NOT_FOUND' | 'UNEXPECTED'

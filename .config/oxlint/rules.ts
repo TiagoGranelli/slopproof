@@ -16,7 +16,7 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
     },
   ],
   'eslint/complexity': ['error', { max: 20 }],
-  'eslint/eqeqeq': ['error', 'always', { null: 'ignore' }],
+  'eslint/eqeqeq': 'error',
   'eslint/id-denylist': [
     'error',
     'result',
@@ -40,15 +40,16 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
   'eslint/max-lines': ['error', { max: 300, skipBlankLines: true, skipComments: true }],
   'eslint/max-lines-per-function': ['error', { max: 20, skipBlankLines: true, skipComments: true }],
   'eslint/max-nested-callbacks': ['error', { max: 3 }],
-
   'eslint/max-params': ['error', { max: 3 }],
   'eslint/no-console': 'error',
   'eslint/no-empty': ['error', { allowEmptyCatch: false }],
   'eslint/no-loop-func': 'off',
   'eslint/no-negated-condition': 'off',
   'eslint/no-nested-ternary': 'error',
+
   'eslint/no-new-func': 'error',
-  'eslint/no-promise-executor-return': 'off',
+  'eslint/no-promise-executor-return': 'error',
+  'eslint/no-regex-spaces': 'error',
   'eslint/no-script-url': 'error',
   'eslint/no-underscore-dangle': [
     'error',
@@ -56,12 +57,16 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
       allow: ['_tag'],
     },
   ],
+  'eslint/no-useless-assignment': 'error',
+  'eslint/no-var': 'error',
   'eslint/no-warning-comments': ['error', { terms: ['todo', 'fixme', 'xxx', 'hack'] }],
+  'eslint/prefer-const': 'error',
   'eslint/require-await': 'off',
   'eslint/require-unicode-regexp': 'off',
+  'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
+  'import/export': 'error',
   'import/extensions': ['error', 'always', { ignorePackages: true }],
   'import/first': 'error',
-
   'import/max-dependencies': 'off',
   'import/no-duplicates': 'error',
   'import/no-namespace': [
@@ -82,10 +87,13 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
       allow: ['@tanstack/react-start/server-only', '**/*.css'],
     },
   ],
-  'jsx-a11y/anchor-ambiguous-text': 'error',
 
+  'jsx-a11y/alt-text': 'error',
+  'jsx-a11y/anchor-ambiguous-text': 'error',
+  'oxc/bad-bitwise-operator': 'error',
   'oxc/no-barrel-file': ['error', { threshold: 0 }],
   'promise/no-nesting': 'error',
+
   'promise/no-return-in-finally': 'error',
   'promise/no-return-wrap': 'error',
   'promise/prefer-catch': 'error',
@@ -103,6 +111,7 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
   'react/jsx-max-depth': ['error', { max: 4 }],
   'react/jsx-no-target-blank': 'error',
   'react/no-danger': 'error',
+  'react/no-unknown-property': 'error',
   'react/no-unstable-nested-components': [
     'error',
     {
@@ -110,6 +119,7 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
     },
   ],
   'react/react-in-jsx-scope': 'off',
+  'react/require-render-return': 'error',
   'react/rule-suppression': 'error',
   'react/rules-of-hooks': 'error',
   'react/syntax': 'error',
@@ -158,20 +168,13 @@ export const rules: NonNullable<OxlintConfig['rules']> = {
   'typescript/no-import-type-side-effects': 'error',
   'typescript/no-inferrable-types': 'error',
   'typescript/no-invalid-void-type': 'error',
-  'typescript/no-misused-promises': [
-    'error',
-    {
-      checksVoidReturn: {
-        attributes: false,
-      },
-    },
-  ],
+  'typescript/no-misused-promises': 'error',
   'typescript/no-namespace': 'error',
   'typescript/no-non-null-assertion': 'error',
 
   'typescript/no-require-imports': 'error',
   'typescript/no-unnecessary-condition': 'error',
-  'typescript/no-unsafe-type-assertion': 'off',
+  'typescript/no-unsafe-type-assertion': 'error',
   'typescript/only-throw-error': [
     'error',
     {

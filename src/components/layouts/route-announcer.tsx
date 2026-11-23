@@ -1,4 +1,5 @@
-import { type AnyRouter, useRouter } from '@tanstack/react-router'
+import { useRouter } from '@tanstack/react-router'
+import type { AnyRouter } from '@tanstack/react-router'
 import { useSyncExternalStore } from 'react'
 import { flashMessage } from '#/lib/flash.ts'
 

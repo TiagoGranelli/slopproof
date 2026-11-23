@@ -81,6 +81,8 @@ const codeOf = (body: Json | undefined, path: string): AuthErrorCode | undefined
 
 const parseJson = (text: string): Json | undefined => {
   try {
+    // JSON.parse returns any; every value it can produce is a Json.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return JSON.parse(text) as Json
   } catch {
     return undefined

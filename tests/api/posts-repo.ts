@@ -1,8 +1,10 @@
 import { Layer } from 'effect'
-import { PostId, type UserId } from '#/contract/ids.ts'
+import { PostId } from '#/contract/ids.ts'
+import type { UserId } from '#/contract/ids.ts'
 import type { Post } from '#/contract/posts.ts'
 import { PostsRepo } from '#/server/posts/repo.ts'
-import { memoryQuery, type RepoOptions } from './memory-db.ts'
+import { memoryQuery } from './memory-db.ts'
+import type { RepoOptions } from './memory-db.ts'
 import { memoryClock, memoryPage } from './memory-keyset.ts'
 
 type StoredPost = Post & { readonly authorId: UserId; readonly cursorAt: string }

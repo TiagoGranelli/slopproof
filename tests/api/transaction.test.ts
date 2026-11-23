@@ -1,7 +1,8 @@
 import { PgTransaction } from 'drizzle-orm/pg-core'
 import { Cause, Data, Effect, Exit } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { Database, type Db } from '#/server/db/client.ts'
+import { Database } from '#/server/db/client.ts'
+import type { Db } from '#/server/db/client.ts'
 
 class Refused extends Data.TaggedError('Refused') {}
 

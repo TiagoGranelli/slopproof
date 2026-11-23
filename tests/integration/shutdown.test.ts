@@ -1,24 +1,31 @@
 import { readFileSync } from 'node:fs'
 import { connect } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { LOOPBACK, type RunningApp, startApp } from '../../scripts/app-server.ts'
+import { LOOPBACK, startApp } from '../../scripts/app-server.ts'
+import type { RunningApp } from '../../scripts/app-server.ts'
 import { dropTestDatabase, openConnections, testDatabaseUrl } from '../../scripts/test-db.ts'
 
 const LOG_FILE = 'test-results/app-server-shutdown.log'
 const MAX_SHUTDOWN_MS = 3000
 
 const settle = () =>
-  // Server gives no observable signal for mid-flight header reads, so a brief fixed wait is required.
-  // oxlint-disable-next-line eslint-js/no-restricted-syntax
-  new Promise((resolve) => setTimeout(resolve, 20))
+  new Promise((resolve) => {
+    // Server gives no observable signal for mid-flight header reads, so a brief fixed wait is required.
+    // oxlint-disable-next-line eslint-js/no-restricted-syntax
+    setTimeout(resolve, 20)
+  })
 const logLines = () => readFileSync(LOG_FILE, 'utf8').split('\n')
 
 const rawConnection = async (directUrl: string) => {
   const socket = connect(Number(new URL(directUrl).port), '127.0.0.1')
-  await new Promise((resolve, reject) => socket.once('connect', resolve).once('error', reject))
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve).once('error', reject)
+  })
   let received = ''
   socket.on('data', (chunk: Buffer) => (received += chunk.toString()))
-  const closed = new Promise<string>((resolve) => socket.once('close', () => resolve(received)))
+  const closed = new Promise<string>((resolve) => {
+    socket.once('close', () => resolve(received))
+  })
   socket.on('error', () => {})
   return { closed, socket }
 }

@@ -2,7 +2,8 @@ import '@tanstack/react-start/server-only'
 import { sql } from 'drizzle-orm'
 import { Context, Effect, Layer } from 'effect'
 import { Database } from './client.ts'
-import { type DbError, query } from './query.ts'
+import { query } from './query.ts'
+import type { DbError } from './query.ts'
 
 export class DatabaseHealth extends Context.Service<DatabaseHealth, { readonly ping: Effect.Effect<void, DbError> }>()(
   'app/DatabaseHealth',

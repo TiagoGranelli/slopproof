@@ -1,4 +1,5 @@
-import { type MutationMeta, useMutation, type UseMutationOptions } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
+import type { MutationMeta, UseMutationOptions } from '@tanstack/react-query'
 import type { AuthFailure, AuthFailureCode, AuthOutcome } from '#/lib/auth.functions.ts'
 
 export class AuthActionError extends Error {

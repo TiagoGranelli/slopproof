@@ -1,4 +1,5 @@
-import { type InfiniteData, InfiniteQueryObserver, MutationObserver } from '@tanstack/react-query'
+import { InfiniteQueryObserver, MutationObserver } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { createQueryClient } from '#/lib/query-client.ts'
 

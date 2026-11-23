@@ -1,16 +1,8 @@
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { signInWithForm } from './support/accounts.ts'
-import {
-  type Author,
-  expect,
-  expectHydrated,
-  failServerFunctionPosts,
-  seedPost,
-  signIn,
-  test,
-  visit,
-} from './support/app.ts'
+import { expect, expectHydrated, failServerFunctionPosts, seedPost, signIn, test, visit } from './support/app.ts'
+import type { Author } from './support/app.ts'
 
 const expectDashboard = async (page: Page) => {
   await expect(page).toHaveURL(/\/dashboard$/)

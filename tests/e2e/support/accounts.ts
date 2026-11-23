@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
-import { type Author, createAuthor, expect, followLink, nextClientIp, signIn, visit } from './app.ts'
+import { createAuthor, expect, followLink, nextClientIp, signIn, visit } from './app.ts'
+import type { Author } from './app.ts'
 
 const appUrl = process.env.APP_URL ?? 'http://localhost:3000'
 const mailpitUrl = process.env.MAILPIT_URL ?? 'http://127.0.0.1:54380'

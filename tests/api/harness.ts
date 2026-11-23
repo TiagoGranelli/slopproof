@@ -18,7 +18,8 @@ import { AuthenticationLive, RequestValidationLive } from '#/server/api/middlewa
 import { RateLimitStore, WriteRateLimitLive } from '#/server/api/rate-limit.ts'
 import { SessionLookup } from '#/server/api/session-lookup.ts'
 import { DatabaseHealth } from '#/server/db/health.ts'
-import { memoryQuery, type RepoOptions } from './memory-db.ts'
+import { memoryQuery } from './memory-db.ts'
+import type { RepoOptions } from './memory-db.ts'
 import { memoryPostsRepo } from './posts-repo.ts'
 
 export const authors = {

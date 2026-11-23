@@ -11,8 +11,8 @@ import {
   signIn,
   test,
   visit,
-  type Author,
 } from './support/app.ts'
+import type { Author } from './support/app.ts'
 
 test.skip(({ isMobile }) => isMobile, 'keyboard navigation is a desktop concern')
 

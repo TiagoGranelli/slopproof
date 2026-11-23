@@ -28,9 +28,14 @@ type SerializedError =
       readonly stack: string | undefined
     }
 
+const errorCode = (error: Error): string | number | undefined => {
+  const code = 'code' in error ? error.code : undefined
+  return typeof code === 'string' || typeof code === 'number' ? code : undefined
+}
+
 const serializeErrorObject = (error: Error, depth: number): SerializedError => ({
   cause: error.cause !== undefined && depth < 3 ? serializeError(error.cause, depth + 1) : undefined,
-  code: (error as { code?: string | number }).code,
+  code: errorCode(error),
   message: firstLine(error.message),
   name: error.name,
   stack: frames(error.stack),
@@ -49,10 +54,12 @@ const serializeError = (error: unknown, depth = 0): SerializedError => {
   if (typeof error === 'bigint' || typeof error === 'function') {
     return typeof error === 'bigint' ? String(error) : error.name
   }
-  if (error === null || typeof error !== 'object') {
-    return error as Exclude<SerializedError, object>
+  if (typeof error === 'object' && error !== null) {
+    return error instanceof Error ? serializeErrorObject(error, depth) : summarizeObject(error)
   }
-  return error instanceof Error ? serializeErrorObject(error, depth) : summarizeObject(error)
+  return typeof error === 'number' || typeof error === 'boolean' || typeof error === 'symbol' || error === null
+    ? error
+    : undefined
 }
 
 export const log = (level: Level, msg: string, fields: Fields = {}): void => {

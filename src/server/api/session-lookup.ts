@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only'
-import { Context, type Effect } from 'effect'
+import { Context } from 'effect'
+import type { Effect } from 'effect'
 import type { CurrentUser } from '#/contract/middleware.ts'
 
 export class SessionLookup extends Context.Service<

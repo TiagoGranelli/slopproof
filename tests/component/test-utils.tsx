@@ -1,6 +1,6 @@
-import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import {
-  type AnyRoute,
   createMemoryHistory,
   createRootRoute,
   createRoute,
@@ -9,6 +9,7 @@ import {
   RouterContextProvider,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { AnyRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
@@ -116,7 +117,9 @@ export async function expectFocusedStatus(title: string) {
 }
 
 export const afterRendering = () =>
-  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
 
 export async function pressAndKeepFocus(button: ReturnType<typeof page.getByRole>) {
   ;(button.element() as HTMLElement).focus()

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { type DefaultTreeAdapterTypes, defaultTreeAdapter, parse } from 'parse5'
+import { defaultTreeAdapter, parse } from 'parse5'
+import type { DefaultTreeAdapterTypes } from 'parse5'
 
 type ParentNode = DefaultTreeAdapterTypes.ParentNode
 type Element = DefaultTreeAdapterTypes.Element
@@ -19,6 +20,8 @@ function* elementsOf(parent: ParentNode): Generator<Element> {
     yield node
     yield* elementsOf(node)
     if (node.tagName === 'template') {
+      // parse5 attaches a document fragment to template nodes in its default tree adapter.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       yield* elementsOf((node as DefaultTreeAdapterTypes.Template).content)
     }
   }

@@ -1,8 +1,5 @@
-import {
-  type AuthFieldCodes,
-  authFieldIssues,
-  describeAuthFailure,
-} from '#/features/auth/utils/describe-auth-failure.ts'
+import { authFieldIssues, describeAuthFailure } from '#/features/auth/utils/describe-auth-failure.ts'
+import type { AuthFieldCodes } from '#/features/auth/utils/describe-auth-failure.ts'
 
 export type AuthFormState =
   | { readonly status: 'idle' }

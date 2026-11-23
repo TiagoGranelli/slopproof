@@ -12,8 +12,8 @@ import {
   signIn,
   test,
   visit,
-  type Author,
 } from './support/app.ts'
+import type { Author } from './support/app.ts'
 
 type Fixtures = { author: Author; page: Page; request: APIRequestContext }
 

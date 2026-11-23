@@ -1,5 +1,6 @@
 import { useQueryErrorResetBoundary } from '@tanstack/react-query'
-import { CatchBoundary, type ErrorComponentProps } from '@tanstack/react-router'
+import { CatchBoundary } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
