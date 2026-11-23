@@ -210,30 +210,26 @@ describe('dashboard posts', () => {
     ).toEqual(['Just published', 'Newest post', 'Older post'])
   })
 
-  it('keeps focus in the composer when a paused next page finishes after reconnect', async () => {
-    const { nextPage } = mockPublishingDuringLoad()
-    await renderDashboard()
-    goOffline()
-    await pressAndKeepFocus(loadMore())
-    await composer().fill('Draft in progress')
-    nextPage.release()
-    onlineManager.setOnline(true)
-    await expect.element(loadMore()).not.toBeInTheDocument()
-    await expect.element(items().nth(1)).toMatchTextContent(/^Stale page/)
-    await afterRendering()
-    expect(composer().element()).toHaveFocus()
-  })
-
-  it('labels the paused next-page action as waiting for connection', async () => {
-    const { nextPage } = mockPublishingDuringLoad()
-    await renderDashboard()
-    goOffline()
-    await pressAndKeepFocus(loadMore())
-    expect.soft(loadMore().element()).toHaveTextContent('Waiting for connection…')
-    nextPage.release()
-    onlineManager.setOnline(true)
-    await expect.element(items().nth(1)).toMatchTextContent(/^Stale page/)
-  })
+  it.each(['composer', 'character count'])(
+    'preserves focus after using the %s during a paused final page',
+    async (target) => {
+      const { nextPage } = mockPublishingDuringLoad()
+      await renderDashboard()
+      goOffline()
+      await pressAndKeepFocus(loadMore())
+      await expect.element(loadMore()).toHaveTextContent('Waiting for connection…')
+      const editing = target === 'composer'
+      await (editing ? composer().fill('Draft in progress') : page.getByText(/^0\/\d+/).click())
+      const expectedFocus = editing ? composer().element() : document.body
+      expect(document.activeElement).toBe(expectedFocus)
+      nextPage.release()
+      onlineManager.setOnline(true)
+      await expect.element(loadMore()).not.toBeInTheDocument()
+      await expect.element(items().nth(1)).toMatchTextContent(/^Stale page/)
+      await afterRendering()
+      expect(document.activeElement).toBe(expectedFocus)
+    },
+  )
 
   it('keeps the published post on return without paginating after leaving during the refresh', async () => {
     const { cursors, nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(() => true)

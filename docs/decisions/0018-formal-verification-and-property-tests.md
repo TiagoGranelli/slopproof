@@ -47,10 +47,10 @@ and React Query owns fetch state. These flows use no effects or timers.
   and “Refreshing…” during an active refresh.
   The click handler also requires the current query to be idle, guarding against clicks before React renders the
   busy state. An invalidated or errored query refreshes first. The same click requests the next page if the
-  refresh succeeds, a next cursor remains, and the list is still mounted. Only a next-page failure shows a Load
-  more error. When a page is appended, the reducer records its first item's ID and clears it after the focus
-  check. Focus moves to that item if the button still has focus or the final page removed the button and focus
-  fell back to the document body.
+  refresh succeeds, a next cursor remains, and the list is still mounted. A next-page failure or a refresh
+  failure from that click shows a Load more error and lets the user retry. When a page is appended, the reducer
+  records its first item's ID and clears it after the focus check. Focus moves to that item if the button still
+  has focus, or if it held focus when the final page removed it and focus fell back to the document body.
 
 We chose plain typed reducers over XState v5 (`xstate`). The flows have flat state and add no production
 dependencies. TypeScript and `typescript/switch-exhaustiveness-check` enforce exhaustiveness, and all three
@@ -65,7 +65,8 @@ counts and empty appended pages. All three flows have `fc.commands` / `fc.asyncM
 rendered components in Chromium (`tests/component/post-editor-properties.test.tsx`,
 `tests/component/auth-form-properties.test.tsx`, `tests/component/load-more-properties.test.tsx`).
 `tests/component/dashboard-posts.test.tsx` exercises pagination during refresh, reconnect after a failed
-publish refresh, offline status text, focus retained in the composer, and navigation.
+publish refresh, offline status text, focus retained after clicking in the composer, and navigation.
+`tests/component/post-list.test.tsx` covers a failed retry during an ongoing outage and recovery on the next click.
 These suites run inside `pnpm test:fast` and `pnpm check`.
 
 ### 3. TLA+ specifications and TLC runner (`pnpm verify:tla`)
