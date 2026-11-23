@@ -41,7 +41,8 @@ const send = (real: LoadMoreReal, event: LoadMoreEvent) => {
 class LoadMoreCommand implements fc.Command<LoadMoreModel, LoadMoreReal> {
   check = () => true
   run(model: LoadMoreModel, real: LoadMoreReal) {
-    send(real, { type: 'LOAD_MORE' })
+    const snapshot = { hasNextPage: model.hasNextPage, itemCount: model.loadedCount }
+    send(real, { snapshot, type: 'LOAD_MORE' })
     if (model.status === 'idle' || model.status === 'error') {
       model.status = 'loading'
       model.inFlight = 1
@@ -144,11 +145,13 @@ const commandArbitrary = fc.commands(
 
 describe('load-more-machine', () => {
   it('focuses the first new item even when the loaded page exhausts the list', () => {
-    const start = initialLoadMoreState({ hasNextPage: true, itemCount: 2 })
-    const loading = transitionLoadMore(start, { type: 'LOAD_MORE' })
+    const snapshot = { hasNextPage: true, itemCount: 2 }
+    const loading = transitionLoadMore(initialLoadMoreState(snapshot), { snapshot, type: 'LOAD_MORE' })
     const exhausted = transitionLoadMore(loading, { addedCount: 2, hasNextPage: false, type: 'LOAD_SUCCEEDED' })
     expect(exhausted).toEqual({ focusIndex: 2, loadedCount: 4, status: 'exhausted' })
-    expect(transitionLoadMore(exhausted, { type: 'LOAD_MORE' })).toEqual(exhausted)
+    expect(
+      transitionLoadMore(exhausted, { snapshot: { hasNextPage: false, itemCount: 4 }, type: 'LOAD_MORE' }),
+    ).toEqual(exhausted)
     expect(transitionLoadMore(exhausted, { type: 'FOCUS_APPLIED' })).toEqual({
       focusIndex: null,
       loadedCount: 4,
@@ -156,9 +159,16 @@ describe('load-more-machine', () => {
     })
   })
 
+  it('accepts a load after a refetch gave an exhausted list another page', () => {
+    const start = initialLoadMoreState({ hasNextPage: false, itemCount: 20 })
+    const loading = transitionLoadMore(start, { snapshot: { hasNextPage: true, itemCount: 20 }, type: 'LOAD_MORE' })
+    expect(loading).toEqual({ loadedCount: 20, status: 'loading' })
+  })
+
   it('reconciles external list changes without leaving an out-of-bounds focus index', () => {
+    const snapshot = { hasNextPage: true, itemCount: 2 }
     const idleWithFocus = transitionLoadMore(
-      transitionLoadMore(initialLoadMoreState({ hasNextPage: true, itemCount: 2 }), { type: 'LOAD_MORE' }),
+      transitionLoadMore(initialLoadMoreState(snapshot), { snapshot, type: 'LOAD_MORE' }),
       { addedCount: 2, hasNextPage: true, type: 'LOAD_SUCCEEDED' },
     )
     expect(reconcileLoadMoreState(idleWithFocus, { hasNextPage: false, itemCount: 1 })).toEqual({
@@ -178,7 +188,7 @@ describe('load-more-machine', () => {
       { focusIndex: 1, loadedCount: 2, status: 'exhausted' },
     ]
     const events: Array<LoadMoreEvent> = [
-      { type: 'LOAD_MORE' },
+      { snapshot: { hasNextPage: true, itemCount: 2 }, type: 'LOAD_MORE' },
       { addedCount: 0, hasNextPage: false, type: 'LOAD_SUCCEEDED' },
       { addedCount: 2, hasNextPage: true, type: 'LOAD_SUCCEEDED' },
       { error: new Error('offline'), type: 'LOAD_FAILED' },

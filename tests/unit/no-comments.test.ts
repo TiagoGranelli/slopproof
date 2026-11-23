@@ -14,6 +14,14 @@ const tester = new RuleTester({
 tester.run('no-comments', noCommentsRule, {
   invalid: [
     {
+      code: '// fallow-ignore-next-line security-sink\nconst fragment = "x"\n',
+      errors: [{ line: 1, message: /ADR 0019/ }],
+    },
+    {
+      code: '// fallow-ignore-file security-sink\n// fallow-ignore-next-line security-sink\nconst fragment = "x"\n',
+      errors: [{ line: 2, message: /ADR 0019/ }],
+    },
+    {
       code: '// explains what the line does\nconst count = 1\n',
       errors: [{ message: /ADR 0019/ }],
     },
@@ -31,15 +39,24 @@ tester.run('no-comments', noCommentsRule, {
     },
     {
       code: '// detached reason\n\n// oxlint-disable-next-line no-console\nconsole.log(1)\n',
-      errors: [{ line: 1, message: /ADR 0019/ }],
+      errors: [
+        { line: 1, message: /ADR 0019/ },
+        { line: 3, message: /ADR 0019/ },
+      ],
     },
     {
       code: 'const first = 1 // trailing comment\n// oxlint-disable-next-line no-console\nconsole.log(first)\n',
-      errors: [{ line: 1, message: /ADR 0019/ }],
+      errors: [
+        { line: 1, message: /ADR 0019/ },
+        { line: 2, message: /ADR 0019/ },
+      ],
     },
     {
       code: '//\n// oxlint-disable-next-line no-console\nconsole.log(1)\n',
-      errors: [{ line: 1, message: /ADR 0019/ }],
+      errors: [
+        { line: 1, message: /ADR 0019/ },
+        { line: 2, message: /ADR 0019/ },
+      ],
     },
   ],
   valid: [
@@ -56,7 +73,7 @@ tester.run('no-comments', noCommentsRule, {
       code: '// Constant inlined because DDL takes no parameters.\n// fallow-ignore-next-line security-sink\nconst fragment = "x"\n',
     },
     {
-      code: '// @ts-expect-error branded id mismatch verified by typecheck\nconst value: number = "x"\n',
+      code: '// The assignment exercises the branded ID check.\n// @ts-expect-error branded id mismatch verified by typecheck\nconst value: number = "x"\n',
       filename: 'sample.ts',
     },
     {

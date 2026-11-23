@@ -17,5 +17,5 @@ export const getSession = createServerFn({ method: 'GET' }).handler(async (): Pr
 })
 
 export const isPrerendering = createIsomorphicFn()
-  .server((): boolean => getRequestHeaders().has('x-nitro-prerender'))
+  .server((): boolean => import.meta.prerender === true)
   .client((): boolean => false)

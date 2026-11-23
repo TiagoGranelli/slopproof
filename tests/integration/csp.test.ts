@@ -47,6 +47,17 @@ describe('content security policy', () => {
     expect(again).not.toContain(nonce!)
   })
 
+  it('keeps nonce-based CSP on a live request carrying Nitro’s prerender header', async () => {
+    const res = await fetch(`${appUrl}/`, { headers: { 'x-nitro-prerender': '1' } })
+    expect(res.status).toBe(200)
+    const csp = res.headers.get('content-security-policy') ?? ''
+    const nonce = csp.match(/'nonce-([0-9a-f]{32})'/)?.[1]
+    expect(nonce).toBeDefined()
+    expect(directive(csp, 'script-src')).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"])
+    expect(directive(csp, 'style-src')).toEqual(["'self'", `'nonce-${nonce}'`])
+    expect(await res.text()).toContain(`property="csp-nonce" content="${nonce}"`)
+  })
+
   it('gives signed-in SSR pages the nonce policy too', async () => {
     const cookie = await signIn(sharedUsers.author, nextIp())
     const res = await fetch(`${appUrl}/dashboard`, { headers: { cookie } })

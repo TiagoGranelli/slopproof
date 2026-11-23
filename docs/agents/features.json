@@ -200,6 +200,7 @@
       "tests/unit/truncate-text.test.ts",
       "tests/api/posts.test.ts",
       "tests/api/posts-validation.test.ts",
+      "tests/component/dashboard-posts.test.tsx",
       "tests/component/post-composer.test.tsx",
       "tests/component/my-post.test.tsx",
       "tests/component/post-editor-properties.test.tsx",
@@ -212,7 +213,7 @@
       "specs/KeysetPagination.tla",
       "tests/bombadil/app.ts"
     ],
-    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands post-editor-machine stored-text truncate-text posts.test posts-validation post-composer my-post post-editor-properties delete-post"
+    "verify": "pnpm exec vitest run --project unit --project api --project component id-brands post-editor-machine stored-text truncate-text posts.test posts-validation dashboard-posts post-composer my-post post-editor-properties delete-post"
   },
   {
     "apiOperations": [],

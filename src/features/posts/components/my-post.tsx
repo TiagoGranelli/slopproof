@@ -36,7 +36,7 @@ export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; 
   return (
     <Suspense fallback={<PostCard busy post={post} />}>
       {isPostEditorOpen(editor) ? (
-        <EditPostForm dispatch={dispatch} onUpdated={props.onUpdated} post={post} state={editor} />
+        <EditPostForm dispatch={dispatch} key={post.id} onUpdated={props.onUpdated} post={post} state={editor} />
       ) : (
         <PostCard
           actions={

@@ -1,5 +1,6 @@
 import { revalidateLogic, useForm } from '@tanstack/react-form'
-import type { Dispatch } from 'react'
+import { useCallback, useRef } from 'react'
+import type { Dispatch, RefObject } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { CharacterCount, isTooLong } from '#/components/form/character-count.tsx'
 import { FieldError } from '#/components/form/field-error.tsx'
@@ -23,27 +24,28 @@ interface EditPostProps {
   readonly state: OpenPostEditorState
 }
 
-function useEditPost(props: EditPostProps) {
-  const update = useUpdatePost()
-  const form = useForm({
+function useEditPost(props: EditPostProps, fieldRef: RefObject<HTMLTextAreaElement | null>) {
+  const update = useUpdatePost({
+    mutationConfig: {
+      onSuccess: (updated) => {
+        if (fieldRef.current) {
+          props.dispatch({ body: updated.body, type: 'SAVE_SUCCEEDED' })
+          props.onUpdated?.()
+        }
+      },
+    },
+  })
+  return useForm({
     defaultValues: { body: props.state.draft },
-    onSubmit: ({ value }) => {
+    onSubmit: ({ value }) =>
       update.mutate(
         { body: postDraftSchema.decode(value), path: { id: props.post.id } },
-        {
-          onError: (error) => props.dispatch({ error: classifyPostSaveError(error), type: 'SAVE_FAILED' }),
-          onSuccess: (updated) => {
-            props.dispatch({ body: updated.body, type: 'SAVE_SUCCEEDED' })
-            props.onUpdated?.()
-          },
-        },
-      )
-    },
+        { onError: (error) => props.dispatch({ error: classifyPostSaveError(error), type: 'SAVE_FAILED' }) },
+      ),
     onSubmitInvalid: () => props.dispatch({ type: 'VALIDATION_FAILED' }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
   })
-  return form
 }
 
 function EditPostActions(props: { countId: string; draft: string; onCancel: () => void; saving: boolean }) {
@@ -111,7 +113,16 @@ const submitEditForm = async (
 
 export function EditPostForm(props: EditPostProps) {
   const { dispatch, post, state } = props
-  const form = useEditPost(props)
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+  const attachField = useCallback((field: HTMLTextAreaElement | null) => {
+    fieldRef.current = field
+    focusAtEnd(field)
+  }, [])
+  const cancel = () => {
+    fieldRef.current = null
+    dispatch({ type: 'CANCEL' })
+  }
+  const form = useEditPost(props, fieldRef)
   const fieldId = `edit-post-${post.id}`
   const saving = state.status === 'saving'
   const { formError, schemaError, serverIssue } = editorErrors(state)
@@ -157,18 +168,13 @@ export function EditPostForm(props: EditPostProps) {
                       return
                     }
                     event.preventDefault()
-                    dispatch({ type: 'CANCEL' })
+                    cancel()
                   }}
-                  ref={focusAtEnd}
+                  ref={attachField}
                   required
                   value={draft}
                 />
-                <EditPostActions
-                  countId={`${fieldId}-count`}
-                  draft={draft}
-                  onCancel={() => dispatch({ type: 'CANCEL' })}
-                  saving={saving}
-                />
+                <EditPostActions countId={`${fieldId}-count`} draft={draft} onCancel={cancel} saving={saving} />
                 <FieldError id={`${fieldId}-error`} message={error} />
               </>
             )

@@ -39,7 +39,7 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
     if (view.status === 'loading' || view.status === 'exhausted') {
       return
     }
-    dispatch({ type: 'LOAD_MORE' })
+    dispatch({ snapshot, type: 'LOAD_MORE' })
     const fetched = await pages.fetchNextPage()
     if (fetched.isError) {
       dispatch({ error: fetched.error, type: 'LOAD_FAILED' })

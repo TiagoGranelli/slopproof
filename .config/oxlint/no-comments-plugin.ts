@@ -33,7 +33,7 @@ interface RepoPlugin {
 const DIRECTIVE_LINE =
   /^\s*(?:(?:oxlint|eslint)-disable(?:-next-line|-line)?\b|fallow-ignore-(?:next-line|file)\b|@ts-expect-error\b|@effect-diagnostics\b|v8 ignore\b|oxfmt-ignore\b|\/\s*<reference\b)/
 const NEXT_LINE_DIRECTIVE =
-  /^\s*(?:(?:oxlint|eslint)-disable-next-line\b|fallow-ignore-next-line\b|@effect-diagnostics\b|v8 ignore\b|oxfmt-ignore\b)/
+  /^\s*(?:(?:oxlint|eslint)-disable-next-line\b|fallow-ignore-next-line\b|@ts-expect-error\b|@effect-diagnostics\b|v8 ignore\b|oxfmt-ignore\b)/
 const DIRECTIVE_BLOCK =
   /^\s*(?:(?:oxlint|eslint)-disable\b|v8 ignore\b|@vite-ignore\b)|@effect-(?:expect-leaking|diagnostics)\b/
 
@@ -48,7 +48,7 @@ const isDirective = (comment: SourceComment): boolean => {
 }
 
 const isNextLineDirective = (comment: SourceComment | undefined): comment is SourceComment =>
-  comment?.type === 'Line' && NEXT_LINE_DIRECTIVE.test(comment.value)
+  comment !== undefined && isDirective(comment) && NEXT_LINE_DIRECTIVE.test(comment.value)
 
 const isStandaloneLine = (comment: SourceComment, lines: ReadonlyArray<string>): boolean => {
   const line = lines[comment.loc.start.line - 1] ?? ''
@@ -61,6 +61,7 @@ const isReasonForNextDirective = (
   lines: ReadonlyArray<string>,
 ): boolean =>
   comment.type === 'Line' &&
+  !isDirective(comment) &&
   comment.value.trim().length > 0 &&
   isStandaloneLine(comment, lines) &&
   isNextLineDirective(next) &&
@@ -68,9 +69,14 @@ const isReasonForNextDirective = (
 
 const isAllowedComment = (
   comment: SourceComment,
-  next: SourceComment | undefined,
+  adjacent: { next: SourceComment | undefined; previous: SourceComment | undefined },
   lines: ReadonlyArray<string>,
-): boolean => isDirective(comment) || isReasonForNextDirective(comment, next, lines)
+): boolean => {
+  if (isNextLineDirective(comment)) {
+    return adjacent.previous !== undefined && isReasonForNextDirective(adjacent.previous, comment, lines)
+  }
+  return isDirective(comment) || isReasonForNextDirective(comment, adjacent.next, lines)
+}
 
 export const noCommentsRule: NoCommentsRule = {
   create(context) {
@@ -79,7 +85,8 @@ export const noCommentsRule: NoCommentsRule = {
         const comments = context.sourceCode.getAllComments()
         const { lines } = context.sourceCode
         for (const [index, comment] of comments.entries()) {
-          if (!isAllowedComment(comment, comments[index + 1], lines)) {
+          const adjacent = { next: comments[index + 1], previous: comments[index - 1] }
+          if (!isAllowedComment(comment, adjacent, lines)) {
             context.report({ loc: comment.loc, message: MESSAGE })
           }
         }

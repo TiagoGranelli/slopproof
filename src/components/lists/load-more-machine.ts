@@ -10,7 +10,7 @@ export type LoadMoreState =
   | { readonly focusIndex: number | null; readonly loadedCount: number; readonly status: 'exhausted' }
 
 export type LoadMoreEvent =
-  | { readonly type: 'LOAD_MORE' }
+  | { readonly snapshot: LoadMoreSnapshot; readonly type: 'LOAD_MORE' }
   | { readonly addedCount: number; readonly hasNextPage: boolean; readonly type: 'LOAD_SUCCEEDED' }
   | { readonly error: unknown; readonly type: 'LOAD_FAILED' }
   | { readonly type: 'FOCUS_APPLIED' }
@@ -110,7 +110,8 @@ const transitionExhausted = (
   }
 }
 
-export const transitionLoadMore = (state: LoadMoreState, event: LoadMoreEvent): LoadMoreState => {
+export const transitionLoadMore = (current: LoadMoreState, event: LoadMoreEvent): LoadMoreState => {
+  const state = event.type === 'LOAD_MORE' ? reconcileLoadMoreState(current, event.snapshot) : current
   switch (state.status) {
     case 'idle':
       return transitionIdle(state, event)
