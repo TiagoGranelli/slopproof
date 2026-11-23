@@ -44,7 +44,14 @@ export function MyPost(props: { onDeleted?: () => void; onUpdated?: () => void; 
               <Button
                 aria-disabled={remove.isPending || undefined}
                 onClick={() =>
-                  startTransition(() => dispatch({ canEdit: !remove.isPending, savedBody: post.body, type: 'OPEN' }))
+                  startTransition(() =>
+                    dispatch({
+                      canEdit: !remove.isPending,
+                      savedBody: post.body,
+                      session: Symbol('post editor session'),
+                      type: 'OPEN',
+                    }),
+                  )
                 }
                 onFocus={preloadEditor}
                 onPointerEnter={preloadEditor}

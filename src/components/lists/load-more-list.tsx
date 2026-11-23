@@ -3,15 +3,15 @@ import { useReducer } from 'react'
 import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import {
-  initialLoadMoreState,
-  reconcileLoadMoreState,
+  firstAppendedItemId,
+  INITIAL_LOAD_MORE_STATE,
   transitionLoadMore,
 } from '#/components/lists/load-more-machine.ts'
 import { Button } from '#/components/ui/button.tsx'
 
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  'data' | 'fetchNextPage' | 'hasNextPage'
+  'data' | 'error' | 'fetchNextPage' | 'hasNextPage' | 'isFetchingNextPage' | 'isFetchNextPageError'
 >
 
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
@@ -23,9 +23,8 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
 }) {
   const { noun, pages } = props
   const items = pages.data.pages.flatMap((page) => page.items)
-  const snapshot = { hasNextPage: pages.hasNextPage, itemCount: items.length }
-  const [machine, dispatch] = useReducer(transitionLoadMore, snapshot, initialLoadMoreState)
-  const view = reconcileLoadMoreState(machine, snapshot)
+  const [{ focusId }, dispatch] = useReducer(transitionLoadMore, INITIAL_LOAD_MORE_STATE)
+  const loading = pages.isFetchingNextPage
 
   const focusLoadedItem = (node: HTMLLIElement | null) => {
     if (!node) {
@@ -36,20 +35,14 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   }
 
   const loadMore = async () => {
-    if (view.status === 'loading' || view.status === 'exhausted') {
+    if (loading || !pages.hasNextPage) {
       return
     }
-    dispatch({ snapshot, type: 'LOAD_MORE' })
+    const request = Symbol('next page request')
+    dispatch({ request, type: 'LOAD_MORE' })
     const fetched = await pages.fetchNextPage()
-    if (fetched.isError) {
-      dispatch({ error: fetched.error, type: 'LOAD_FAILED' })
-      return
-    }
-    dispatch({
-      addedCount: fetched.data?.pages.at(-1)?.items.length ?? 0,
-      hasNextPage: fetched.hasNextPage,
-      type: 'LOAD_SUCCEEDED',
-    })
+    const appendedId = fetched.isSuccess ? firstAppendedItemId(pages.data.pages.length, fetched.data.pages) : null
+    dispatch({ focusId: appendedId, request, type: 'LOAD_FINISHED' })
   }
 
   if (items.length === 0) {
@@ -60,24 +53,21 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
     )
   }
 
-  const focusIndex = view.status === 'idle' || view.status === 'exhausted' ? view.focusIndex : null
-  const loading = view.status === 'loading'
-
   return (
     <div className="grid gap-3">
       <ul className="grid gap-3" data-testid={props.testId}>
-        {items.map((entry, index) => (
+        {items.map((entry) => (
           <li
             className="rounded-xl"
             key={entry.id}
-            ref={index === focusIndex ? focusLoadedItem : undefined}
+            ref={entry.id === focusId ? focusLoadedItem : undefined}
             tabIndex={-1}
           >
             {props.renderItem(entry)}
           </li>
         ))}
       </ul>
-      {view.status !== 'exhausted' ? (
+      {pages.hasNextPage ? (
         <Button
           aria-disabled={loading || undefined}
           className="justify-self-center"
@@ -88,7 +78,9 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
           {loading ? `Loading more ${noun}…` : `Load more ${noun}`}
         </Button>
       ) : null}
-      {view.status === 'error' ? <ApiErrorAlert action={`load more ${noun}`} error={view.error} /> : null}
+      {!loading && pages.isFetchNextPageError ? (
+        <ApiErrorAlert action={`load more ${noun}`} error={pages.error} />
+      ) : null}
     </div>
   )
 }

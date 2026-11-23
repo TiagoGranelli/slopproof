@@ -16,6 +16,7 @@ interface EditorModel {
   focusTarget: 'edit-button' | 'none'
   inFlightSaves: number
   savedBody: string
+  session: symbol
   status: PostEditorState['status']
 }
 
@@ -37,6 +38,7 @@ const assertEditorInvariants = (model: EditorModel, real: EditorReal) => {
   } else {
     expect(state.draft).toBe(model.draft)
     expect(state.savedBody).toBe(model.savedBody)
+    expect(state.session).toBe(model.session)
   }
 }
 
@@ -51,9 +53,11 @@ class OpenCommand implements fc.Command<EditorModel, EditorReal> {
   }
   check = () => true
   run(model: EditorModel, real: EditorReal) {
-    applyEvent(real, { canEdit: this.canEdit, savedBody: model.savedBody, type: 'OPEN' })
+    const session = Symbol('post editor session')
+    applyEvent(real, { canEdit: this.canEdit, savedBody: model.savedBody, session, type: 'OPEN' })
     if ((model.status === 'viewing' || model.status === 'cancelled') && this.canEdit) {
       model.status = 'editing'
+      model.session = session
       model.draft = model.savedBody
       model.error = null
       model.focusInvalid = false
@@ -101,7 +105,7 @@ class SubmitCommand implements fc.Command<EditorModel, EditorReal> {
 class ValidationFailedCommand implements fc.Command<EditorModel, EditorReal> {
   check = () => true
   run(model: EditorModel, real: EditorReal) {
-    applyEvent(real, { type: 'VALIDATION_FAILED' })
+    applyEvent(real, { session: model.session, type: 'VALIDATION_FAILED' })
     if (model.status === 'saving') {
       model.status = 'editing'
       model.inFlightSaves = 0
@@ -119,7 +123,7 @@ class SaveSucceededCommand implements fc.Command<EditorModel, EditorReal> {
   }
   check = () => true
   run(model: EditorModel, real: EditorReal) {
-    applyEvent(real, { body: this.saved, type: 'SAVE_SUCCEEDED' })
+    applyEvent(real, { body: this.saved, session: model.session, type: 'SAVE_SUCCEEDED' })
     if (model.status === 'saving') {
       model.status = 'viewing'
       model.savedBody = this.saved
@@ -138,7 +142,7 @@ class SaveFailedCommand implements fc.Command<EditorModel, EditorReal> {
   }
   check = () => true
   run(model: EditorModel, real: EditorReal) {
-    applyEvent(real, { error: this.error, type: 'SAVE_FAILED' })
+    applyEvent(real, { error: this.error, session: model.session, type: 'SAVE_FAILED' })
     if (model.status === 'saving') {
       model.status = 'save-failed'
       model.inFlightSaves = 0
@@ -218,12 +222,14 @@ describe('post-editor-machine', () => {
     const blocked = transitionPostEditor(INITIAL_POST_EDITOR_STATE, {
       canEdit: false,
       savedBody: 'original',
+      session: Symbol('post editor session'),
       type: 'OPEN',
     })
     expect(blocked).toEqual(INITIAL_POST_EDITOR_STATE)
     const opened = transitionPostEditor(INITIAL_POST_EDITOR_STATE, {
       canEdit: true,
       savedBody: 'original',
+      session: Symbol('post editor session'),
       type: 'OPEN',
     })
     const edited = transitionPostEditor(opened, { draft: 'discarded', type: 'DRAFT_CHANGED' })
@@ -236,28 +242,58 @@ describe('post-editor-machine', () => {
 
   it('handles every state and event pair deterministically', () => {
     const sampleError: PostEditorError = { kind: 'field', message: 'Too long.' }
+    const session = Symbol('post editor session')
     const states: Array<PostEditorState> = [
       INITIAL_POST_EDITOR_STATE,
       { focusTarget: 'edit-button', status: 'viewing' },
       { focusTarget: 'edit-button', restoredBody: 'saved', status: 'cancelled' },
-      { draft: 'draft', focusInvalid: false, savedBody: 'saved', status: 'editing' },
-      { draft: 'draft', focusInvalid: true, savedBody: 'saved', status: 'editing' },
-      { draft: 'draft', savedBody: 'saved', status: 'saving' },
-      { draft: 'draft', error: sampleError, savedBody: 'saved', status: 'save-failed' },
+      { draft: 'draft', focusInvalid: false, savedBody: 'saved', session, status: 'editing' },
+      { draft: 'draft', focusInvalid: true, savedBody: 'saved', session, status: 'editing' },
+      { draft: 'draft', savedBody: 'saved', session, status: 'saving' },
+      { draft: 'draft', error: sampleError, savedBody: 'saved', session, status: 'save-failed' },
     ]
     const events: Array<PostEditorEvent> = [
-      { canEdit: true, savedBody: 'saved', type: 'OPEN' },
-      { canEdit: false, savedBody: 'saved', type: 'OPEN' },
+      { canEdit: true, savedBody: 'saved', session, type: 'OPEN' },
+      { canEdit: false, savedBody: 'saved', session, type: 'OPEN' },
       { draft: 'revised', type: 'DRAFT_CHANGED' },
       { type: 'SUBMIT' },
-      { type: 'VALIDATION_FAILED' },
-      { body: 'revised', type: 'SAVE_SUCCEEDED' },
-      { error: sampleError, type: 'SAVE_FAILED' },
+      { session, type: 'VALIDATION_FAILED' },
+      { body: 'revised', session, type: 'SAVE_SUCCEEDED' },
+      { error: sampleError, session, type: 'SAVE_FAILED' },
       { type: 'CANCEL' },
       { type: 'FOCUS_RETURNED' },
     ]
     const outcomes = states.flatMap((state) => events.map((event) => transitionPostEditor(state, event)))
     expect(outcomes).toHaveLength(states.length * events.length)
+  })
+
+  it('ignores every late outcome from a cancelled editor while its replacement saves', () => {
+    fc.assert(
+      fc.property(fc.string(), errorArbitrary, (savedBody, error) => {
+        const cancelledSession = Symbol('post editor session')
+        const session = Symbol('post editor session')
+        const opened = transitionPostEditor(INITIAL_POST_EDITOR_STATE, {
+          canEdit: true,
+          savedBody,
+          session: cancelledSession,
+          type: 'OPEN',
+        })
+        const firstSave = transitionPostEditor(opened, { type: 'SUBMIT' })
+        const cancelled = transitionPostEditor(firstSave, { type: 'CANCEL' })
+        const reopened = transitionPostEditor(cancelled, { canEdit: true, savedBody, session, type: 'OPEN' })
+        const saving = transitionPostEditor(reopened, { type: 'SUBMIT' })
+        const stale: Array<PostEditorEvent> = [
+          { session: cancelledSession, type: 'VALIDATION_FAILED' },
+          { error, session: cancelledSession, type: 'SAVE_FAILED' },
+          { body: savedBody, session: cancelledSession, type: 'SAVE_SUCCEEDED' },
+        ]
+        expect(stale.map((event) => transitionPostEditor(saving, event))).toEqual([saving, saving, saving])
+        expect(transitionPostEditor(saving, { body: savedBody, session, type: 'SAVE_SUCCEEDED' })).toEqual({
+          focusTarget: 'edit-button',
+          status: 'viewing',
+        })
+      }),
+    )
   })
 
   it('preserves all invariants across arbitrary event sequences', () => {
@@ -270,6 +306,7 @@ describe('post-editor-machine', () => {
           focusTarget: 'none',
           inFlightSaves: 0,
           savedBody: initialBody,
+          session: Symbol('post editor session'),
           status: 'viewing',
         }
         const real: EditorReal = { state: INITIAL_POST_EDITOR_STATE }

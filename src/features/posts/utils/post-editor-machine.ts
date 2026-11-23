@@ -11,13 +11,15 @@ export type PostEditorState =
       readonly draft: string
       readonly focusInvalid: boolean
       readonly savedBody: string
+      readonly session: symbol
       readonly status: 'editing'
     }
-  | { readonly draft: string; readonly savedBody: string; readonly status: 'saving' }
+  | { readonly draft: string; readonly savedBody: string; readonly session: symbol; readonly status: 'saving' }
   | {
       readonly draft: string
       readonly error: PostEditorError
       readonly savedBody: string
+      readonly session: symbol
       readonly status: 'save-failed'
     }
   | { readonly focusTarget: 'edit-button'; readonly restoredBody: string; readonly status: 'cancelled' }
@@ -25,12 +27,12 @@ export type PostEditorState =
 export type OpenPostEditorState = Extract<PostEditorState, { readonly status: 'editing' | 'save-failed' | 'saving' }>
 
 export type PostEditorEvent =
-  | { readonly canEdit: boolean; readonly savedBody: string; readonly type: 'OPEN' }
+  | { readonly canEdit: boolean; readonly savedBody: string; readonly session: symbol; readonly type: 'OPEN' }
   | { readonly draft: string; readonly type: 'DRAFT_CHANGED' }
   | { readonly type: 'SUBMIT' }
-  | { readonly type: 'VALIDATION_FAILED' }
-  | { readonly body: string; readonly type: 'SAVE_SUCCEEDED' }
-  | { readonly error: PostEditorError; readonly type: 'SAVE_FAILED' }
+  | { readonly session: symbol; readonly type: 'VALIDATION_FAILED' }
+  | { readonly body: string; readonly session: symbol; readonly type: 'SAVE_SUCCEEDED' }
+  | { readonly error: PostEditorError; readonly session: symbol; readonly type: 'SAVE_FAILED' }
   | { readonly type: 'CANCEL' }
   | { readonly type: 'FOCUS_RETURNED' }
 
@@ -51,7 +53,15 @@ const openEditor = (
   event: Extract<PostEditorEvent, { readonly type: 'OPEN' }>,
   state: PostEditorState,
 ): PostEditorState =>
-  event.canEdit ? { draft: event.savedBody, focusInvalid: false, savedBody: event.savedBody, status: 'editing' } : state
+  event.canEdit
+    ? {
+        draft: event.savedBody,
+        focusInvalid: false,
+        savedBody: event.savedBody,
+        session: event.session,
+        status: 'editing',
+      }
+    : state
 
 const transitionViewing = (
   state: Extract<PostEditorState, { readonly status: 'viewing' }>,
@@ -99,7 +109,7 @@ const transitionEditing = (
     case 'DRAFT_CHANGED':
       return { ...state, draft: event.draft, focusInvalid: false }
     case 'SUBMIT':
-      return { draft: state.draft, savedBody: state.savedBody, status: 'saving' }
+      return { draft: state.draft, savedBody: state.savedBody, session: state.session, status: 'saving' }
     case 'CANCEL':
       return { focusTarget: 'edit-button', restoredBody: state.savedBody, status: 'cancelled' }
     case 'FOCUS_RETURNED':
@@ -112,19 +122,19 @@ const transitionEditing = (
   }
 }
 
-const transitionSaving = (
-  state: Extract<PostEditorState, { readonly status: 'saving' }>,
-  event: PostEditorEvent,
-): PostEditorState => {
+type SavingPostEditorState = Extract<PostEditorState, { readonly status: 'saving' }>
+
+const transitionSaving = (state: SavingPostEditorState, event: PostEditorEvent): PostEditorState => {
+  const { draft, savedBody, session } = state
   switch (event.type) {
     case 'VALIDATION_FAILED':
-      return { draft: state.draft, focusInvalid: true, savedBody: state.savedBody, status: 'editing' }
+      return { draft, focusInvalid: true, savedBody, session, status: 'editing' }
     case 'SAVE_SUCCEEDED':
       return { focusTarget: 'edit-button', status: 'viewing' }
     case 'SAVE_FAILED':
-      return { draft: state.draft, error: event.error, savedBody: state.savedBody, status: 'save-failed' }
+      return { draft, error: event.error, savedBody, session, status: 'save-failed' }
     case 'CANCEL':
-      return { focusTarget: 'edit-button', restoredBody: state.savedBody, status: 'cancelled' }
+      return { focusTarget: 'edit-button', restoredBody: savedBody, status: 'cancelled' }
     case 'DRAFT_CHANGED':
     case 'FOCUS_RETURNED':
     case 'OPEN':
@@ -141,7 +151,7 @@ const transitionSaveFailed = (
     case 'DRAFT_CHANGED':
       return { ...state, draft: event.draft }
     case 'SUBMIT':
-      return { draft: state.draft, savedBody: state.savedBody, status: 'saving' }
+      return { draft: state.draft, savedBody: state.savedBody, session: state.session, status: 'saving' }
     case 'CANCEL':
       return { focusTarget: 'edit-button', restoredBody: state.savedBody, status: 'cancelled' }
     case 'FOCUS_RETURNED':
@@ -154,6 +164,9 @@ const transitionSaveFailed = (
 }
 
 export const transitionPostEditor = (state: PostEditorState, event: PostEditorEvent): PostEditorState => {
+  if (event.type !== 'OPEN' && 'session' in event && (!isPostEditorOpen(state) || event.session !== state.session)) {
+    return state
+  }
   switch (state.status) {
     case 'viewing':
       return transitionViewing(state, event)

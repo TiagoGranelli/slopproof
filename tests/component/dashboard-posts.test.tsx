@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import { Route } from '#/routes/_authed/dashboard.tsx'
 import { api, held, listPage, post, worker } from './api-mocks.ts'
-import { pressAndKeepFocus, renderInApp } from './test-utils.tsx'
+import { afterRendering, pressAndKeepFocus, renderInApp } from './test-utils.tsx'
 
 const renderDashboard = () => renderInApp(null, { route: { path: '/dashboard', route: Route }, url: '/dashboard' })
 const loadMore = () => page.getByRole('button', { name: /^Load(ing)? more posts/ })
@@ -42,6 +42,33 @@ const mockPublishingAcrossPageBoundary = () => {
     }),
   )
   return pendingFailure
+}
+
+const mockPublishingDuringLoad = () => {
+  const nextPage = held()
+  const refresh = held()
+  const refreshStarted = Promise.withResolvers<undefined>()
+  const firstPage = listPage([post({ body: 'Newest post' })], 'older')
+  let published = false
+  worker.use(
+    api.myPostsCreate(() => {
+      published = true
+      return HttpResponse.json(post({ body: 'Just published' }))
+    }),
+    api.myPostsList(async ({ request }) => {
+      if (new URL(request.url).searchParams.has('cursor')) {
+        await nextPage.wait()
+        return HttpResponse.json(listPage([post({ body: 'Older post' })]))
+      }
+      if (published) {
+        refreshStarted.resolve(undefined)
+        await refresh.wait()
+        return HttpResponse.error()
+      }
+      return HttpResponse.json(firstPage)
+    }),
+  )
+  return { nextPage, refresh, refreshStarted: refreshStarted.promise }
 }
 
 const mockOverlappingSaves = (original: ReturnType<typeof post>) => {
@@ -84,6 +111,23 @@ describe('dashboard posts', () => {
     await expect.element(items().nth(20)).toMatchTextContent(/^Post 20/)
     await expect.element(items().nth(20)).toHaveFocus()
     await expect.element(loadMore()).not.toBeInTheDocument()
+  })
+
+  it('clears Load more when publishing cancels its request and keeps refresh failures out of it', async () => {
+    const { nextPage, refresh, refreshStarted } = mockPublishingDuringLoad()
+    const { queryClient } = await renderDashboard()
+    await pressAndKeepFocus(loadMore())
+    await publish('Just published')
+    await refreshStarted
+    await afterRendering()
+    expect.soft(loadMore().element().getAttribute('aria-disabled')).toBeNull()
+    refresh.release()
+    await expect.poll(() => queryClient.isFetching()).toBe(0)
+    await afterRendering()
+    expect.soft(page.getByRole('alert').elements()).toHaveLength(0)
+    await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
+    await expect.element(items().nth(0)).not.toHaveFocus()
+    nextPage.release()
   })
 
   it('announces the saved post and restores focus while the list is still refetching', async () => {

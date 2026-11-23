@@ -24,25 +24,41 @@ interface EditPostProps {
   readonly state: OpenPostEditorState
 }
 
-function useEditPost(props: EditPostProps, fieldRef: RefObject<HTMLTextAreaElement | null>) {
-  const update = useUpdatePost({
+function useEditPostMutation(props: EditPostProps, fieldRef: RefObject<HTMLTextAreaElement | null>) {
+  const {
+    dispatch,
+    onUpdated,
+    state: { session },
+  } = props
+  return useUpdatePost({
     mutationConfig: {
       onSuccess: (updated) => {
         if (fieldRef.current) {
-          props.dispatch({ body: updated.body, type: 'SAVE_SUCCEEDED' })
-          props.onUpdated?.()
+          dispatch({ body: updated.body, session, type: 'SAVE_SUCCEEDED' })
+          onUpdated?.()
         }
       },
     },
   })
+}
+
+function useEditPost(props: EditPostProps, fieldRef: RefObject<HTMLTextAreaElement | null>) {
+  const {
+    dispatch,
+    post,
+    state: { draft, session },
+  } = props
+  const update = useEditPostMutation(props, fieldRef)
+  const saveFailed = (error: unknown) =>
+    fieldRef.current && dispatch({ error: classifyPostSaveError(error), session, type: 'SAVE_FAILED' })
   return useForm({
-    defaultValues: { body: props.state.draft },
-    onSubmit: ({ value }) =>
-      update.mutate(
-        { body: postDraftSchema.decode(value), path: { id: props.post.id } },
-        { onError: (error) => props.dispatch({ error: classifyPostSaveError(error), type: 'SAVE_FAILED' }) },
-      ),
-    onSubmitInvalid: () => props.dispatch({ type: 'VALIDATION_FAILED' }),
+    defaultValues: { body: draft },
+    onSubmit: ({ value }) => {
+      if (fieldRef.current) {
+        update.mutate({ body: postDraftSchema.decode(value), path: { id: post.id } }, { onError: saveFailed })
+      }
+    },
+    onSubmitInvalid: () => fieldRef.current && dispatch({ session, type: 'VALIDATION_FAILED' }),
     validationLogic: revalidateLogic(),
     validators: { onDynamic: postDraftSchema.validator },
   })
@@ -94,9 +110,10 @@ const focusInvalidField = (dispatch: Dispatch<PostEditorEvent>) => (element: HTM
 const submitEditForm = async (
   dispatch: Dispatch<PostEditorEvent>,
   form: { handleSubmit: () => Promise<void> },
-  saving: boolean,
+  editor: { fieldRef: RefObject<HTMLTextAreaElement | null>; state: OpenPostEditorState },
 ) => {
-  if (saving) {
+  const isActive = () => editor.fieldRef.current !== null
+  if (editor.state.status === 'saving' || !isActive()) {
     return
   }
   dispatch({ type: 'SUBMIT' })
@@ -104,8 +121,15 @@ const submitEditForm = async (
     .load()
     .then(() => true)
     .catch(() => false)
+  if (!isActive()) {
+    return
+  }
   if (!loaded) {
-    dispatch({ error: { kind: 'schema', message: SCHEMA_LOAD_FAILED }, type: 'SAVE_FAILED' })
+    dispatch({
+      error: { kind: 'schema', message: SCHEMA_LOAD_FAILED },
+      session: editor.state.session,
+      type: 'SAVE_FAILED',
+    })
     return
   }
   await form.handleSubmit()
@@ -135,7 +159,7 @@ export function EditPostForm(props: EditPostProps) {
         noValidate
         onSubmit={(event) => {
           event.preventDefault()
-          void submitEditForm(dispatch, form, saving)
+          void submitEditForm(dispatch, form, { fieldRef, state })
         }}
         ref={state.status === 'editing' && state.focusInvalid ? focusInvalidField(dispatch) : undefined}
         {...loadOnInteraction(postDraftSchema)}
