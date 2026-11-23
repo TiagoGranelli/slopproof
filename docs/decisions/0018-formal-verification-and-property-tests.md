@@ -28,8 +28,8 @@ testing.
 
 ### 1. Explicit UI state charts as plain typed transition tables
 
-Model each stateful UI flow as a pure discriminated-union state machine next to its feature and make it the
-component's single source of truth via React's `useReducer` (zero parallel booleans, zero effects or timers):
+Model UI transitions with pure reducers next to their features. React's `useReducer` owns local transitions,
+and React Query owns fetch state. These flows use no effects or timers.
 
 - **Post editor** (`src/features/posts/utils/post-editor-machine.ts`): `viewing`, `editing`, `saving`,
   `save-failed`, `cancelled` (with explicit `focusTarget` and `restoredBody`). Owned by `MyPost`, passed to
@@ -41,15 +41,15 @@ component's single source of truth via React's `useReducer` (zero parallel boole
   `useAuthFormController` in `src/features/auth/components/auth-form.tsx` and used by all eight account forms
   (`LoginForm`, `SignUpForm`, `ForgotPasswordForm`, `ResetPasswordForm`, `ChangePasswordForm`,
   `DeleteAccountForm`, `VerifyEmailForm`, `ResendVerificationForm`).
-- **Load-more pagination** (`src/components/lists/load-more-machine.ts`): `idle`, `loading`, `error`,
-  `exhausted` (with bounds-checked `focusIndex` for the first new item and pure render-time reconciliation for
-  external query updates). Used by `LoadMoreList`.
+- **Load-more pagination** (`src/components/lists/load-more-machine.ts`). React Query's next-page busy and error
+  flags drive button feedback. The reducer tracks the current request token and the ID of the first item in an
+  appended page, so a superseded request cannot move focus. A click during a refresh shows the busy label and
+  joins the refresh. If the refresh succeeds without appending a page and more pages remain, pagination uses
+  the refreshed cursor. A refresh failure leaves the button available and does not surface a Load more error.
 
-We chose plain typed transition tables over XState v5 (`xstate`): the flows have 4–6 flat states with no
-hierarchical/parallel actors or spawned services, plain tables add zero production dependencies and zero client
-bundle bytes (preserving the Lighthouse mobile 100 bar of ADR 0011), exhaustiveness is enforced by TypeScript +
-`typescript/switch-exhaustiveness-check`, and all three machines sit in `COVERAGE_GATE` (`vitest.config.ts`) at
-100% lines and branches.
+We chose plain typed reducers over XState v5 (`xstate`). The flows have flat state and add no production
+dependencies. TypeScript and `typescript/switch-exhaustiveness-check` enforce exhaustiveness, and all three
+reducers sit in `COVERAGE_GATE` (`vitest.config.ts`) at 100% lines and branches.
 
 ### 2. Model-based property tests in `pnpm check`
 

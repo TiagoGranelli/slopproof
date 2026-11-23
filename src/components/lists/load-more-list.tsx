@@ -1,5 +1,5 @@
 import type { InfiniteData, UseSuspenseInfiniteQueryResult } from '@tanstack/react-query'
-import { useReducer } from 'react'
+import { useReducer, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import {
@@ -11,8 +11,24 @@ import { Button } from '#/components/ui/button.tsx'
 
 type Pages<Item> = Pick<
   UseSuspenseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<Item> }>, unknown>,
-  'data' | 'error' | 'fetchNextPage' | 'hasNextPage' | 'isFetchingNextPage' | 'isFetchNextPageError'
+  'data' | 'error' | 'fetchNextPage' | 'hasNextPage' | 'isFetchingNextPage' | 'isFetchNextPageError' | 'isRefetching'
 >
+
+const focusAfterFetch = async <Item extends { readonly id: string }>(
+  previousPageCount: number,
+  fetched: Awaited<ReturnType<Pages<Item>['fetchNextPage']>>,
+  joinedRefresh: boolean,
+) => {
+  if (!fetched.isSuccess) {
+    return null
+  }
+  const refreshedPageCount = fetched.data.pages.length
+  if (joinedRefresh && fetched.hasNextPage && refreshedPageCount <= previousPageCount) {
+    const appended = await fetched.fetchNextPage({ cancelRefetch: false })
+    return appended.isSuccess ? firstAppendedItemId(refreshedPageCount, appended.data.pages) : null
+  }
+  return firstAppendedItemId(previousPageCount, fetched.data.pages)
+}
 
 export function LoadMoreList<Item extends { readonly id: string }>(props: {
   empty: string
@@ -24,7 +40,8 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
   const { noun, pages } = props
   const items = pages.data.pages.flatMap((page) => page.items)
   const [{ focusId }, dispatch] = useReducer(transitionLoadMore, INITIAL_LOAD_MORE_STATE)
-  const loading = pages.isFetchingNextPage
+  const [waitingForRefresh, setWaitingForRefresh] = useState(false)
+  const loading = pages.isFetchingNextPage || waitingForRefresh
 
   const focusLoadedItem = (node: HTMLLIElement | null) => {
     if (!node) {
@@ -40,8 +57,15 @@ export function LoadMoreList<Item extends { readonly id: string }>(props: {
     }
     const request = Symbol('next page request')
     dispatch({ request, type: 'LOAD_MORE' })
-    const fetched = await pages.fetchNextPage()
-    const appendedId = fetched.isSuccess ? firstAppendedItemId(pages.data.pages.length, fetched.data.pages) : null
+    const refreshing = pages.isRefetching
+    if (refreshing) {
+      setWaitingForRefresh(true)
+    }
+    const fetched = await pages.fetchNextPage({ cancelRefetch: false })
+    if (refreshing) {
+      setWaitingForRefresh(false)
+    }
+    const appendedId = await focusAfterFetch(pages.data.pages.length, fetched, refreshing)
     dispatch({ focusId: appendedId, request, type: 'LOAD_FINISHED' })
   }
 

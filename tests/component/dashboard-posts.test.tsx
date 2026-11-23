@@ -44,31 +44,39 @@ const mockPublishingAcrossPageBoundary = () => {
   return pendingFailure
 }
 
-const mockPublishingDuringLoad = () => {
+const mockPublishingDuringLoad = (refreshSucceeds = false) => {
   const nextPage = held()
   const refresh = held()
+  const nextPageStarted = Promise.withResolvers<undefined>()
   const refreshStarted = Promise.withResolvers<undefined>()
-  const firstPage = listPage([post({ body: 'Newest post' })], 'older')
+  const firstPage = listPage([post({ body: 'Newest post' })], 'old-cursor')
+  const publishedPost = post({ body: 'Just published' })
+  const refreshedPage = listPage([publishedPost, ...firstPage.items], 'new-cursor')
   let published = false
   worker.use(
     api.myPostsCreate(() => {
       published = true
-      return HttpResponse.json(post({ body: 'Just published' }))
+      return HttpResponse.json(publishedPost)
     }),
     api.myPostsList(async ({ request }) => {
-      if (new URL(request.url).searchParams.has('cursor')) {
-        await nextPage.wait()
+      const cursor = new URL(request.url).searchParams.get('cursor')
+      if (cursor === 'new-cursor') {
         return HttpResponse.json(listPage([post({ body: 'Older post' })]))
+      }
+      if (cursor === 'old-cursor') {
+        nextPageStarted.resolve(undefined)
+        await nextPage.wait()
+        return HttpResponse.json(listPage([post({ body: 'Stale page' })]))
       }
       if (published) {
         refreshStarted.resolve(undefined)
         await refresh.wait()
-        return HttpResponse.error()
+        return refreshSucceeds ? HttpResponse.json(refreshedPage) : HttpResponse.error()
       }
       return HttpResponse.json(firstPage)
     }),
   )
-  return { nextPage, refresh, refreshStarted: refreshStarted.promise }
+  return { nextPage, nextPageStarted: nextPageStarted.promise, refresh, refreshStarted: refreshStarted.promise }
 }
 
 const mockOverlappingSaves = (original: ReturnType<typeof post>) => {
@@ -128,6 +136,23 @@ describe('dashboard posts', () => {
     await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
     await expect.element(items().nth(0)).not.toHaveFocus()
     nextPage.release()
+  })
+
+  it('waits for a publish refresh before loading more from the refreshed cursor', async () => {
+    const { nextPage, nextPageStarted, refresh, refreshStarted } = mockPublishingDuringLoad(true)
+    await renderDashboard()
+    await pressAndKeepFocus(loadMore())
+    await nextPageStarted
+    await publish('Just published')
+    await refreshStarted
+    await loadMore().click()
+    await expect.element(loadMore()).toHaveTextContent('Loading more posts…')
+    await expect.element(items().nth(0)).toMatchTextContent(/^Newest post/)
+    refresh.release()
+    nextPage.release()
+    await expect.element(items().nth(0)).toMatchTextContent(/^Just published/)
+    await expect.element(items().nth(2)).toMatchTextContent(/^Older post/)
+    await expect.element(items().nth(2)).toHaveFocus()
   })
 
   it('announces the saved post and restores focus while the list is still refetching', async () => {
