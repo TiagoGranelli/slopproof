@@ -1,6 +1,11 @@
-import { copyFileSync, existsSync, readFileSync, statfsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import lighthouse, { desktopConfig } from 'lighthouse'
+import type { Flags } from 'lighthouse'
 import { computeMedianRun } from 'lighthouse/core/lib/median-run.js'
-import { xSync } from 'tinyexec'
 import type { Json } from '#/contract/json.ts'
 import { median, REPORTED } from './lighthouse-policy.ts'
 import type { Category, FormFactor, Measured, Metric } from './lighthouse-policy.ts'
@@ -73,22 +78,115 @@ type LighthouseRun = {
   url: string
 }
 
-export const runLighthouse = (run: LighthouseRun): Lhr => {
-  const args = ['exec', 'lighthouse', run.url, '--output=json', '--output=html', `--output-path=${run.outputBase}`]
-    .concat([`--only-categories=${REPORTED.join(',')}`, `--chrome-flags=${run.chrome.flags.join(' ')}`, '--quiet'])
-    .concat(run.formFactor === 'desktop' ? ['--preset=desktop'] : [])
-    .concat(run.cookie ? [`--extra-headers=${JSON.stringify({ cookie: run.cookie })}`] : [])
-  const lighthouse = xSync('pnpm', args, {
-    nodeOptions: { env: { CHROME_PATH: run.chrome.path }, stdio: 'inherit' },
-    timeout: 180_000,
-  })
-  if (lighthouse.exitCode !== 0) {
-    throw new Error(
-      `lighthouse failed for ${run.url} (${run.formFactor}): exit ${lighthouse.exitCode ?? lighthouse.signalCode}, ` +
-        'expected 0 (its output is above)',
-    )
+const CHROME_QUIET_FLAGS = [
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-background-networking',
+  '--disable-default-apps',
+  '--disable-extensions',
+  '--disable-sync',
+  '--metrics-recording-only',
+  '--mute-audio',
+]
+
+const profileBaseDir = () => {
+  const dir = tmpdir()
+  return dir.length > 40 && existsSync('/tmp') ? '/tmp' : dir
+}
+
+const devToolsMatch = (text: string) => /DevTools listening on ws:\/\/[^/]+:(\d+)\//.exec(text)?.[1]
+
+const createPortSettler = (child: ChildProcess, reject: (reason: Error) => void) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const clear = (reason?: Error) => {
+    clearTimeout(timer)
+    child.removeAllListeners('error').removeAllListeners('exit')
+    child.stderr?.removeAllListeners('data')
+    if (reason) {
+      reject(reason)
+    }
   }
-  return JSON.parse(readFileSync(`${run.outputBase}.report.json`, 'utf8')) as Lhr
+  return {
+    arm: (ms: number, message: () => string) => {
+      timer = setTimeout(() => clear(new Error(message())), ms)
+    },
+    clear,
+  }
+}
+
+const readDevToolsPort = (child: ChildProcess): Promise<number> =>
+  new Promise((resolve, reject) => {
+    let stderr = ''
+    const { arm, clear } = createPortSettler(child, reject)
+    arm(30_000, () => `Chrome DevTools timed out: ${stderr.trim()}`)
+    child.once('error', clear)
+    child.once('exit', (code) => clear(new Error(`Chrome exited (${code}): ${stderr.trim()}`)))
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+      const found = devToolsMatch(stderr)
+      if (found) {
+        clear()
+        resolve(Number(found))
+      }
+    })
+  })
+
+const stopChrome = async (child: ChildProcess, profileDir: string) => {
+  if (child.exitCode === null && child.signalCode === null) {
+    const exited = new Promise<void>((done) => {
+      child.once('exit', () => done())
+    })
+    child.kill('SIGTERM')
+    const timer = setTimeout(() => child.kill('SIGKILL'), 5000)
+    await exited.finally(() => clearTimeout(timer))
+  }
+  rmSync(profileDir, { force: true, recursive: true })
+}
+
+const launchChrome = async (chrome: Chrome) => {
+  const baseDir = profileBaseDir()
+  const profileDir = mkdtempSync(join(baseDir, 'lh-'))
+  const flags = ['--remote-debugging-port=0', `--user-data-dir=${profileDir}`, ...CHROME_QUIET_FLAGS, ...chrome.flags]
+  const child = spawn(chrome.path, [...flags, 'about:blank'], {
+    env: { ...process.env, TMPDIR: baseDir },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  })
+  try {
+    const port = await readDevToolsPort(child)
+    return { port, stop: () => stopChrome(child, profileDir) }
+  } catch (error) {
+    await stopChrome(child, profileDir)
+    throw error
+  }
+}
+
+const writeReports = (outputBase: string, report: string | Array<string>): Lhr => {
+  const [json = '', html = ''] = Array.isArray(report) ? report : [report, '']
+  writeFileSync(`${outputBase}.report.json`, json)
+  writeFileSync(`${outputBase}.report.html`, html)
+  return JSON.parse(json) as Lhr
+}
+
+const lighthouseFlags = (run: LighthouseRun, port: number): Flags => ({
+  extraHeaders: run.cookie ? { cookie: run.cookie } : undefined,
+  logLevel: 'error',
+  onlyCategories: REPORTED,
+  output: ['json', 'html'],
+  port,
+})
+
+export const runLighthouse = async (run: LighthouseRun): Promise<Lhr> => {
+  const browser = await launchChrome(run.chrome)
+  const config = run.formFactor === 'desktop' ? desktopConfig : undefined
+  try {
+    const outcome = await lighthouse(run.url, lighthouseFlags(run, browser.port), config)
+    if (!outcome) {
+      throw new Error(`lighthouse returned nothing for ${run.url} (${run.formFactor})`)
+    }
+    return writeReports(run.outputBase, outcome.report)
+  } finally {
+    await browser.stop()
+  }
 }
 
 export const score = (lhr: Lhr, category: Category): number | null => {

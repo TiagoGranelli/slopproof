@@ -42,22 +42,41 @@ const run = (step: Step): StepOutcome => {
   }
 }
 
-if (process.argv.length > 2) {
+const CORE_STEPS = new Set(['api (recorded)', 'db', 'integration', 'contract coverage'])
+const UNDECLARED_STEP: Step = {
+  alone: 'pnpm verify:app -- --only=e2e',
+  command: () => [process.execPath, 'scripts/contract-coverage.ts', '--undeclared-only', ...serverLogs()],
+  name: 'contract coverage (undeclared)',
+}
+
+const selectSteps = (argv: Array<string>) => {
+  if (argv.length === 0) {
+    return STEPS
+  }
+  const [flag] = argv
+  if (argv.length === 1 && flag === '--only=core') {
+    return STEPS.filter((step) => CORE_STEPS.has(step.name))
+  }
+  if (argv.length === 1 && flag === '--only=e2e') {
+    return [...STEPS.filter((step) => step.name === 'e2e'), UNDECLARED_STEP]
+  }
   console.error(
-    `verify:app takes no arguments (got ${process.argv.slice(2).join(' ')}). For one layer or file, run its runner: ` +
-      '`pnpm test:db [filter]`, `pnpm test [filter]` or `pnpm test:e2e [filter]`.',
+    `verify:app takes --only=core, --only=e2e, or no arguments (got ${argv.join(' ')}). For one layer or file, ` +
+      'run its runner: `pnpm test:db [filter]`, `pnpm test [filter]` or `pnpm test:e2e [filter]`.',
   )
   process.exit(2)
 }
+
+const steps = selectSteps(process.argv.slice(2))
 rmSync(CONTRACT_OBSERVATIONS, { force: true, recursive: true })
 mkdirSync('test-results', { recursive: true })
 for (const log of serverLogs()) {
   rmSync(log)
 }
 
-const outcomes = STEPS.map((step) => run(step))
+const outcomes = steps.map((step) => run(step))
 console.log('')
 for (const { detail, name, ok } of outcomes) {
-  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(18)} ${detail}`)
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(28)} ${detail}`)
 }
 process.exitCode = outcomes.every((outcome) => outcome.ok) ? 0 : 1

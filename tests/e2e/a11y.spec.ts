@@ -2,6 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { expectAccessible } from './support/a11y.ts'
 import {
+  authenticate,
   dashboardWithMyPost,
   expect,
   failServerFunctionPosts,
@@ -22,12 +23,12 @@ const STATES = {
     await visit(page, '/about')
   },
   account: async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/account')
     await expect(page.getByTestId('sessions').getByRole('listitem')).not.toHaveCount(0)
   },
   'account, wrong current password': async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/account')
     await page.getByLabel('Current password').fill('not the password at all')
     await page.getByLabel('New password').fill(`pw-${crypto.randomUUID()}`)
@@ -35,7 +36,7 @@ const STATES = {
     await expect(page.getByLabel('Current password')).toHaveAttribute('aria-invalid', 'true')
   },
   'dashboard, composer over the limit': async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/dashboard')
     await page.getByLabel('New post').fill(overTheLimit)
     await expect(page.getByText('Over the 280-character limit.')).toBeAttached()
@@ -56,12 +57,12 @@ const STATES = {
     await expect(page.getByLabel('Edit post')).toBeFocused()
   },
   'dashboard, no posts yet': async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage() })
     await expect(page.getByText('You have not published anything yet.')).toBeVisible()
   },
   'dashboard, publish rejected': async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/dashboard')
     await page.getByLabel('New post').fill(overTheLimit)
     await page.getByRole('button', { name: 'Publish' }).click()

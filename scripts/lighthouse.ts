@@ -94,9 +94,10 @@ const signIn = async (appUrl: string, credentials: { email: string; password: st
 
 type Target = { chrome: Chrome; cookie: string | undefined; url: string }
 
-const measureRuns = (target: Target, page: Page, formFactor: FormFactor): Array<Lhr> =>
-  Array.from({ length: runs }, (_, index) => {
-    const lhr = runLighthouse({
+const measureRuns = async (target: Target, page: Page, formFactor: FormFactor): Promise<Array<Lhr>> => {
+  const lhrs: Array<Lhr> = []
+  for (let index = 0; index < runs; index++) {
+    const lhr = await runLighthouse({
       chrome: target.chrome,
       cookie: page.auth ? target.cookie : undefined,
       formFactor,
@@ -109,11 +110,13 @@ const measureRuns = (target: Target, page: Page, formFactor: FormFactor): Array<
     if (new URL(lhr.finalDisplayedUrl).pathname !== page.path) {
       throw new Error(`${page.name}: landed on ${lhr.finalDisplayedUrl}, expected the path ${page.path}`)
     }
-    return lhr
-  })
+    lhrs.push(lhr)
+  }
+  return lhrs
+}
 
-const measurePage = (target: Target, page: Page, formFactor: FormFactor): PageOutcome => {
-  const lhrs = measureRuns(target, page, formFactor)
+const measurePage = async (target: Target, page: Page, formFactor: FormFactor): Promise<PageOutcome> => {
+  const lhrs = await measureRuns(target, page, formFactor)
   const { metrics, perRun, scores } = summarizeRuns(lhrs)
   const { problems, verdict } = judge(page, { formFactor, performanceBar }, { metrics, perRun })
   const { medianLhr, medianRun } = keepMedianReport(lhrs, join(OUT, `${page.name}-${formFactor}`))
@@ -132,25 +135,35 @@ const measurePage = (target: Target, page: Page, formFactor: FormFactor): PageOu
   }
 }
 
+const warmPages = async (appUrl: string, cookie: string | undefined) => {
+  for (const page of pages) {
+    await fetch(appUrl + page.path, { headers: page.auth && cookie ? { cookie } : {} })
+  }
+}
+
+const measureAll = async (target: Target): Promise<Array<PageOutcome>> => {
+  const pageOutcomes: Array<PageOutcome> = []
+  for (const page of pages) {
+    for (const formFactor of formFactors) {
+      const outcome = await measurePage(target, page, formFactor)
+      console.log(progressLine(outcome))
+      pageOutcomes.push(outcome)
+    }
+  }
+  return pageOutcomes
+}
+
 const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<PageOutcome>> => {
   const flags = chromeFlags({ edgeCertificateSpki: app.edgeCertificateSpki, http1: protocol === 'h1' })
-  const through = direct ? ' (Node server, no edge)' : ` (edge in front of ${app.directUrl}, ${protocol})`
-  console.log(`measuring ${app.url}${through}`)
+  console.log(
+    `measuring ${app.url}${direct ? ' (Node server, no edge)' : ` (edge in front of ${app.directUrl}, ${protocol})`}`,
+  )
   await seedPosts(app.databaseUrl, app.user.email)
   const cookie = pages.some((page) => page.auth)
     ? await signIn(app.url, { email: app.user.email, password: app.user.password })
     : undefined
-  for (const page of pages) {
-    await fetch(app.url + page.path, { headers: page.auth && cookie ? { cookie } : {} })
-  }
-  const target = { chrome: { flags, path: chromePath }, cookie, url: app.url }
-  return pages.flatMap((page) =>
-    formFactors.map((formFactor) => {
-      const outcome = measurePage(target, page, formFactor)
-      console.log(progressLine(outcome))
-      return outcome
-    }),
-  )
+  await warmPages(app.url, cookie)
+  return measureAll({ chrome: { flags, path: chromePath }, cookie, url: app.url })
 }
 
 const chromePath = await findChromium()

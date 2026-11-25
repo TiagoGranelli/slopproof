@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
-import { dashboardWithMyPost, expect, expectHydrated, signIn, test, visit } from './support/app.ts'
+import { authenticate, dashboardWithMyPost, expect, expectHydrated, test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
@@ -38,7 +38,7 @@ test('SSR pages load every module and route chunk under the nonce policy', async
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled()
 
-  await signIn(page, author)
+  await authenticate(page, author)
   await visit(page, '/dashboard')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await navLink(page, APP_NAME).click()

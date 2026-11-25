@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { Client } from 'pg'
-import { xSync } from 'tinyexec'
+import { x } from 'tinyexec'
 import { dropTestDatabase, resetTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 if (existsSync('.env')) {
@@ -13,11 +13,11 @@ if (existsSync('.env')) {
 const SCHEMA = './src/server/db/schema/index.ts'
 const MIGRATIONS = 'drizzle'
 
-const pnpm = (args: Array<string>) => {
-  const run = xSync('pnpm', args, { nodeOptions: { stdio: ['ignore', 'pipe', 'pipe'] }, timeout: 120_000 })
-  const output = `${run.stdout}${run.stderr}`
-  if (run.exitCode !== 0) {
-    throw new Error(`pnpm ${args.join(' ')} failed (exit ${run.exitCode ?? run.signalCode}, expected 0)\n${output}`)
+const pnpm = async (args: Array<string>) => {
+  const outcome = await x('pnpm', args, { nodeOptions: { stdio: ['ignore', 'pipe', 'pipe'] }, timeout: 120_000 })
+  const output = `${outcome.stdout}${outcome.stderr}`
+  if (outcome.exitCode !== 0) {
+    throw new Error(`pnpm ${args.join(' ')} failed (exit ${outcome.exitCode ?? 'unknown'}, expected 0)\n${output}`)
   }
   return output
 }
@@ -26,7 +26,7 @@ const git = (args: Array<string>) => spawnSync('git', args, { encoding: 'utf8' }
 
 const checks = {
   async auth() {
-    const authCheck = xSync('pnpm', ['exec', 'auth', 'check', 'schema', '--config', 'src/server/auth.ts'], {
+    const authCheck = await x('pnpm', ['exec', 'auth', 'check', 'schema', '--config', 'src/server/auth.ts'], {
       nodeOptions: {
         env: {
           APP_URL: process.env.APP_URL || 'http://localhost:3000',
@@ -46,7 +46,7 @@ const checks = {
 
   async contract() {
     const before = git(['stash', 'create']).stdout.trim() || 'HEAD'
-    pnpm(['codegen'])
+    await pnpm(['codegen'])
     const diff = git(['diff', '--exit-code', '--stat', before, '--', 'openapi.json', 'src/sdk'])
     if (diff.status === 0) {
       return []
@@ -60,7 +60,7 @@ const checks = {
     try {
       const before = await fingerprint(url)
       const push = ['exec', 'drizzle-kit', 'push', '--dialect=postgresql', `--schema=${SCHEMA}`]
-      const output = pnpm([...push, `--url=${url}`, '--force'])
+      const output = await pnpm([...push, `--url=${url}`, '--force'])
       if (before === (await fingerprint(url))) {
         return []
       }
@@ -79,8 +79,8 @@ const checks = {
     try {
       cpSync(MIGRATIONS, dir, { recursive: true })
       const out = relative(process.cwd(), dir)
-      pnpm(['exec', 'drizzle-kit', 'generate', '--dialect=postgresql', `--schema=${SCHEMA}`, `--out=${out}`])
-      pnpm(['exec', 'drizzle-kit', 'check', '--dialect=postgresql', `--out=${MIGRATIONS}`])
+      await pnpm(['exec', 'drizzle-kit', 'generate', '--dialect=postgresql', `--schema=${SCHEMA}`, `--out=${out}`])
+      await pnpm(['exec', 'drizzle-kit', 'check', '--dialect=postgresql', `--out=${MIGRATIONS}`])
       const added = readdirSync(dir).filter((file) => !existsSync(join(MIGRATIONS, file)))
       return added.map((file) => `the schema needs ${file}: run \`pnpm db:generate --name <slug>\``)
     } finally {
@@ -121,25 +121,29 @@ if (unknown.length) {
   throw new Error(`unknown check(s): ${unknown.join(', ')}; expected any of ${Object.keys(checks).join(', ')}`)
 }
 
-const passes = async (name: CheckName): Promise<boolean> => {
+type CheckOutcome = { lines: Array<string>; ok: boolean }
+
+const runCheck = async (name: CheckName): Promise<CheckOutcome> => {
   try {
     const problems = await checks[name]()
     if (problems.length === 0) {
-      console.log(`ok    ${name}`)
-    } else {
-      console.error(`DRIFT ${name}\n${problems.map((p) => `  - ${p}`).join('\n')}`)
+      return { lines: [`ok    ${name}`], ok: true }
     }
-    return problems.length === 0
+    return { lines: [`DRIFT ${name}\n${problems.map((p) => `  - ${p}`).join('\n')}`], ok: false }
   } catch (error) {
-    console.error(`ERROR ${name}: ${error instanceof Error ? error.message : String(error)}`)
-    return false
+    return { lines: [`ERROR ${name}: ${error instanceof Error ? error.message : String(error)}`], ok: false }
   }
 }
 
-let failed = false
-for (const name of requested.length ? requested : (Object.keys(checks) as Array<CheckName>)) {
-  if (!(await passes(name))) {
-    failed = true
+const printOutcome = ({ lines, ok }: CheckOutcome) => {
+  for (const line of lines) {
+    ;(ok ? console.log : console.error)(line)
   }
 }
-process.exitCode = failed ? 1 : 0
+
+const selected = requested.length ? requested : (Object.keys(checks) as Array<CheckName>)
+const outcomes = await Promise.all(selected.map((name) => runCheck(name)))
+for (const outcome of outcomes) {
+  printOutcome(outcome)
+}
+process.exitCode = outcomes.every(({ ok }) => ok) ? 0 : 1

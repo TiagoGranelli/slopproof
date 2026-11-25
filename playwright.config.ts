@@ -35,7 +35,7 @@ const LOCAL_REPORTER = process.stdout.isTTY ? 'line' : 'dot'
 export default defineConfig({
   failOnFlakyTests: !!process.env.CI,
   forbidOnly: !!process.env.CI,
-  fullyParallel: false,
+  fullyParallel: true,
   globalSetup: './tests/e2e/global-setup.ts',
   outputDir: 'test-results/playwright',
   projects: [...setup, ...PROJECTS.filter((p) => names.includes(p.name))],
@@ -47,5 +47,7 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
   },
-  workers: Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2))),
+  workers: process.env.CI
+    ? Math.min(4, availableParallelism())
+    : Math.min(6, Math.max(2, Math.floor(availableParallelism() / 2))),
 })

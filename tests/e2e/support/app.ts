@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import type { APIRequestContext, Page, Route, TestInfo } from '@playwright/test'
+import type { APIRequestContext, Cookie, Page, Route, TestInfo } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { POST_MAX_LENGTH, POSTS_PAGE_DEFAULT } from '#/contract/limits.ts'
 import type { Post, PostPage } from '#/sdk/types.gen.ts'
@@ -34,11 +34,27 @@ export const createAuthor = async (name: string): Promise<Author> => {
 let clientCount = 0
 export const nextClientIp = (workerIndex: number) => `198.19.${workerIndex % 256}.${++clientCount % 256}`
 
+type WorkerSession = { cookieHeader: string; cookies: Array<Cookie> }
+const workerSessions = new WeakMap<Author, WorkerSession>()
+
 export const test = base.extend<object, { author: Author }>({
   author: [
-    // Playwright reads the fixtures a fixture uses from its first parameter, which must be a destructuring.
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, provide, workerInfo) => provide(await createAuthor(`E2E Author ${workerInfo.workerIndex}`)),
+    async ({ playwright }, provide, workerInfo) => {
+      const author = await createAuthor(`E2E Author ${workerInfo.workerIndex}`)
+      const api = await playwright.request.newContext({
+        baseURL: appUrl,
+        extraHTTPHeaders: { origin: appUrl, 'x-forwarded-for': nextClientIp(workerInfo.workerIndex) },
+      })
+      try {
+        await signIn(api, author)
+        const { cookies } = await api.storageState()
+        const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ')
+        workerSessions.set(author, { cookieHeader, cookies })
+      } finally {
+        await api.dispose()
+      }
+      await provide(author)
+    },
     { scope: 'worker' },
   ],
   context: async ({ context }, provide, testInfo) => {
@@ -86,6 +102,15 @@ export const signIn = async (client: Page | APIRequestContext, author: Author) =
   expect(res.status()).toBe(200)
 }
 
+export const authenticate = async (page: Page, author: Author) => {
+  const session = workerSessions.get(author)
+  if (session) {
+    await page.context().addCookies(session.cookies)
+    return
+  }
+  await signIn(page, author)
+}
+
 const abortPost = (route: Route) => (route.request().method() === 'POST' ? route.abort() : route.fallback())
 
 export const failServerFunctionPosts = async (page: Page) => {
@@ -94,8 +119,12 @@ export const failServerFunctionPosts = async (page: Page) => {
 }
 
 export const seedPost = async (request: APIRequestContext, author: Author, body = `seed ${crypto.randomUUID()}`) => {
-  await signIn(request, author)
-  const res = await request.post('/api/me/posts', { data: { body } })
+  const session = workerSessions.get(author)
+  const headers: Record<string, string> = session ? { cookie: session.cookieHeader } : {}
+  if (!session) {
+    await signIn(request, author)
+  }
+  const res = await request.post('/api/me/posts', { data: { body }, headers })
   expect(res.status()).toBe(201)
   return (await res.json()) as Post
 }
@@ -128,11 +157,11 @@ export const navigateWithApiResponse = async (
 }
 
 export const dashboardWithMyPost = async (page: Page, author: Author) => {
-  await signIn(page, author)
-  await visit(page, '/dashboard')
+  await authenticate(page, author)
   const body = `a11y post ${crypto.randomUUID()}`
-  await page.getByLabel('New post').fill(body)
-  await page.getByRole('button', { name: 'Publish' }).click()
+  const res = await page.request.post('/api/me/posts', { data: { body }, headers: { origin: appUrl } })
+  expect(res.status()).toBe(201)
+  await visit(page, '/dashboard')
   const post = page.getByTestId('my-posts').locator(':scope > li').filter({ hasText: body })
   await expect(post).toBeVisible()
   return { body, edit: post.getByRole('button', { name: /^Edit/ }), post }

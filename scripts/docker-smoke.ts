@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { dockerPrefix, IMAGES } from './images.ts'
 
@@ -55,15 +55,69 @@ const step = async <T>(name: string, run: () => T | Promise<T>): Promise<T> => {
   return value
 }
 
-const scanImage = () =>
-  spawnSync(
-    'docker',
-    ['run', '--rm', '--memory', '2g', '--volume', '/var/run/docker.sock:/var/run/docker.sock']
-      .concat(['--volume', `${GRYPE_DB}:/grype-db`, '--env', 'GRYPE_DB_CACHE_DIR=/grype-db'])
-      .concat(['--volume', `${resolve('.config/grype.yaml')}:/grype.yaml:ro`, IMAGES.grype, `docker:${IMAGE}`])
-      .concat(['--only-fixed', '--fail-on', 'high', '--config', '/grype.yaml']),
-    { stdio: 'inherit' },
-  ).status
+type ScanOutcome = { ms: number; output: string; status: number | null }
+type ActiveScan = { child: ReturnType<typeof spawn>; done: Promise<ScanOutcome> }
+
+const grypeDbMount = () => {
+  const dir = process.env.GRYPE_DB_DIR?.trim()
+  if (!dir) {
+    return GRYPE_DB
+  }
+  mkdirSync(dir, { recursive: true })
+  return resolve(dir)
+}
+
+const buildImage = () => {
+  if (process.env.DOCKER_BUILD_CACHE !== 'gha') {
+    compose(['build', 'migrate'])
+    return
+  }
+  const buildArgs = ['buildx', 'build', '--load', '--cache-from', 'type=gha,scope=app'].concat([
+    '--cache-to',
+    'type=gha,mode=max,scope=app',
+    '-t',
+    IMAGE,
+    '.',
+  ])
+  const buildx = spawnSync('docker', buildArgs, { stdio: 'inherit' })
+  if (buildx.status !== 0) {
+    throw new Error(`docker buildx build failed (exit ${buildx.status ?? buildx.signal}, expected 0)`)
+  }
+}
+
+const grypeArgs = () =>
+  ['run', '--rm', '--memory', '2g', '--volume', '/var/run/docker.sock:/var/run/docker.sock']
+    .concat(['--volume', `${grypeDbMount()}:/grype-db`, '--env', 'GRYPE_DB_CACHE_DIR=/grype-db'])
+    .concat(['--volume', `${resolve('.config/grype.yaml')}:/grype.yaml:ro`, IMAGES.grype, `docker:${IMAGE}`])
+    .concat(['--only-fixed', '--fail-on', 'high', '--config', '/grype.yaml'])
+
+const startScanImage = (): ActiveScan => {
+  const started = performance.now()
+  const child = spawn('docker', grypeArgs(), { stdio: ['ignore', 'pipe', 'pipe'] })
+  let output = ''
+  child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  const done = new Promise<ScanOutcome>((doneScan) => {
+    child.once('error', (error) =>
+      doneScan({ ms: performance.now() - started, output: `${output}\n${error.message}`, status: 1 }),
+    )
+    child.once('exit', (status) => doneScan({ ms: performance.now() - started, output, status }))
+  })
+  return { child, done }
+}
+
+const finishScan = async (scan: ActiveScan | undefined) => {
+  if (!scan) {
+    return 0
+  }
+  const { ms, output, status } = await scan.done
+  console.log('\n▶ scan the image for fixable vulnerabilities (grype)')
+  if (output.trim()) {
+    console.log(output.trimEnd())
+  }
+  console.log(`  done in ${(ms / 1000).toFixed(1)}s`)
+  return status
+}
 
 const appliedBy = (output: string) => {
   const last = JSON.parse(output.split('\n').at(-1) ?? '{}') as { applied?: number; msg?: string }
@@ -186,16 +240,18 @@ const cleanup = () => {
     spawnSync('docker', ['image', 'rm', IMAGE], { stdio: 'ignore' })
   }
 }
+
+let failed = false
+let scanStatus: number | null
+let activeScan: ActiveScan | undefined
 process.once('SIGINT', () => {
+  activeScan?.child.kill('SIGTERM')
   cleanup()
   process.exit(130)
 })
-
-let failed = false
-let scanStatus: number | null = 0
 try {
-  await step(`build ${IMAGE}`, () => compose(['build', 'migrate']))
-  scanStatus = await step('scan the image for fixable vulnerabilities (grype)', scanImage)
+  await step(`build ${IMAGE}`, buildImage)
+  activeScan = startScanImage()
   await step('start Postgres and PgBouncer (transaction mode)', () => compose(['up', '--detach', '--wait', 'pooler']))
   await step('migrate: three runs at once through the pooler', migrateConcurrently)
   await step('migrate: one direct run, which applies nothing', migrateDirectly)
@@ -215,6 +271,7 @@ try {
     env,
   })
   console.log(`\n--- ${failed ? 'every service' : 'app'} logs ---\n${`${logs.stdout}${logs.stderr}`.trim()}`)
+  scanStatus = await finishScan(activeScan)
   cleanup()
 }
 if (scanStatus !== 0) {

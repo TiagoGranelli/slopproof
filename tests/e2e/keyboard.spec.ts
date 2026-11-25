@@ -3,6 +3,7 @@ import { APP_NAME } from '#/config/app.ts'
 import { expectTabStops, tabOrder, tabThrough } from './support/a11y.ts'
 import { createAccount } from './support/accounts.ts'
 import {
+  authenticate,
   dashboardWithMyPost,
   expect,
   fakePost,
@@ -142,7 +143,7 @@ test.describe('tab order', () => {
     [
       'error page',
       async (page, author) => {
-        await signIn(page, author)
+        await authenticate(page, author)
         await navigateWithApiResponse(page, '/api/posts', { json: {}, status: 503 })
         await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
       },
@@ -151,7 +152,7 @@ test.describe('tab order', () => {
     [
       'dashboard',
       async (page, author) => {
-        await signIn(page, author)
+        await authenticate(page, author)
         await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('First'), fakePost('Second')) })
         await expect(page.getByText('Second', { exact: true })).toBeVisible()
       },
@@ -170,7 +171,7 @@ test.describe('tab order', () => {
     [
       'dashboard, dark theme chosen',
       async (page, author) => {
-        await signIn(page, author)
+        await authenticate(page, author)
         await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('First')) })
         await page.getByRole('radio', { name: 'Dark' }).check()
       },
@@ -207,7 +208,7 @@ test.describe('focus traps', () => {
     author,
     page,
   }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('First'), fakePost('Second')) })
     await page.getByRole('button', { name: 'Edit post: First' }).click()
     await expect(page.getByLabel('Edit post')).toBeFocused()

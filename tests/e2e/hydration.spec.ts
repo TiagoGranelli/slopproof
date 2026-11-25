@@ -1,5 +1,5 @@
 import { POST_MAX_LENGTH } from '#/contract/limits.ts'
-import { expect, signIn, test, visit } from './support/app.ts'
+import { authenticate, expect, test, visit } from './support/app.ts'
 
 const TYPED = 'typed the moment the page said it was hydrated'
 
@@ -16,7 +16,7 @@ test('text typed the moment the page reports hydration reaches the form', async 
       field.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }))
     }).observe(document, { attributeFilter: ['data-hydrated'], attributes: true, subtree: true })
   }, TYPED)
-  await signIn(page, author)
+  await authenticate(page, author)
   await visit(page, '/dashboard')
   await expect(page.getByLabel('New post')).toHaveValue(TYPED)
   await expect(page.getByText(`${TYPED.length}/${POST_MAX_LENGTH}`)).toBeVisible()

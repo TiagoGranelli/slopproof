@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { dashboardWithMyPost, expect, failServerFunctionPosts, signIn, test, visit } from './support/app.ts'
+import {
+  authenticate,
+  dashboardWithMyPost,
+  expect,
+  failServerFunctionPosts,
+  signIn,
+  test,
+  visit,
+} from './support/app.ts'
 
 test.skip(({ isMobile }) => isMobile, 'keyboard navigation is a desktop concern')
 
@@ -51,7 +59,11 @@ test.describe('editing from the keyboard', () => {
 
 test.describe('announcements', () => {
   test('publishing is announced and puts focus back in the empty composer', async ({ author, page }) => {
-    await dashboardWithMyPost(page, author)
+    await authenticate(page, author)
+    await visit(page, '/dashboard')
+    const body = `publish announce ${randomUUID()}`
+    await page.getByLabel('New post').fill(body)
+    await page.getByRole('button', { name: 'Publish' }).click()
     await expect(page.getByRole('status')).toHaveText('Post published.')
     await expect(page.getByLabel('New post')).toBeFocused()
     await expect(page.getByLabel('New post')).toHaveValue('')
@@ -115,7 +127,7 @@ test('a post with a supplementary Unicode character at index 39 keeps well-forme
   author,
   page,
 }) => {
-  await signIn(page, author)
+  await authenticate(page, author)
   await visit(page, '/dashboard')
   const body = `${'a'.repeat(39)}🀀 ${randomUUID()}`
   await page.getByLabel('New post').fill(body)

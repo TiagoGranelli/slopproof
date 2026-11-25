@@ -20,7 +20,7 @@ RUN npm install --global --no-fund --no-audit \
 # --ignore-scripts: `prepare` installs the git hooks, and there is no git here. No dependency may run a build
 # script anyway (allowBuilds in pnpm-workspace.yaml).
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store
+    pnpm install --frozen-lockfile --ignore-scripts --trust-lockfile --store-dir /pnpm-store
 COPY . .
 # Nitro prerenders /about during the build, which loads the server config. These placeholders only
 # satisfy validation; nothing connects to them and none of them ends up in the output.

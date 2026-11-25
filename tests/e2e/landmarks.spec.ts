@@ -1,5 +1,6 @@
 import { SITE_FOOTER, siteHeader } from './support/a11y.ts'
 import {
+  authenticate,
   dashboardWithMyPost,
   expect,
   fakePost,
@@ -87,7 +88,7 @@ ${SITE_FOOTER}`)
   })
 
   test('account', async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/account')
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}
 - main:
@@ -102,7 +103,7 @@ ${SITE_FOOTER}`)
   })
 
   test('dashboard', async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await navigateWithApiResponse(page, '/api/me/posts', { json: lastPage(fakePost('One of mine')) })
     await expect(page.getByText('One of mine', { exact: true })).toBeVisible()
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}
@@ -127,7 +128,7 @@ ${SITE_FOOTER}`)
   })
 
   test('error page', async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await navigateWithApiResponse(page, '/api/posts', { json: {}, status: 503 })
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}
 - main:
@@ -173,7 +174,7 @@ test.describe('landmarks of UI states', () => {
   })
 
   test('dashboard, dark theme chosen', async ({ author, page }) => {
-    await signIn(page, author)
+    await authenticate(page, author)
     await visit(page, '/dashboard')
     await page.getByRole('radio', { name: 'Dark' }).check()
     await expect(page.locator('body')).toMatchAriaSnapshot(`${siteHeader('signed in')}

@@ -5,8 +5,9 @@ covers and how to make an exception.
 
 ## What `pnpm check` runs
 
-`pnpm check` is `lefthook run pre-commit --all-files`: every job in `.config/lefthook.yml`, one at a time, about
-16 s, then a summary with each failed job's fix. No database, no build; it needs Playwright's Chromium.
+`pnpm check` is `lefthook run pre-commit --all-files`: every job in `.config/lefthook.yml` (the lightweight checks in
+parallel, the type-aware and test jobs one at a time), then a summary with each failed job's fix. No database, no
+build; it needs Playwright's Chromium.
 
 | Job | What fails it |
 | --- | --- |
@@ -33,8 +34,9 @@ runs `secrets` and `repo-policy`, in about a second. `pnpm install` installs the
 It sets aside the unstaged part of a partially staged file while the jobs run, but a modified file that is not
 staged at all, or an untracked one, is checked as if it were part of the commit: a file left out of the commit
 can hide a problem the commit has. CI checks the exact commit: `pnpm ci:static` runs `pnpm check` with
-`CHECK_BASE_REF=HEAD^` (the commit under test against its parent) and without `drift`, which the `drift` job runs
-in full. A job subset: `pnpm check --job lint --job tests`, or `LEFTHOOK_EXCLUDE=tests pnpm check`.
+`CHECK_BASE_REF=HEAD^` (the commit under test against its parent) and excludes `drift` (run in the `drift` job) and
+`repo-policy` (already covered by `tests`). A job subset: `pnpm check --job lint --job tests`, or
+`LEFTHOOK_EXCLUDE=tests pnpm check`.
 
 ## Escape hatches
 

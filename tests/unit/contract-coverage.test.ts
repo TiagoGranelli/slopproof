@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { ALLOWLIST, contractCoverageProblems, logObservations, operations } from '../../scripts/contract-coverage.ts'
+import {
+  ALLOWLIST,
+  contractCoverageProblems,
+  logObservations,
+  operations,
+  undeclaredStatusProblems,
+} from '../../scripts/contract-coverage.ts'
 
 const spec = {
   paths: {
@@ -62,6 +68,29 @@ describe('logObservations', () => {
       '{not json',
     ].join('\n')
     expect(logObservations(log)).toEqual([seen('GET', '/api/posts', 200), seen('GET', '/api/posts', 500)])
+  })
+})
+
+describe('undeclaredStatusProblems', () => {
+  it('passes when observed statuses are declared or allowlisted without failing on unobserved statuses', () => {
+    const observed = [seen('PATCH', '/api/me/posts/1', 200), seen('DELETE', '/api/me/posts/1', 403)]
+    const allowlist = {
+      undeclared: [{ operation: '*', reason: 'CSRF', status: 403 }],
+      unobserved: [],
+    }
+    expect(undeclaredStatusProblems(ops, observed, allowlist)).toEqual([])
+  })
+
+  it('reports unexcused undeclared statuses and unexplained allowlist entries', () => {
+    const observed = [seen('PATCH', '/api/me/posts/1', 418), seen('DELETE', '/api/me/posts/1', 403)]
+    const allowlist = {
+      undeclared: [{ operation: '*', reason: ' ', status: 403 }],
+      unobserved: [],
+    }
+    expect(undeclaredStatusProblems(ops, observed, allowlist)).toEqual([
+      `${ALLOWLIST}: * 403 needs a reason`,
+      'PATCH /api/me/posts/{id} answered 418, which openapi.json does not declare',
+    ])
   })
 })
 

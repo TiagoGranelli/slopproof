@@ -4,20 +4,41 @@ inputs:
   install:
     description: Run `pnpm install --frozen-lockfile`. Jobs whose script needs only Node and Docker skip it.
     default: 'true'
+  trust-lockfile:
+    description: Skip re-verifying minimumReleaseAge and trustPolicy during frozen install (set to 'false' in supply-chain).
+    default: 'true'
   browsers:
     description: Space-separated Playwright browsers to install (cached), with their system dependencies, e.g. `chromium firefox webkit`.
     default: ''
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+    - if: inputs.install == 'true'
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
     - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version-file: package.json
-        cache: ${{ inputs.install == 'true' && 'pnpm' || '' }}
+        package-manager-cache: false
+    - id: pnpm-store
+      if: inputs.install == 'true'
+      shell: bash
+      run: printf 'path=%s\n' "$(pnpm store path --silent | tr -d '\r')" >> "$GITHUB_OUTPUT"
+    - if: inputs.install == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: pnpm-store-${{ runner.os }}-${{ runner.arch }}-
     - if: inputs.install == 'true'
       shell: bash
-      run: pnpm install --frozen-lockfile
+      env:
+        TRUST_LOCKFILE: ${{ inputs.trust-lockfile }}
+      run: |
+        if [ "$TRUST_LOCKFILE" = 'false' ]; then
+          pnpm install --frozen-lockfile --ignore-scripts
+        else
+          pnpm install --frozen-lockfile --trust-lockfile --prefer-offline --ignore-scripts
+        fi
     - id: playwright
       if: inputs.browsers != ''
       shell: bash
@@ -25,13 +46,16 @@ runs:
         BROWSERS: ${{ inputs.browsers }}
       # The cache key names the Playwright version and the browser set, so adding a browser misses the cache.
       run: |
-        echo "version=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
-        echo "browsers=$(tr -s ' ' '\n' <<< "$BROWSERS" | sort | paste -sd- -)" >> "$GITHUB_OUTPUT"
+        cache_dir=$(node -p "const os=require('node:os'),p=require('node:path'),f=process.platform;p.join(f==='win32'?(process.env.LOCALAPPDATA||p.join(os.homedir(),'AppData','Local')):f==='darwin'?p.join(os.homedir(),'Library','Caches'):(process.env.XDG_CACHE_HOME||p.join(os.homedir(),'.cache')),'ms-playwright')" | tr -d '\r')
+        pw_version=$(pnpm exec playwright --version | cut -d' ' -f2 | tr -d '\r')
+        printf 'path=%s\n' "$cache_dir" >> "$GITHUB_OUTPUT"
+        printf 'version=%s\n' "$pw_version" >> "$GITHUB_OUTPUT"
+        printf 'browsers=%s\n' "$(tr -s ' ' '\n' <<< "$BROWSERS" | sort | paste -sd- -)" >> "$GITHUB_OUTPUT"
     - id: playwright-cache
       if: inputs.browsers != ''
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ~/.cache/ms-playwright
+        path: ${{ steps.playwright.outputs.path }}
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.playwright.outputs.browsers }}
     - if: inputs.browsers != '' && steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
@@ -42,13 +66,16 @@ runs:
         pnpm exec playwright install --with-deps "${browsers[@]}"
     # Cache hit: the browsers are restored, but their system libraries live outside the cache. The
     # ubuntu-24.04 image ships Google Chrome, whose packages cover what Chromium links against; Firefox and
-    # WebKit need more. apt (30 s or more) runs only if a restored binary or library actually misses one.
-    - if: inputs.browsers != '' && steps.playwright-cache.outputs.cache-hit == 'true'
+    # WebKit need more. Include browser-local library directories in LD_LIBRARY_PATH so bundled libs
+    # (e.g. Firefox's libgkcodecs/liblgpllibs) do not trigger a redundant apt run.
+    - if: runner.os == 'Linux' && inputs.browsers != '' && steps.playwright-cache.outputs.cache-hit == 'true'
       shell: bash
       env:
         BROWSERS: ${{ inputs.browsers }}
+        PW_DIR: ${{ steps.playwright.outputs.path }}
       run: |
-        missing=$(find ~/.cache/ms-playwright -type f \( -perm -u+x -o -name '*.so*' \) -exec ldd {} + 2>/dev/null | grep 'not found' | sort -u || true)
+        lib_dirs=$(find "$PW_DIR" -type f -name '*.so*' -printf '%h\n' | sort -u | paste -sd: -)
+        missing=$(LD_LIBRARY_PATH="${lib_dirs}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" find "$PW_DIR" -type f \( -perm -u+x -o -name '*.so*' \) -exec ldd {} + 2>/dev/null | grep 'not found' | sort -u || true)
         if [ -n "$missing" ]; then
           echo "$missing"
           read -ra browsers <<< "$BROWSERS"

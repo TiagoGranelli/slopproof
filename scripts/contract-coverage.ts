@@ -71,6 +71,14 @@ type Gap = { excuses: Array<AllowEntry>; operation: string; problem: string; sta
 
 const missingFrom = (statuses: Set<number>, other: Set<number>) => [...statuses].filter((status) => !other.has(status))
 
+const undeclaredGapsOf = (op: Operation, statuses: Set<number>, allowlist: Allowlist): Array<Gap> =>
+  missingFrom(statuses, op.declared).map((status) => ({
+    excuses: allowlist.undeclared,
+    operation: op.id,
+    problem: `${op.id} answered ${status}, which openapi.json does not declare`,
+    status,
+  }))
+
 const gapsOf = (op: Operation, statuses: Set<number>, allowlist: Allowlist): Array<Gap> => [
   ...missingFrom(op.declared, statuses).map((status) => ({
     excuses: allowlist.unobserved,
@@ -78,22 +86,11 @@ const gapsOf = (op: Operation, statuses: Set<number>, allowlist: Allowlist): Arr
     problem: `${op.id} declares ${status}, but no test saw it answered`,
     status,
   })),
-  ...missingFrom(statuses, op.declared).map((status) => ({
-    excuses: allowlist.undeclared,
-    operation: op.id,
-    problem: `${op.id} answered ${status}, which openapi.json does not declare`,
-    status,
-  })),
+  ...undeclaredGapsOf(op, statuses, allowlist),
 ]
 
-export const contractCoverageProblems = (
-  ops: Array<Operation>,
-  observed: Array<Observation>,
-  allowlist: Allowlist,
-): Array<string> => {
-  const entries = [...allowlist.unobserved, ...allowlist.undeclared]
+const partitionGaps = (gaps: Array<Gap>) => {
   const used = new Set<AllowEntry>()
-  const gaps = [...observedStatuses(ops, observed)].flatMap(([op, statuses]) => gapsOf(op, statuses, allowlist))
   const unexcused = gaps.flatMap(({ excuses, operation, problem, status }) => {
     const entry = excuses.find((candidate) => matches(candidate, operation, status))
     if (entry) {
@@ -101,38 +98,48 @@ export const contractCoverageProblems = (
     }
     return entry ? [] : [problem]
   })
+  return { unexcused, used }
+}
+
+export const contractCoverageProblems = (
+  ops: Array<Operation>,
+  observed: Array<Observation>,
+  allowlist: Allowlist,
+): Array<string> => {
+  const entries = [...allowlist.unobserved, ...allowlist.undeclared]
+  const gaps = [...observedStatuses(ops, observed)].flatMap(([op, statuses]) => gapsOf(op, statuses, allowlist))
+  const { unexcused, used } = partitionGaps(gaps)
   const stale = entries.flatMap((entry) =>
     used.has(entry) ? [] : [`${ALLOWLIST}: ${entry.operation} ${entry.status} matches no gap any more; remove it`],
   )
   return [...unexplained(entries), ...unexcused, ...stale]
 }
 
-if (import.meta.main) {
-  const [observations, ...logs] = process.argv.slice(2)
-  if (!observations) {
-    console.error('usage: node scripts/contract-coverage.ts <observations directory> [log file ...]')
-    process.exit(2)
-  }
-  const spec = JSON.parse(readFileSync('openapi.json', 'utf8')) as Parameters<typeof operations>[0]
-  const fromApp = logs.flatMap((file) => logObservations(readFileSync(file, 'utf8')))
-  const observed = [
-    ...fromApp,
-    ...(existsSync(observations) ? readdirSync(observations) : [])
-      .filter((name) => name.endsWith('.jsonl'))
-      .flatMap((name) =>
-        readFileSync(join(observations, name), 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as Observation),
-      ),
-  ]
-  const allowlist = JSON.parse(readFileSync(ALLOWLIST, 'utf8')) as Allowlist
-  const ops = operations(spec)
-  const problems = contractCoverageProblems(ops, observed, allowlist)
-  for (const problem of problems) {
-    console.error(problem)
-  }
-  const pairs = ops.reduce((sum, op) => sum + op.declared.size, 0)
+export const undeclaredStatusProblems = (
+  ops: Array<Operation>,
+  observed: Array<Observation>,
+  allowlist: Allowlist,
+): Array<string> => {
+  const gaps = [...observedStatuses(ops, observed)].flatMap(([op, statuses]) =>
+    undeclaredGapsOf(op, statuses, allowlist),
+  )
+  const { unexcused } = partitionGaps(gaps)
+  return [...unexplained(allowlist.undeclared), ...unexcused]
+}
+
+const dirObservations = (dir: string) =>
+  existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => name.endsWith('.jsonl'))
+        .flatMap((name) =>
+          readFileSync(join(dir, name), 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as Observation),
+        )
+    : []
+
+const printInMemoryOnly = (ops: Array<Operation>, fromApp: Array<Observation>, observed: Array<Observation>) => {
   const seenIn = (list: Array<Observation>, op: Operation, status: number) =>
     list.some((o) => o.method === op.method && op.pattern.test(o.path) && o.status === status)
   const inMemoryOnly = ops.flatMap((op) =>
@@ -143,10 +150,46 @@ if (import.meta.main) {
   if (inMemoryOnly.length) {
     console.log(`seen only in the api layer, not from the built app: ${inMemoryOnly.join(', ')}`)
   }
-  console.log(
-    problems.length
-      ? `contract coverage: ${problems.length} problem(s)`
-      : `contract coverage: all ${pairs} declared operation × status pairs observed (${observed.length} responses)`,
-  )
-  process.exitCode = problems.length ? 1 : 0
+}
+
+const parseCliArgs = (argv: Array<string>) => {
+  const undeclaredOnly = argv[0] === '--undeclared-only'
+  const rest = undeclaredOnly ? argv.slice(1) : argv
+  const observations = undeclaredOnly ? undefined : rest[0]
+  const logs = undeclaredOnly ? rest : rest.slice(1)
+  if ((!undeclaredOnly && !observations) || (undeclaredOnly && !logs.length)) {
+    console.error('usage: node scripts/contract-coverage.ts [--undeclared-only] <observations dir | log file ...>')
+    process.exit(2)
+  }
+  return { logs, observations, undeclaredOnly }
+}
+
+const printProblems = (problems: Array<string>, summary: string) => {
+  for (const problem of problems) {
+    console.error(problem)
+  }
+  console.log(problems.length ? `contract coverage: ${problems.length} problem(s)` : summary)
+  return problems.length ? 1 : 0
+}
+
+const runCli = () => {
+  const { logs, observations, undeclaredOnly } = parseCliArgs(process.argv.slice(2))
+  const spec = JSON.parse(readFileSync('openapi.json', 'utf8')) as Parameters<typeof operations>[0]
+  const fromApp = logs.flatMap((file) => logObservations(readFileSync(file, 'utf8')))
+  const observed = observations ? [...fromApp, ...dirObservations(observations)] : fromApp
+  const allowlist = JSON.parse(readFileSync(ALLOWLIST, 'utf8')) as Allowlist
+  const ops = operations(spec)
+  const problems = (undeclaredOnly ? undeclaredStatusProblems : contractCoverageProblems)(ops, observed, allowlist)
+  const pairs = ops.reduce((sum, op) => sum + op.declared.size, 0)
+  if (!undeclaredOnly) {
+    printInMemoryOnly(ops, fromApp, observed)
+  }
+  const summary = undeclaredOnly
+    ? `contract coverage (undeclared): clean across ${observed.length} responses`
+    : `contract coverage: all ${pairs} declared operation × status pairs observed (${observed.length} responses)`
+  return printProblems(problems, summary)
+}
+
+if (import.meta.main) {
+  process.exitCode = runCli()
 }

@@ -50,7 +50,7 @@ export default defineConfig({
       exclude: ['src/sdk/**', 'src/routeTree.gen.ts', 'src/components/ui/**', 'src/server/db/schema/auth.ts'],
       include: ['src/**/*.{ts,tsx}'],
       provider: 'v8',
-      reporter: process.env.CI ? ['text-summary', 'html'] : ['html'],
+      reporter: process.env.CI ? ['text-summary'] : ['html'],
       thresholds: {
         ...COVERAGE_FLOOR,
         ...Object.fromEntries(COVERAGE_GATE.map((file) => [file, { branches: 100, lines: 100 }])),

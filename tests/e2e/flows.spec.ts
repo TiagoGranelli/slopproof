@@ -1,7 +1,16 @@
 import type { Page } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { signInWithForm } from './support/accounts.ts'
-import { expect, expectHydrated, failServerFunctionPosts, seedPost, signIn, test, visit } from './support/app.ts'
+import {
+  authenticate,
+  expect,
+  expectHydrated,
+  failServerFunctionPosts,
+  seedPost,
+  signIn,
+  test,
+  visit,
+} from './support/app.ts'
 import type { Author } from './support/app.ts'
 
 const expectDashboard = async (page: Page) => {
@@ -132,7 +141,7 @@ test('public page hydrates from SSR without refetching or console errors', async
 })
 
 test('dashboard hydrates from SSR without refetching its data', async ({ author, page }) => {
-  await signIn(page, author)
+  await authenticate(page, author)
   const refetches: Array<string> = []
   const errors: Array<string> = []
   page.on('request', (r) => new URL(r.url()).pathname.startsWith('/api/') && refetches.push(r.url()))
@@ -188,7 +197,7 @@ test('author signs in, publishes, edits, sees the post publicly, deletes it and 
 }) => {
   await signInThroughForm(page, author)
 
-  const body = `e2e post ${Date.now()}`
+  const body = `e2e post ${crypto.randomUUID()}`
   await publish(page, body)
 
   await expectEditDiscarded(page, body, 'the Cancel button')
@@ -209,9 +218,9 @@ test('author signs in, publishes, edits, sees the post publicly, deletes it and 
 })
 
 test('a rejected save shows the error in the post and keeps the draft', async ({ author, page }) => {
-  await signIn(page, author)
+  await authenticate(page, author)
   await visit(page, '/dashboard')
-  const body = `e2e rejected edit ${Date.now()}`
+  const body = `e2e rejected edit ${crypto.randomUUID()}`
   await publish(page, body)
   const draft = 'x'.repeat(281)
   await editPost(page, body, draft)
@@ -227,11 +236,11 @@ test('client-side navigation shows a post published or edited moments ago, never
   author,
   page,
 }) => {
-  await signIn(page, author)
+  await authenticate(page, author)
   await visit(page, '/')
   await openDashboardPreloadingHome(page)
 
-  const body = `e2e fresh ${Date.now()}`
+  const body = `e2e fresh ${crypto.randomUUID()}`
   await publish(page, body)
   await expectHomeShowsOnly(page, body)
 

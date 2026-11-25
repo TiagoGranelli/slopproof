@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { APP_NAME, pageTitle } from '#/config/app.ts'
-import { expect, signIn, test, visit } from './support/app.ts'
+import { authenticate, expect, test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })
@@ -36,7 +36,7 @@ test('the header shows who is signed in from the session SSR read, with no reque
   author,
   page,
 }) => {
-  await signIn(page, author)
+  await authenticate(page, author)
   const serverFunctions: Array<string> = []
   page.on('request', (r) => r.url().includes('/_serverFn/') && serverFunctions.push(r.url()))
   await visit(page, '/')

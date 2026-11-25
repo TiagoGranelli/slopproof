@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { assertFreshBuild } from './build-freshness.ts'
 import { edgePeers, startEdge } from './edge.ts'
 import type { RunningEdge } from './edge.ts'
+import { captureProcess } from './process-log.ts'
 import { spawnServer, waitForServer } from './server-process.ts'
 import type { ServerProcess } from './server-process.ts'
 import { resetTestDatabase } from './test-db.ts'
@@ -39,19 +39,12 @@ const freePort = () =>
     })
   })
 
-const runQuiet = (command: string, args: Array<string>, env: NodeJS.ProcessEnv) =>
-  new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
-    let output = ''
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.once('error', reject)
-    child.once('exit', (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`${command} ${args.join(' ')} failed (exit ${code}, expected 0)\n${output.trim()}`)),
-    )
-  })
+const runQuiet = async (command: string, args: Array<string>, env: NodeJS.ProcessEnv) => {
+  const { output, status } = await captureProcess(command, args, env)
+  if (status !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed (exit ${status}, expected 0)\n${output.trim()}`)
+  }
+}
 
 type EdgeOptions = {
   logFile: string
