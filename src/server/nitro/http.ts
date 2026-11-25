@@ -61,6 +61,8 @@ export default definePlugin((nitroApp) => {
 
   nitroApp.hooks.hook('request', (event) => {
     started.set(event, performance.now())
+    // Touching event.req.signal arms srvx's lazy abort signal for 499 logging.
+    // oxlint-disable-next-line typescript/no-meaningless-void-operator
     void event.req.signal
   })
 

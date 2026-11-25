@@ -44,13 +44,13 @@ root-to-directory chain stays under 28 KiB.
 
 | Field | `shadcn` |
 | --- | --- |
-| Source | https://github.com/shadcn-ui/ui/tree/ad0a097d30cf9524ac4a3b5294c9513c5c344672/skills/shadcn |
-| Commit | `ad0a097d30cf9524ac4a3b5294c9513c5c344672`, the commit of tag `shadcn@4.22.0`, which matches the `shadcn` devDependency. |
+| Source | https://github.com/shadcn-ui/ui/tree/96da9cc7f1aa10580a3741664e2a77c721206c00/skills/shadcn |
+| Commit | `96da9cc7f1aa10580a3741664e2a77c721206c00`, the commit of tag `shadcn@4.23.0`, which matches the `shadcn` devDependency. |
 | License | MIT |
 | Size | 21 files, 158,662 bytes |
 | Location | `.agents/skills/shadcn/` (canonical, read by Codex) with the symlink `.claude/skills/shadcn` (Claude Code) |
 | Lock | `skills-lock.json` records the commit (`ref`) and a content hash (`computedHash`) |
-| Installed | 2026-10-25 with `skills@1.7.0` |
+| Installed | 2026-11-25 with `skills@1.7.0` |
 
 Update it in the same PR that bumps the `shadcn` devDependency:
 
@@ -75,13 +75,13 @@ in personal skills while working in this repo, so it is not set by default.
 
 | Library | What ships | How to load |
 | --- | --- | --- |
-| TanStack Start and Router | 22 skills: `@tanstack/react-start` 1.169.3 (3), `@tanstack/start-client-core` 1.170.38 (7), `@tanstack/start-server-core` 1.169.44 (1), `@tanstack/router-core` 1.171.38 (10), `@tanstack/router-plugin` 1.168.47 (1) | `pnpm dlx @tanstack/intent@0.4.0 list`, then `pnpm dlx @tanstack/intent@0.4.0 load <package>#<skill>`. Intent is MIT. Pin its version: the `Load:` lines it prints use `@tanstack/intent@latest`, so replace `@latest` with `@0.4.0`. |
-| Effect 4.0.5 | `node_modules/effect/AGENTS.md` (433 lines), `ai-docs/` (about 170 KB of content), and `src/` (20 MB) | Read `node_modules/effect/AGENTS.md` before writing Effect code. The upstream skill `Effect-TS/skills/effect-ts` (MIT, 870 bytes, commit `2309e6f`) only says to do that, so the instruction is in `AGENTS.md` and the skill is not installed. `effect-v3-to-v4` is not needed because the project already uses v4. |
-| Fallow 3.34.0 | `node_modules/fallow/skills/fallow/` (about 380 KB of content, two skills) | Read `node_modules/fallow/skills/fallow/SKILL.md`, or run `pnpm dlx @tanstack/intent@0.4.0 load fallow#fallow`. `fallow-rs/fallow-skills` (MIT) is not installed because the package already ships it. |
+| TanStack Start and Router | 25 skills: `@tanstack/react-router` 1.170.46 (3), `@tanstack/react-start` 1.169.7 (3), `@tanstack/start-client-core` 1.170.39 (7), `@tanstack/start-server-core` 1.169.45 (1), `@tanstack/router-core` 1.171.39 (10), `@tanstack/router-plugin` 1.169.0 (1) | `pnpm dlx @tanstack/intent@0.5.6 list`, then `pnpm dlx @tanstack/intent@0.5.6 load <package>#<skill>`. Intent is MIT. Pin its version: the `Load:` lines it prints use `intent`, or `@tanstack/intent@latest` when invoked directly; pin `@0.5.6`. |
+| Effect 4.1.5 | `node_modules/effect/AGENTS.md` (433 lines), `ai-docs/` (about 170 KB of content), and `src/` (20 MB) | Read `node_modules/effect/AGENTS.md` before writing Effect code. The upstream skill `Effect-TS/skills/effect-ts` (MIT, 870 bytes, commit `2309e6f`) only says to do that, so the instruction is in `AGENTS.md` and the skill is not installed. `effect-v3-to-v4` is not needed because the project already uses v4. |
+| Fallow 3.48.0 | `node_modules/fallow/skills/` (`fallow/`, `fallow-setup/`, about 453 KB of content, two skills) | Read `node_modules/fallow/skills/fallow/SKILL.md`, or run `pnpm dlx @tanstack/intent@0.5.6 load fallow#fallow`. `fallow-rs/fallow-skills` (MIT) is not installed because the package already ships it. |
 | Playwright 1.64.1 | `playwright-core/lib/tools/skills/`: `playwright-trace` (5 KB), `playwright-cli` (69 KB), `playwright-component-testing` (35 KB) | For failed E2E runs, use `pnpm exec playwright trace open test-results/<test>/trace.zip`, then `trace actions`, `trace errors`, and `trace requests`. The skill files are at `find node_modules/.pnpm -path '*playwright-core/lib/tools/skills/*/SKILL.md'`. `microsoft/playwright-cli` (Apache-2.0) duplicates them. |
 
 `package.json` sets `"intent": { "skills": ["@tanstack/*", "fallow"] }`, so `intent list` shows only
-those sources: 8 packages and 28 skills, which are the 22 above, one from the transitive
+those sources: 9 packages and 31 skills, which are the 25 above, one from the transitive
 `@tanstack/virtual-file-routes`, three from the transitive `@tanstack/devtools-event-client`, and Fallow's two. The two skills of the transitive `dotenv` are hidden, and a
 notice says so.
 

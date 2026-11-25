@@ -5,7 +5,7 @@
 # See docs/operations.md for environment variables, migrations and the deploy sequence.
 
 # Pinned by digest; the same reference as `node` in scripts/images.ts (`pnpm ci:workflows` checks the copy).
-ARG NODE_IMAGE=node:26.12.0-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11
+ARG NODE_IMAGE=node:26.13.1-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app

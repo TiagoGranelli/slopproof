@@ -143,7 +143,7 @@ a refused edit means change the source and run the command.
 ## Version policy
 
 Dependencies are pinned exactly, fresh releases are quarantined for a day, and the pre-release packages
-(`nitro`, `@tanstack/react-start`, `oxfmt`, `@hey-api/openapi-ts`) are upgraded one
+(`nitro`, `oxfmt`, `@hey-api/openapi-ts`) are upgraded one
 per PR with `check`, `check:drift` and `verify:app` passing. The `upgrade-prerelease-deps` skill holds the full
 policy; load it before changing `package.json` or `pnpm-workspace.yaml`.
 
@@ -169,10 +169,10 @@ policy; load it before changing `package.json` or `pnpm-workspace.yaml`.
 
 ## Library docs and skills
 
-- **TanStack Start and Router:** run `pnpm dlx @tanstack/intent@0.4.0 list`, then
-  `pnpm dlx @tanstack/intent@0.4.0 load <package>#<skill>` for the matching skill (for example,
+- **TanStack Start and Router:** run `pnpm dlx @tanstack/intent@0.5.6 list`, then
+  `pnpm dlx @tanstack/intent@0.5.6 load <package>#<skill>` for the matching skill (for example,
   `@tanstack/start-client-core#start-core/execution-model`). The `Load:` lines that `intent list` prints
-  use `@tanstack/intent@latest`; replace `@latest` with `@0.4.0`.
+  use `@tanstack/intent@latest`; replace `@latest` with `@0.5.6`.
 - **shadcn/ui:** the skill in `.agents/skills/shadcn` loads automatically. Run the pinned CLI with
   `pnpm exec shadcn …` wherever the skill says `npx shadcn@latest`.
 - **Better Auth, Fallow, and Playwright traces:** see [docs/agents/skills.md](docs/agents/skills.md).

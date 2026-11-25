@@ -1,6 +1,6 @@
 ---
 name: upgrade-prerelease-deps
-description: Upgrade dependencies in this repo, above all the pinned pre-release ones (nitro, @tanstack/react-start, oxfmt, @hey-api/openapi-ts). Use when bumping any package version, reviewing a Renovate PR, acting on pnpm audit:check, or when an install fails the release quarantine.
+description: Upgrade dependencies in this repo, above all the pinned pre-release ones (nitro, oxfmt, @hey-api/openapi-ts). Use when bumping any package version, reviewing a Renovate PR, acting on pnpm audit:check, or when an install fails the release quarantine.
 ---
 
 # Upgrade dependencies
@@ -18,9 +18,9 @@ description: Upgrade dependencies in this repo, above all the pinned pre-release
   the lockfile). An advisory that cannot apply here goes in `auditConfig.ignoreGhsas` in
   `pnpm-workspace.yaml`, with a comment giving the reason and a review date (write it by hand; `pnpm audit
   --ignore` adds the id without the comment). `pnpm audit:check` is the gate; Renovate's OSV alerts open fix PRs.
-- Pre-release packages, pinned exactly: `nitro` (its npm `latest` is a `-beta` build), `@tanstack/react-start`
-  (npm `latest` is a 1.x release, but Start's docs still call it a Release Candidate), `oxfmt` (0.x, announced
-  as beta) and `@hey-api/openapi-ts` (a `next` snapshot, below).
+- Pre-release packages, pinned exactly: `nitro` (its npm `latest` is an `-rc` / pre-1.0 build), `oxfmt` (0.x,
+  announced as beta), and `@hey-api/openapi-ts` (a `next` snapshot, below). (`@tanstack/react-start` reached 1.0
+  stable and stays pinned like every other stable dependency.)
 - Skills are pinned to a commit (`skills-lock.json`); update the shadcn skill in the PR that bumps `shadcn`
   ([docs/agents/skills.md](../../../docs/agents/skills.md)). Docs shipped inside packages are pinned by the
   lockfile.

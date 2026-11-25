@@ -39,11 +39,10 @@ trustPolicyIgnoreAfter: 43200
 # Exceptions name one exact version and the evidence that the release is genuine.
 trustPolicyExclude:
   # tsrs's first 2026 release, 0.0.0-bootstrap.0 (2026-10-10), was a staged publish approved by its maintainer
-  # (boshen) to register the trusted publisher; pnpm ranks a staged publish above a trusted publisher, so every
-  # later release reads as a downgrade. This one is published by the same GitHub trusted publisher
-  # (oidcConfigId 5ef4a9f1, as 0.16 to 0.25) with SLSA provenance. Remove once the bootstrap is older than 30 days
-  # than the version in use, or when tsrs is bumped (2026-11-19).
-  - 'tsrs@7.1.0-beta.tsrs3'
+  # (boshen) to register the trusted publisher; pnpm still flags 7.1.0-beta.tsrs5 against it as a downgrade.
+  # This release is published by GitHub Actions OIDC (`oxc-project/tsrs`, `.github/workflows/release.yml`) with
+  # SLSA v1 provenance. Review/remove once it no longer triggers `trustPolicy` or when tsrs is bumped (2026-11-25).
+  - 'tsrs@7.1.0-beta.tsrs5'
 
 # Transitive versions forced for a security fix; each names the advisory. Remove an entry once the parent ships
 # the fix (`pnpm why <package>`).
@@ -64,12 +63,6 @@ auditConfig:
     # gate; listed so a plain `pnpm audit` stays clean. drizzle-kit 1.0 drops @esbuild-kit (ADR 0005).
     # Review by 2026-12-31.
     - GHSA-67mh-4wv8-2f99
-    # zod 3.25.76, only through lighthouse > puppeteer-core 25.12 > chromium-bidi 17, which validates the
-    # messages of the Chrome that Lighthouse itself launches; no user input reaches it, and the advisory (memory
-    # exhaustion on an oversized array) has no fixed 3.x. The app's zod is 4.6.7 (fixed). puppeteer-core 25.13+
-    # moves chromium-bidi to zod 4, but those chromium-bidi builds have no provenance and fail `trustPolicy`.
-    # Review by 2026-11-30.
-    - GHSA-mrhx-c7xc-m3w5
 
 # better-call (Better Auth's router) has an optional peer on zod ^4. pnpm fills a missing optional peer from any
 # version in the graph and chose shadcn's zod 3.25.76, which gave @better-auth/core a second copy of better-call
