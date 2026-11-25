@@ -274,24 +274,32 @@ jobs:
         with:
           install: 'false'
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - id: grype-cache-meta
+      - id: cache-meta
         shell: bash
         run: |
-          dir="$HOME/.cache/grype-db"
-          mkdir -p "$dir"
-          printf 'today=%s\n' "$(date -u +%F)" >> "$GITHUB_OUTPUT"
-          printf 'dir=%s\n' "$dir" >> "$GITHUB_OUTPUT"
+          grype_dir="$HOME/.cache/grype-db"
+          buildx_dir="$HOME/.cache/buildx-app"
+          mkdir -p "$grype_dir" "$buildx_dir"
+          printf 'today=%s\ngrype_dir=%s\nbuildx_dir=%s\n' \
+            "$(date -u +%F)" "$grype_dir" "$buildx_dir" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.grype-cache-meta.outputs.dir }}
-          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-meta.outputs.today }}
+          path: ${{ steps.cache-meta.outputs.grype_dir }}
+          key: grype-db-${{ runner.os }}-${{ steps.cache-meta.outputs.today }}
           restore-keys: grype-db-${{ runner.os }}-
+      - id: buildx-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.cache-meta.outputs.buildx_dir }}
+          key: docker-buildx-${{ runner.os }}-${{ hashFiles('Dockerfile', 'package.json', 'pnpm-lock.yaml') }}
+          restore-keys: docker-buildx-${{ runner.os }}-
       - env:
-          DOCKER_BUILD_CACHE: gha
-          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.dir }}
+          DOCKER_BUILD_CACHE_DIR: ${{ steps.cache-meta.outputs.buildx_dir }}
+          DOCKER_BUILD_CACHE_WRITE: ${{ steps.buildx-cache.outputs.cache-hit != 'true' && '1' || '0' }}
+          GRYPE_DB_DIR: ${{ steps.cache-meta.outputs.grype_dir }}
         run: node scripts/ci-jobs.ts docker
       - if: always()
         shell: bash
         env:
-          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.dir }}
+          GRYPE_DB_DIR: ${{ steps.cache-meta.outputs.grype_dir }}
         run: sudo chown -R "$(id -u):$(id -g)" "$GRYPE_DB_DIR"

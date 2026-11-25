@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { dockerPrefix, IMAGES } from './images.ts'
 
@@ -67,21 +67,39 @@ const grypeDbMount = () => {
   return resolve(dir)
 }
 
-const buildImage = () => {
-  if (process.env.DOCKER_BUILD_CACHE !== 'gha') {
-    compose(['build', 'migrate'])
-    return
+const buildxCacheArgs = (cachePath: string, nextCachePath: string, writeCache: boolean) => {
+  const from = existsSync(resolve(cachePath, 'index.json')) ? ['--cache-from', `type=local,src=${cachePath}`] : []
+  if (!writeCache) {
+    return from
   }
-  const buildArgs = ['buildx', 'build', '--load', '--cache-from', 'type=gha,scope=app'].concat([
-    '--cache-to',
-    'type=gha,mode=max,scope=app',
-    '-t',
-    IMAGE,
-    '.',
-  ])
-  const buildx = spawnSync('docker', buildArgs, { stdio: 'inherit' })
+  rmSync(nextCachePath, { force: true, recursive: true })
+  return [...from, '--cache-to', `type=local,dest=${nextCachePath},mode=max`]
+}
+
+const buildWithLocalCache = (cacheDir: string) => {
+  const cachePath = resolve(cacheDir)
+  const nextCachePath = `${cachePath}.new`
+  const writeCache = process.env.DOCKER_BUILD_CACHE_WRITE !== '0'
+  const cacheArgs = buildxCacheArgs(cachePath, nextCachePath, writeCache)
+  const buildx = spawnSync('docker', ['buildx', 'build', '--load', ...cacheArgs, '-t', IMAGE, '.'], {
+    stdio: 'inherit',
+  })
   if (buildx.status !== 0) {
+    rmSync(nextCachePath, { force: true, recursive: true })
     throw new Error(`docker buildx build failed (exit ${buildx.status ?? buildx.signal}, expected 0)`)
+  }
+  if (writeCache && existsSync(nextCachePath)) {
+    rmSync(cachePath, { force: true, recursive: true })
+    renameSync(nextCachePath, cachePath)
+  }
+}
+
+const buildImage = () => {
+  const cacheDir = process.env.DOCKER_BUILD_CACHE_DIR?.trim()
+  if (cacheDir) {
+    buildWithLocalCache(cacheDir)
+  } else {
+    compose(['build', 'migrate'])
   }
 }
 

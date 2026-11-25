@@ -63,12 +63,11 @@ runs:
         BROWSERS: ${{ inputs.browsers }}
       run: |
         read -ra browsers <<< "$BROWSERS"
-        pnpm exec playwright install --with-deps "${browsers[@]}"
-    # Cache hit: the browsers are restored, but their system libraries live outside the cache. The
-    # ubuntu-24.04 image ships Google Chrome, whose packages cover what Chromium links against; Firefox and
-    # WebKit need more. Include browser-local library directories in LD_LIBRARY_PATH so bundled libs
-    # (e.g. Firefox's libgkcodecs/liblgpllibs) do not trigger a redundant apt run.
-    - if: runner.os == 'Linux' && inputs.browsers != '' && steps.playwright-cache.outputs.cache-hit == 'true'
+        pnpm exec playwright install "${browsers[@]}"
+    # Browsers live in the workspace/runner cache while system libraries live in the OS image. Checking `ldd`
+    # on both cache hits and misses skips slow redundant `apt-get` runs for Chromium on ubuntu-24.04 (which
+    # already ships Chrome's shared libraries) while installing missing `.so` deps for Firefox and WebKit.
+    - if: runner.os == 'Linux' && inputs.browsers != ''
       shell: bash
       env:
         BROWSERS: ${{ inputs.browsers }}
