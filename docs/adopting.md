@@ -202,9 +202,10 @@ where it goes:
   an endpoint that returns a presigned upload URL for S3 or a compatible store, upload from the browser
   directly, and add the bucket's origin to `connect-src` (and `img-src` if you show the files) in
   `src/lib/content-security-policy.ts`.
-- Tracing. Effect ships OpenTelemetry support; provide an OTLP exporter layer in
-  `src/server/api/web-handler.ts` and add the trace id to the fields `src/server/log.ts` writes, so a log
-  line leads to its trace.
+- Observability and tracing. W3C `traceparent` and `x-request-id` correlation (`src/server/request-context.ts`,
+  `src/server/log.ts`), Effect native metrics (`src/server/observability/telemetry.ts`) with `/metrics` and
+  `OTEL_EXPORTER_OTLP_ENDPOINT`, plus `registerErrorReporter` (`src/server/observability/error-reporter.ts`) ship
+  out of the box. See [operations.md](operations.md) and [slos.md](slos.md) to connect your collector or APM.
 - Email. Account messages are built in `src/server/mail/auth-messages.ts` and sent through `authMail`; put
   your product's messages next to them and send them through the same mailer, so tests and Mailpit see them.
 - Analytics. The Content-Security-Policy allows no inline script and no third-party origin. Load a script

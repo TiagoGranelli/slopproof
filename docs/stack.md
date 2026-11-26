@@ -10,7 +10,7 @@ response and reliability targets, see the [threat model](security/threat-model.m
 | Node 26, pnpm 12 | pnpm blocks dependency build scripts unless allowed, holds back releases younger than a day and refuses a package whose trust level drops (`pnpm-workspace.yaml`) | Low |
 | TypeScript 7 | The native compiler keeps `pnpm check` fast. It has no JavaScript compiler API, so tools that need one run on workarounds ([ADR 0002](decisions/0002-typescript-7.md)) | Medium |
 | TanStack Start and Router, Vite 8 | Server rendering, file routes and server functions in one Node service, with typed loaders and search params | Medium: Start calls itself a release candidate |
-| Nitro 3 | The deployment layer: the production server, graceful shutdown, prerendered static pages ([ADR 0004](decisions/0004-prerender-via-nitro.md)) | Medium: beta |
+| Nitro 3 | The deployment layer: the production server, graceful shutdown, prerendered static pages ([ADR 0004](decisions/0004-prerender-via-nitro.md)) | Medium: release candidate (`3.0.261103-rc`) |
 | React 19 with the React Compiler | Memoization without hand-written `useMemo`, through the stable Babel preset ([ADR 0006](decisions/0006-react-compiler-babel-preset.md)) | Low |
 | Tailwind 4, shadcn/ui on Radix | Accessible primitives copied into `src/components/ui/`, styled with classes only, which the CSP requires ([ADR 0010](decisions/0010-content-security-policy.md)) | Low |
 | Effect 4 `HttpApi` | The API contract: schemas, endpoints and typed errors in `src/contract`, the OpenAPI document generated from it, and handlers tested without a database ([ADR 0001](decisions/0001-effect-httpapi-business-api.md), [ADR 0007](decisions/0007-no-trpc-no-zod.md)) | Medium: 4.0.0 is the first stable release of v4, and most published examples are still v3 |
@@ -45,9 +45,9 @@ that change something here when they are fixed:
 | TanStack/router#8520 | Route chunks preload their static imports; re-run `pnpm lighthouse` ([ADR 0011](decisions/0011-lighthouse-over-https-http2.md)) |
 | TanStack/form#2132 | Remove `src/lib/no-devtools-event-client.ts` and its alias in `vite.config.ts` |
 | GoogleChrome/lighthouse#16539 | Mobile scores stop counting preloaded scripts against first paint; CI goes back to the `target` bar |
-| A Nitro release with nitrojs/nitro#4620 and #4654 (merged after 3.0.260903-beta) | Consider Nitro's `maxRequestBodySize` in place of the `bodyLimit` middleware in `src/start.ts` |
+| Nitro `3.0.261103-rc` (includes nitrojs/nitro#4620 and #4654) | Evaluate Nitro's built-in `maxRequestBodySize` in place of the `bodyLimit` middleware in `src/start.ts` |
 | drizzle-team/drizzle-orm#3807, #5347 | Simplify `scripts/check-drift.ts` (absolute `--out`, UNLOGGED tables) |
-| microsoft/playwright#42731 | Remove the Firefox COOP preference in `playwright.config.ts` after Playwright 1.63 |
+| microsoft/playwright#42731 | Kept in `playwright.config.ts` on 1.64.1 until Firefox COOP removal is verified clean |
 | evilmartians/lefthook#1167 | Run the `security` job of `.config/lefthook.yml` inline instead of through a pnpm script, once a release has the fix |
 | oxc-project/oxc#17021, #23695 | Lint directives through Oxlint instead of `tests/unit/repo-policy.test.ts`; the plain plugin specifier in `oxlint.config.ts` |
 | stryker-mutator/stryker-js#6210 | Fixed in `@stryker-mutator/vitest-runner@10.1.1`; the repo also ships zero-bloat incremental `scripts/mutate.ts` (`pnpm verify:mutate`, below) |

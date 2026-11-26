@@ -1,7 +1,9 @@
 # src/server/AGENTS.md
 
 Server-only code: Effect handlers (`api/`), Better Auth (`auth.ts`), Drizzle (`db/`), repositories, `env.ts`,
-shutdown (`lifecycle.ts`). Read this before you change anything here. The root `AGENTS.md` still applies.
+shutdown (`lifecycle.ts`), request context (`request-context.ts`), `feature-flags.ts`, `audit/audit-log.ts`,
+and `observability/` (`telemetry.ts`, `error-reporter.ts`). Read this before you change anything here. The root
+`AGENTS.md` still applies.
 
 ## Rules
 
@@ -47,7 +49,7 @@ Two things the compiler checks through Effect, beyond errors and services:
 - **Ids are branded** (`src/contract/ids.ts`): `PostId` and `UserId` are strings that do not mix, in the contract,
   the table columns (`.$type<PostId>()`) and every repository signature. A plain string becomes an id only at a
   boundary, with `UserId.make(...)` (as the session lookup in `api/web-handler.ts`) or by decoding a request.
-- **Credentials are `Redacted`** (`env.ts`: `databaseUrl`, `authSecret`, `smtp.url`). Printing, logging or
+- **Credentials are `Redacted`** (`env.ts`: `databaseUrl`, `authSecret`, `smtp.url`, `metricsToken`). Printing, logging or
   serializing one shows `<redacted>`. Call `Redacted.value(...)` only where the value is handed to its library,
   and wrap a new credential the same way.
 

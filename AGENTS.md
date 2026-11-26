@@ -103,7 +103,7 @@ Read [tests/AGENTS.md](tests/AGENTS.md) before writing or changing tests (layers
 | Command | Covers |
 | --- | --- |
 | `pnpm check:changed` | Fast incremental gate on changed files (`oxfmt`, `oxlint`, `effect-tsgo`, `vitest related`, `fallow`, `squawk`, `drift`); run during iteration |
-| `pnpm check` | All no-DB, no-build gates (format, type-aware lint, typecheck, Effect, dead code, complexity, dupes, security sinks, fast tests + coverage, drift, migrations, licenses), ~16 s. Run before hand-off |
+| `pnpm check` | All no-DB, no-build gates (format, type-aware lint, typecheck, Effect, dead code, complexity, dupes, security sinks, fast tests + coverage, drift, migrations, licenses), ~9 s. Run before hand-off |
 | `pnpm test:unit\|test:api\|test:component [filter ...]` | One fast layer; `pnpm test:fast` runs all three with coverage |
 | `pnpm test:db [filter ...]` | The `db` layer on a throwaway Postgres database (no build) |
 | `pnpm format`, `pnpm lint:fix` | Autofixes |

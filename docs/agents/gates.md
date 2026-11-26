@@ -5,8 +5,7 @@ covers and how to make an exception.
 
 ## What `pnpm check` runs
 
-`pnpm check` is `lefthook run pre-commit --all-files --no-auto-install`: every job in `.config/lefthook.yml` (the
-lightweight checks in parallel, the type-aware and test jobs one at a time), then a summary with each failed job's
+`pnpm check` is `lefthook run pre-commit --all-files --no-auto-install`: every job in `.config/lefthook.yml` (top-level `quick-checks`, `lint`, `effect`, `tests` and `repo-policy` run in parallel), then a summary with each failed job's
 fix. No database, no build; component tests need headless Chromium (`CHROME_PATH=/usr/bin/google-chrome` on Linux CI,
 `chromium-headless-shell` on Windows CI, or `CHROME_PATH` when pointing Vitest at a local Chrome binary).
 
@@ -14,13 +13,13 @@ fix. No database, no build; component tests need headless Chromium (`CHROME_PATH
 | --- | --- |
 | `secrets` | Betterleaks on the staged changes, only when a `betterleaks` 2 binary is on the `PATH` (CI's `repo-guards` job always runs `secrets`). Until 2.0.0 is released Homebrew installs version 1, which the job skips: take 2.0.0-rc.1 from the [release](https://github.com/betterleaks/betterleaks/releases/tag/v2.0.0-rc.1) |
 | `format` | `oxfmt --check` |
-| `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 3 with sorting, the `pedantic` category, TanStack Query/Router, Playwright, `eslint-plugin-react-you-might-not-need-an-effect` (`strict`), `repo/no-comments` (ADR 0019), and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
+| `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 4 with sorting, the `pedantic` category, TanStack Query/Router, Playwright, `eslint-plugin-react-you-might-not-need-an-effect` (`strict`), `repo/no-comments` (ADR 0019), and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
 | `effect` | `effect-tsgo tsc --noEmit`: TypeScript 7 typecheck plus Effect language-service diagnostics (every rule whose default is a suggestion is promoted to a warning in `tsconfig.json`, so it fails too; `pnpm typecheck` keeps `tsrs --noEmit` standalone per ADR 0016) |
 | `fallow` | `fallow --quiet --fail-on-issues --dupes-threshold 0.000001`: unused files, exports, types and dependencies, boundaries (`zones`), complexity (cognitive 15, cyclomatic 20 per function), and any clone group outside generated code and tests |
 | `security` | `fallow security --gate new --changed-since "${CHECK_BASE_REF:-HEAD}" src`: a new security-sink candidate in `src/` on a line changed since `CHECK_BASE_REF` (default `HEAD`). The generated SDK carries `// fallow-ignore-file security-sink` (Hey API `output.header`) |
 | `tests` | `pnpm test:fast`: Vitest projects `unit` (`isolate: false`), `api` (`isolate: false`) and `component` (`isolate: true`) with the coverage gate ([tests/AGENTS.md](../../tests/AGENTS.md)). Two of the tests are gates themselves: `tests/unit/repo-policy.test.ts` and `tests/api/public-operations.test.ts` (below) |
 | `repo-policy` | `tests/unit/repo-policy.test.ts` alone, on every commit (under a second), so a commit without code runs it too |
-| `drift` | `check:drift contract migrations auth`. `contract` runs `pnpm codegen` in place and fails if it changed `openapi.json` or `src/sdk` (the regenerated files stay, ready to commit) |
+| `drift` | parallel `drift-contract`, `drift-migrations`, `drift-auth` (`check:drift`). `contract` renders OpenAPI and runs Hey API into a temporary directory so it stays read-only alongside `lint`/`tests`, failing and listing changed files if `pnpm codegen` is needed |
 | `migrations` | `squawk --config .config/squawk.toml drizzle/*.sql` (`squawk-cli` from npm) over the migrations after 0004 |
 | `licenses` | a production dependency whose SPDX expression (`spdx-satisfies`) the list in `scripts/licenses.ts` does not allow |
 

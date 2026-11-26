@@ -17,11 +17,22 @@
 /playwright.config.ts @TiagoGranelli
 
 # The gate list and pre-commit hook, the repository rules, the public operations, the drift checks.
-/.config/lefthook.yml                @TiagoGranelli
-/tests/unit/repo-policy.test.ts      @TiagoGranelli
-/tests/api/public-operations.test.ts @TiagoGranelli
-/scripts/check-drift.ts              @TiagoGranelli
-/scripts/ci-jobs.ts                  @TiagoGranelli
+/.claude/settings.json                @TiagoGranelli
+/.config/lefthook.yml                  @TiagoGranelli
+/tests/unit/repo-policy.test.ts        @TiagoGranelli
+/tests/api/public-operations.test.ts   @TiagoGranelli
+/tests/contract-coverage-allowlist.json @TiagoGranelli
+/specs/                                @TiagoGranelli
+/scripts/caddy-validate.ts             @TiagoGranelli
+/scripts/check-changed.ts              @TiagoGranelli
+/scripts/check-drift.ts                @TiagoGranelli
+/scripts/ci-jobs.ts                    @TiagoGranelli
+/scripts/dast-smoke.ts                 @TiagoGranelli
+/scripts/format-edited-file.ts         @TiagoGranelli
+/scripts/lighthouse-policy.ts          @TiagoGranelli
+/scripts/load-test.ts                  @TiagoGranelli
+/scripts/mutate.ts                     @TiagoGranelli
+/scripts/tla.ts                        @TiagoGranelli
 
 # Supply chain: exact versions, build-script, release-age and trust exceptions, overrides, vulnerability and
 # license exceptions, secret-scan and migration-lint exceptions.

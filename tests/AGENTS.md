@@ -65,6 +65,6 @@ describes the running app both integration and E2E test. Claude Code loads the o
   which the API description documents once). Stale entries fail.
 - **Flakiness.** CI retries a failed Playwright test once but fails the run if it then passes
   (`failOnFlakyTests`): fix the cause. Locate fields by role and exact name (`getByRole('textbox', { name:
-  'Email', exact: true })`); a bare `getByLabel('Email')` also matches "Email confirmed". Mutation testing is
-  not a gate yet: StrykerJS's Vitest runner skips nested tests on Vitest 5
-  ([docs/stack.md](../docs/stack.md#mutation-testing)).
+  'Email', exact: true })`); a bare `getByLabel('Email')` also matches "Email confirmed". Incremental mutation
+  testing runs via `pnpm verify:mutate` (`scripts/mutate.ts`, locally and nightly in
+  `.github/workflows/deep-gates.yml`; see [docs/stack.md](../docs/stack.md#mutation-testing)).

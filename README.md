@@ -63,7 +63,7 @@ export async function PostCount() {
 
 Here, `pnpm check` rejects it and says where the data should come from:
 
-![Output of pnpm check: three lint errors saying UI code must not import the database or src/server and should go through the generated SDK, two architecture boundary violations, and a summary where lint and deadcode fail with instructions and the other twelve jobs pass](docs/assets/check-catches-db-import.png)
+![Output of pnpm check: three lint errors saying UI code must not import the database or src/server and should go through the generated SDK, two architecture boundary violations, an unowned feature file failure, and a summary where fallow, lint, and tests fail with instructions while the remaining checks pass](docs/assets/check-catches-db-import.png)
 
 <sub>A real run on a scratch copy of the repository, with a few lines of pnpm and Fallow noise removed.</sub>
 
@@ -71,7 +71,7 @@ An agent builds the most common version it has seen, and a new project has nothi
 a prompt or an `AGENTS.md` are suggestions: the agent can skip them, and you find out in review, if you look.
 A rule that fails a command is one it cannot skip.
 
-![Two workflows side by side. Without Slopproof: you ask, the agent writes, you review, and every mistake comes back to you (reading the database from the UI, one query per row, no test for the error case, a page never tried with a keyboard). With Slopproof: pnpm check sits between the agent and your review and sends failures back to the agent, so you review a diff that already passed architecture boundaries, query budgets, accessibility in five browsers and contract drift. Four gates run in order: a hook on every edit, pnpm check with 14 jobs in about 16 seconds, pnpm verify:app on the built app with a real Postgres, and CI with Lighthouse and an image scan.](docs/assets/with-and-without.png)
+![Two workflows side by side. Without Slopproof: you ask, the agent writes, you review, and every mistake comes back to you (reading the database from the UI, N+1 query per row and full table scan, skipped error cases and missing tests, unchecked keyboard and CSP leaks). With Slopproof: automated gates sit between the agent and your review and send failures back in seconds, so you review a diff that already passed architecture and contract drift, query budgets and EXPLAIN plans, accessibility across 5 browsers plus CSP, TLA+ proofs, fuzzing and observability. Four layers run in order: a hook on every edit, pnpm check:changed (~1–2 s) and pnpm check (~9 s), pnpm verify:app on the built app with Postgres, E2E, chaos and query plans, and ~2-minute PR CI plus nightly deep gates.](docs/assets/with-and-without.png)
 
 ## Is it for you
 
@@ -104,13 +104,22 @@ Every row is something agents do when nothing stops them, and the check that sto
 | Add an inline script | The Content-Security-Policy allows no `unsafe-inline`, and a violation fails any end-to-end test |
 | Ship a slow page | Lighthouse on four pages, mobile and desktop: 100 in accessibility, best practices and SEO, 95 in performance |
 | Install whatever is newest | Exact pins, a one-day wait on new releases, `pnpm audit`, a license allowlist, secret and image scans |
+| Reach for `useEffect`, timers, or prose comments | Banned by lint and instant edit hooks ([ADR 0017](docs/decisions/0017-no-effects-or-timers.md), [ADR 0019](docs/decisions/0019-no-comments.md)); derive during render, express intent in types and names |
+| Miss parser edge cases or slow index scans | `fast-check` fuzzing on parsers/contracts, 10k-row Postgres `EXPLAIN` index-plan checks, and TLA+ TLC specs in CI |
+| Lose tracing, audit logs, or config safety | W3C `traceparent` correlation, edge-guarded `/metrics` & OTLP, immutable `audit_log`, chaos tests, Caddy/Fly validation, STRIDE threat model, and runbooks |
+| Wait too long while iterating locally | `PostToolUse` edit hook (`<1 s`) + `pnpm check:changed` (~1–2 s incremental); nightly `deep-gates.yml` runs mutation, DAST, load/soak, visual, and benchmarks |
 
 An agent cannot quietly switch a check off: every exception is a visible edit with its reason next to it, and
 changes to the check files go to a code owner.
 [docs/agents/gates.md](docs/agents/gates.md) describes each check and how to make an exception.
 
-For the agent itself: `AGENTS.md` stays under 200 lines, each multi-step workflow is a skill, and the Claude Code
-settings format and lint each edited file, refuse edits to generated files and block `git commit --no-verify`.
+### Defense in depth: from edit to production
+
+![Four-stage Slopproof defense lifecycle: 1. Pre-Production (edit hook, Oxlint/Oxfmt/tsrs/Effect, Fallow boundaries and complexity, 100% unit/API/component gate, fast-check fuzz and property tests, TLA+ TLC proofs, nightly mutation and benchmarks), 2. Build & Deploy (contract and migration drift, Postgres EXPLAIN query plans, 5-browser E2E/Axe/CSP, Lighthouse 100 behind Caddy, Docker smoke and Grype CVE scan, Caddyfile and Fly config checks, nightly DAST/load/soak), 3. Release (typed feature flags, graceful shutdown and /api/ready, strict CSP, redacted error reporter, atomic Postgres rate limits, zero-downtime SQL migrations), and 4. Post-Release (W3C tracing and x-request-id, Prometheus /metrics and OTLP, immutable audit_log table, chaos and fault-injection tests, client RUM and error hook, STRIDE threat model and SLOs, operational runbooks).](docs/assets/defense-layers.png)
+
+For the agent itself: `AGENTS.md` stays under 14 KiB, each multi-step workflow is a skill, `pnpm check:changed`
+gives ~1–2 s incremental feedback, and the Claude Code settings format, lint, and guard each edited file, refuse
+edits to generated files and block `git commit --no-verify`.
 Four eval tasks with hidden checks run in [Harbor](https://docs.harborframework.com/), so you can measure whether
 a change to the instructions helps.
 
@@ -126,6 +135,9 @@ A working app that you change into yours:
   Delete it when you start your own.
 - **The UI details agents skip.** Themes without a flash on load, a skip link, route announcements, visible
   focus, field errors that screen readers announce, and a delete confirmation that Enter alone never confirms.
+- **Production observability & operations.** W3C `traceparent`/`x-request-id` correlation, Effect native metrics
+  with `/metrics` & OTLP export, an immutable `audit_log` migration, redacted error reporting, typed runtime
+  feature flags, chaos tests, a STRIDE threat model, SLOs, and operational runbooks.
 - **One container to deploy.** Recipes for a single server with Docker Compose and Caddy, for Fly.io and for
   Kubernetes.
 
@@ -186,13 +198,16 @@ do the same jobs in Python, Rails and Go. For React and TypeScript on another st
 
 ## Status
 
-The first release is [0.1.0](CHANGELOG.md). CI runs every job in `pnpm check`, the drift checks against Postgres,
-the integration and end-to-end tests in five browser projects, contract coverage, Lighthouse, and the Docker
-image build and scan.
+Current release: [0.2.0](CHANGELOG.md). PR CI runs every job in `pnpm check`, the drift checks against Postgres,
+TLA+ model checks and Caddy/Fly validation, API/DB (including query plans)/integration (including chaos and
+observability) and end-to-end tests across five browser projects, contract coverage, Lighthouse, and the Docker
+image build and scan (~2m20s across 15 parallel jobs). Nightly and on-demand deep gates (mutation testing, DAST,
+load/soak, visual regressions, benchmarks, and Bombadil UI exploration) run in
+[.github/workflows/deep-gates.yml](.github/workflows/deep-gates.yml).
 
-Some dependencies are pre-release: Nitro 3 is a beta, Hey API is a `next` snapshot and TanStack Start still calls
-itself a release candidate. The project runs on TypeScript 7 and Node 26. Upgrades are pinned and gated, one per
-pull request, but expect some to need work.
+Some dependencies are pre-release: Nitro 3 is a release candidate, Hey API is a `next` snapshot and TanStack
+Start still calls itself a release candidate. The project runs on TypeScript 7 and Node 26. Upgrades are pinned
+and gated, one per pull request, but expect some to need work.
 
 The agent evals run with Harbor, but results from real agents are not published yet.
 
@@ -205,8 +220,13 @@ catch whole classes of mistakes every time, and what gets past them is cheap to 
 | --- | --- |
 | [docs/adopting.md](docs/adopting.md) | From "Use this template" to your own deployed app, and taking template updates later |
 | [AGENTS.md](AGENTS.md) | The architecture map and the rules that agents and people follow |
+| [docs/stack.md](docs/stack.md) | Why each library is here, tracked upstream issues, and mutation-testing targets |
 | [docs/agents/gates.md](docs/agents/gates.md) | What each check covers and how to make an exception |
+| [docs/agents/skills.md](docs/agents/skills.md) | Project skills and package-shipped library docs |
 | [docs/agents/evals.md](docs/agents/evals.md) | Running the agent evals |
+| [docs/security/threat-model.md](docs/security/threat-model.md) | STRIDE threat model mapped 1:1 to enforcement tests |
+| [docs/slos.md](docs/slos.md) | SLIs, SLOs, canary and rollback recipes, and alert triggers |
+| [docs/runbooks/](docs/runbooks/README.md) | Operational runbooks for DB outage, high 5xx rate, auth abuse, and key rotation |
 | [docs/operations.md](docs/operations.md) | Configuration, deployment and security |
 | [docs/decisions/](docs/decisions/README.md) | Architecture decisions |
 

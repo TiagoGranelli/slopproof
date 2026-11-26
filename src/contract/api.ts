@@ -12,7 +12,7 @@ export class Api extends HttpApi.make('api')
   .annotateMerge(
     OpenApi.annotations({
       title: `${APP_NAME} API`,
-      version: '0.1.0',
+      version: '0.2.0',
       description:
         'Every POST, PATCH and DELETE must come from the app itself: `Sec-Fetch-Site: same-origin`, or an ' +
         '`Origin` (or `Referer`) equal to the app origin. Any other answers `403` with a plain-text body before ' +
