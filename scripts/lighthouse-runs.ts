@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, statfsSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import lighthouse, { desktopConfig, generateReport } from 'lighthouse'
@@ -139,7 +140,7 @@ const stopChrome = async (child: ChildProcess, profileDir: string) => {
     const timer = setTimeout(() => child.kill('SIGKILL'), 5000)
     await exited.finally(() => clearTimeout(timer))
   }
-  rmSync(profileDir, { force: true, recursive: true })
+  await rm(profileDir, { force: true, maxRetries: 20, recursive: true, retryDelay: 100 }).catch(() => undefined)
 }
 
 const launchChrome = async (chrome: Chrome) => {
