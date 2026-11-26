@@ -27,12 +27,12 @@ pre-commit:
               remove the secret from the staged change; a false positive goes in .config/betterleaks.toml with its reason
 
           - name: format
-            glob: '**/*.{ts,tsx,js,mjs,cjs,json,jsonc,css,yml,yaml,html,toml}'
+            glob: '**/*.{ts,tsx,mts,js,mjs,cjs,json,jsonc,css,yml,yaml,html,toml}'
             run: ./node_modules/.bin/oxfmt --check
             fail_text: run `pnpm format`
 
           - name: fallow
-            glob: ['**/*.{ts,tsx}', 'package.json', '.fallowrc.json']
+            glob: ['**/*.{ts,tsx,mts}', 'package.json', '.fallowrc.json']
             run: ./node_modules/.bin/fallow --quiet --fail-on-issues --dupes-threshold 0.000001
             fail_text: >-
               fix the unused code or boundary finding (.fallowrc.json), split functions above the complexity ceiling, or
@@ -47,20 +47,38 @@ pre-commit:
               `// fallow-ignore-next-line security-sink` above it with the reason
 
           - name: drift
-            glob:
-              - 'src/contract/**/*.ts'
-              - 'src/server/**/*.ts'
-              - 'src/sdk/**'
-              - 'openapi.json'
-              - 'openapi-ts.config.ts'
-              - 'drizzle/**'
-              - 'scripts/openapi.ts'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-            run: node scripts/check-drift.ts contract migrations auth
-            fail_text: >-
-              contract: commit what `pnpm codegen` regenerated; migrations: `pnpm db:generate --name <slug>`; auth: edit
-              src/server/db/schema/auth.ts by hand (skill auth-change)
+            group:
+              parallel: true
+              jobs:
+                - name: drift-contract
+                  glob:
+                    - 'src/contract/**/*.ts'
+                    - 'src/sdk/**'
+                    - 'openapi.json'
+                    - 'openapi-ts.config.ts'
+                    - 'scripts/openapi.ts'
+                    - 'package.json'
+                    - 'pnpm-lock.yaml'
+                  run: node scripts/check-drift.ts contract
+                  fail_text: commit what `pnpm codegen` regenerated
+
+                - name: drift-migrations
+                  glob:
+                    - 'src/server/db/schema/**/*.ts'
+                    - 'drizzle/**'
+                    - 'package.json'
+                    - 'pnpm-lock.yaml'
+                  run: node scripts/check-drift.ts migrations
+                  fail_text: run `pnpm db:generate --name <slug>`
+
+                - name: drift-auth
+                  glob:
+                    - 'src/server/auth.ts'
+                    - 'src/server/db/schema/auth.ts'
+                    - 'package.json'
+                    - 'pnpm-lock.yaml'
+                  run: node scripts/check-drift.ts auth
+                  fail_text: edit src/server/db/schema/auth.ts by hand (skill auth-change)
 
           - name: migrations
             glob: ['drizzle/*.sql', '.config/squawk.toml', 'package.json']
@@ -77,14 +95,14 @@ pre-commit:
               version) with the reason
 
     - name: lint
-      glob: ['**/*.{ts,tsx,js,mjs,cjs}', '.config/oxlint/*.ts', 'package.json']
+      glob: ['**/*.{ts,tsx,mts,js,mjs,cjs}', '.config/oxlint/*.ts', 'oxlint.config.ts', 'package.json']
       run: ./node_modules/.bin/oxlint --type-aware --deny-warnings
       fail_text: >-
         run `pnpm lint:fix`, then fix what remains as the message says (one file: `pnpm lint src/x.ts`). A rule that is
         wrong for one line: `// oxlint-disable-next-line <rule>` under a comment that says why
 
     - name: effect
-      glob: ['**/*.{ts,tsx}', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml']
+      glob: ['**/*.{ts,tsx,mts}', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml']
       run: ./node_modules/.bin/effect-tsgo tsc --noEmit
       fail_text: >-
         fix the TypeScript or Effect diagnostic above (in src/sdk run `pnpm codegen`, in src/routeTree.gen.ts run
@@ -92,7 +110,15 @@ pre-commit:
 
     # unit, api and component tests with the coverage gate (vitest.config.ts); needs Playwright's Chromium.
     - name: tests
-      glob: ['**/*.{ts,tsx,css}', 'openapi.json', 'package.json', 'pnpm-lock.yaml']
+      glob:
+        - 'src/**/*.{ts,tsx,mts,css}'
+        - 'tests/{unit,api,component}/**/*.{ts,tsx}'
+        - 'scripts/**/*.{ts,mts}'
+        - '.config/oxlint/no-comments-plugin.ts'
+        - 'vitest.config.ts'
+        - 'openapi.json'
+        - 'package.json'
+        - 'pnpm-lock.yaml'
       run: ./node_modules/.bin/vitest run --project unit --project api --project component --coverage
       fail_text: >-
         fix the failing test or the code it covers (one layer: `pnpm test:unit|test:api|test:component [filter]`).

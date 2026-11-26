@@ -1,11 +1,18 @@
 import '@tanstack/react-start/server-only'
 import { appendResponseHeader, getRequestHeaders, getRequestIP } from '@tanstack/react-start/server'
 import type { BASE_ERROR_CODES } from 'better-auth'
+import { Redacted } from 'effect'
+import { UserId } from '#/contract/ids.ts'
 import type { Json } from '#/contract/json.ts'
+import { recordAuditEvent } from '../audit/audit-log.ts'
 import { auth } from '../auth.ts'
 import { finishBeforeShutdown } from '../background-tasks.ts'
+import { db } from '../db/client.ts'
+import type { AuditOutcome } from '../db/schema/audit-log.ts'
 import { env } from '../env.ts'
+import { isFlagEnabled } from '../feature-flags.ts'
 import { log } from '../log.ts'
+import { recordAuthEvent } from '../observability/telemetry.ts'
 import { AUTH_BASE_PATH, isHttpEndpoint, notFound } from './auth-endpoints.ts'
 import { forwardedFor } from './forwarded-for.ts'
 
@@ -122,17 +129,78 @@ const readOutcome = async (response: Response, path: string): Promise<AuthEndpoi
   }
 }
 
+const authAuditOutcome = (response: Response): AuditOutcome => {
+  if (response.ok) {
+    return 'success'
+  }
+  if (response.status === 401 || response.status === 403 || response.status === 429) {
+    return 'denied'
+  }
+  return 'failure'
+}
+
+const auditActorId = (ok: boolean, body: Json | undefined): UserId | null => {
+  if (!ok || !isJsonObject(body) || !isJsonObject(body.user) || typeof body.user.id !== 'string') {
+    return null
+  }
+  return UserId.make(body.user.id)
+}
+
+const lastForwardedIp = (headers: Headers): string | undefined =>
+  headers
+    .get('x-forwarded-for')
+    ?.split(',')
+    .map((entry) => entry.trim())
+    .toReversed()
+    .find((entry) => entry.length > 0)
+
+const auditableAuthPath = (request: Request): string | undefined => {
+  const pathname = new URL(request.url).pathname
+  const subPath = pathname.startsWith(AUTH_BASE_PATH) ? pathname.slice(AUTH_BASE_PATH.length) : pathname
+  if (subPath === '/get-session' || (request.method === 'GET' && subPath !== '/verify-email')) {
+    return undefined
+  }
+  return subPath
+}
+
+const buildAuthAuditInput = (request: Request, response: Response, body: Json | undefined) => {
+  const subPath = auditableAuthPath(request)
+  if (!subPath) {
+    return undefined
+  }
+  return {
+    action: `auth.${subPath.replace(/^\/+/, '').replaceAll('/', '.')}`,
+    actorId: auditActorId(response.ok, body),
+    ip: lastForwardedIp(request.headers),
+    ipSalt: env.auditIpSalt ? Redacted.value(env.auditIpSalt) : undefined,
+    metadata: { method: request.method, path: subPath, statusCode: response.status },
+    outcome: authAuditOutcome(response),
+  }
+}
+
+const recordAuthAudit = async (request: Request, response: Response, body: Json | undefined): Promise<void> => {
+  const event = buildAuthAuditInput(request, response, body)
+  if (!event) {
+    return
+  }
+  recordAuthEvent(event.action, event.outcome)
+  await finishBeforeShutdown(recordAuditEvent(db, event, { strict: isFlagEnabled('auditLogStrict') }))
+}
+
 export const callAuthEndpoint = async (
   method: 'GET' | 'POST',
   path: `/${string}`,
   input: EndpointInput = {},
 ): Promise<AuthEndpointResult> => {
-  const response = await dispatch(endpointRequest(method, path, input))
+  const request = endpointRequest(method, path, input)
+  const response = await dispatch(request)
   const cookies = response.headers.getSetCookie()
   if (cookies.length > 0) {
     appendResponseHeader('set-cookie', cookies)
   }
-  return readOutcome(response, path)
+  const outcome = await readOutcome(response, path)
+  await recordAuthAudit(request, response, outcome.ok ? outcome.body : undefined)
+  return outcome
 }
 
 type JsonObject = { readonly [key: string]: Json }
@@ -149,14 +217,24 @@ const withoutToken = (value: Json | undefined): Json | undefined => {
   return isJsonObject(session) && 'token' in session ? { ...rest, session: withoutToken(session) ?? null } : rest
 }
 
-const withoutSessionTokens = async (response: Response): Promise<Response> => {
+const withoutSessionTokens = async (
+  response: Response,
+): Promise<{ readonly body: Json | undefined; readonly response: Response }> => {
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
-    return response
+    return { body: undefined, response }
   }
-  const body = withoutToken(parseJson(await response.text()))
+  const parsed = parseJson(await response.text())
+  const body = withoutToken(parsed)
   const headers = new Headers(response.headers)
   headers.delete('content-length')
-  return new Response(JSON.stringify(body), { headers, status: response.status, statusText: response.statusText })
+  return {
+    body: parsed,
+    response: new Response(JSON.stringify(body), {
+      headers,
+      status: response.status,
+      statusText: response.statusText,
+    }),
+  }
 }
 
 export const handleAuthRequest = async (request: Request): Promise<Response> => {
@@ -171,6 +249,9 @@ export const handleAuthRequest = async (request: Request): Promise<Response> => 
     method: request.method,
     signal: request.signal,
   }
-  const response = await dispatch(new Request(request.url, init))
-  return withoutSessionTokens(response)
+  const forwarded = new Request(request.url, init)
+  const rawResponse = await dispatch(forwarded)
+  const sanitized = await withoutSessionTokens(rawResponse)
+  await recordAuthAudit(forwarded, sanitized.response, sanitized.body)
+  return sanitized.response
 }

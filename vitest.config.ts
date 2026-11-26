@@ -25,6 +25,13 @@ const COVERAGE_GATE = [
   'src/features/posts/utils/post-editor-machine.ts',
   'src/features/auth/utils/auth-form-machine.ts',
   'src/components/lists/load-more-machine.ts',
+  'src/server/request-context.ts',
+  'src/server/observability/telemetry.ts',
+  'src/server/observability/error-reporter.ts',
+  'src/server/feature-flags.ts',
+  'src/server/db/schema/audit-log.ts',
+  'src/server/audit/audit-log.ts',
+  'src/lib/client-telemetry.ts',
 ]
 const COVERAGE_FLOOR = { branches: 67, functions: 59, lines: 69, statements: 69 }
 for (const file of COVERAGE_GATE) {

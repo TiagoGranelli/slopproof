@@ -7,6 +7,7 @@ const PINNED_COPIES = [
   'deploy/compose.production.yaml',
   '.github/compose.ci.yaml',
   '.github/workflows/ci.yml',
+  '.github/workflows/deep-gates.yml',
   'Dockerfile',
   '.agents/evals/Dockerfile',
 ]

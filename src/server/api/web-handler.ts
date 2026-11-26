@@ -6,9 +6,12 @@ import { Api } from '#/contract/api.ts'
 import { UserId } from '#/contract/ids.ts'
 import { Database } from '../db/client.ts'
 import { DatabaseHealth } from '../db/health.ts'
+import { env } from '../env.ts'
 import { requestSession } from '../http/request-session.ts'
 import { onShutdown } from '../lifecycle.ts'
 import { log } from '../log.ts'
+import { reportCapturedError } from '../observability/error-reporter.ts'
+import { createOtlpExporter } from '../observability/telemetry.ts'
 import { PostsRepo } from '../posts/repo.ts'
 import { ApiHandlers } from './handlers.ts'
 import { AuthenticationLive, issuePath, RequestValidationLive } from './middleware.ts'
@@ -29,10 +32,13 @@ const describeSchemaDefect = (defect: HttpApiError.HttpApiSchemaError): Error =>
 
 const logDefect = (request: HttpServerRequest.HttpServerRequest, cause: Cause.Cause<unknown>) => {
   const defect = Cause.squash(cause)
+  const path = request.url.split('?')[0] ?? '/'
+  const reported = HttpApiError.HttpApiSchemaError.is(defect) ? describeSchemaDefect(defect) : defect
+  reportCapturedError(reported, { tags: { method: request.method, path, source: 'effect-api' } })
   log('error', 'api defect', {
-    error: HttpApiError.HttpApiSchemaError.is(defect) ? describeSchemaDefect(defect) : defect,
+    error: reported,
     method: request.method,
-    path: request.url.split('?')[0],
+    path,
   })
 }
 
@@ -79,9 +85,17 @@ const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: '/api/openapi.json' }).
   Layer.merge(ServerMiddleware),
 )
 
-const { dispose, handler } = HttpRouter.toWebHandler(ApiLive.pipe(Layer.provide(HttpServer.layerServices)), {
-  disableLogger: true,
-})
+const telemetry = createOtlpExporter({ endpoint: env.otlpEndpoint })
+
+const { dispose, handler } = HttpRouter.toWebHandler(
+  ApiLive.pipe(Layer.provide(HttpServer.layerServices), Layer.provide(telemetry.tracerLayer)),
+  {
+    disableLogger: true,
+  },
+)
 onShutdown('effect-api', dispose)
+onShutdown('telemetry-flush', async () => {
+  await telemetry.flush()
+})
 
 export const apiHandler = handler

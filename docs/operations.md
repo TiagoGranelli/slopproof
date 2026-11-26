@@ -1,7 +1,9 @@
 # Operations
 
 How to configure, deploy and run the app in production. The app is a single Node process
-(Nitro `node-server` output in `.output/`) in front of PostgreSQL.
+(Nitro `node-server` output in `.output/`) in front of PostgreSQL. See also the
+[threat model](security/threat-model.md), [incident runbooks](runbooks/README.md) and
+[SLOs, profiling and release recipes](slos.md).
 
 ## Environment
 
@@ -26,6 +28,11 @@ non-numeric `SERVER_SHUTDOWN_TIMEOUT` to 5.
 | `PORT`, `HOST` | no | Listen address. Default port 3000 on all interfaces. `NITRO_PORT` and `NITRO_HOST` take precedence when set. |
 | `NITRO_SSL_CERT`, `NITRO_SSL_KEY` | no | Serve HTTPS from Node: PEM text or file paths. Both must be set; with only one, the server silently serves plain HTTP. File paths need an `--allow-fs-read` for each in the image's `CMD` ([ADR 0012](decisions/0012-node-permission-model.md)). |
 | `SERVER_SHUTDOWN_TIMEOUT` | no | Seconds to drain requests on SIGTERM. Default 5. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Optional OTLP/HTTP (`http://` or `https://`) collector base URL for batched trace export (`src/server/observability/telemetry.ts`). Unset: disabled with zero overhead. |
+| `METRICS_TOKEN` | for `/metrics` | Optional secret bearer token guarding `GET /metrics` (compared in constant time when `FEATURE_FLAGS` enables `prometheusMetrics`). Unset: `/metrics` returns 404. |
+| `AUDIT_IP_SALT` | for `audit_log` | Optional secret HMAC-SHA256 salt for hashing client IPs in `audit_log.ip_hash` (`src/server/audit/audit-log.ts`). Unset: `ip_hash` is recorded as `null`. |
+| `FEATURE_FLAGS` | no | Optional JSON object overriding typed server feature flags in `src/server/feature-flags.ts` (`boolean` or `{ enabled, rolloutPercent }`). |
+| `CLIENT_TELEMETRY_ENDPOINT` | no | Optional opt-in URL for browser Web Vitals and client error beacons (`src/lib/client-telemetry.ts`). Unset: no client telemetry is sent. |
 | `NODE_ENV` | no | The production build behaves as production regardless; the Docker image sets it anyway. |
 
 The migration script (`node .output/migrate.mjs`, `pnpm db:migrate`) reads:
@@ -294,7 +301,7 @@ kubectl exec -it deploy/app -c app -- node .output/create-user.mjs you@example.c
 ## Secrets
 
 The secrets are `BETTER_AUTH_SECRET`, `DATABASE_URL` and `MIGRATION_DATABASE_URL` (they hold the database
-password), `SMTP_URL` (its credentials) and, on the Compose recipe, the two database passwords. Keep them in
+password), `SMTP_URL` (its credentials), optional `METRICS_TOKEN` and `AUDIT_IP_SALT`, and, on the Compose recipe, the two database passwords. Keep them in
 the platform's secret store: `deploy.env` with mode 600 on the server, `fly secrets`, a Kubernetes Secret
 (with encryption at rest, or an external secrets operator). Never put them in the image (the Dockerfile's
 build uses placeholders only), in `fly.toml`, in a manifest or in the repository. Anyone who can run
@@ -400,7 +407,7 @@ default) send a length.
 
 `deploy/Caddyfile` is the reference edge, and the topology the tests measure: `pnpm lighthouse` always
 runs through it, the integration and E2E tests optionally (`TEST_EDGE=1`), and `pnpm ci:docker` serves the image behind it.
-It uses Caddy 2.11.4 (image pinned by digest in `compose.yaml` and `scripts/images.ts`) and does four
+It uses Caddy 2.11.4 (image pinned by digest in `compose.yaml` and `scripts/images.ts`) and does five
 things:
 
 - **TLS and HTTP/2:** with a domain as `EDGE_ADDRESS` (`app.example.com`), Caddy obtains and renews the
@@ -425,6 +432,9 @@ things:
   right and takes the first address that is not trusted, so a client cannot pick its IP by prepending
   entries. The compose `edge` profile trusts the private ranges in the app, because Docker picks the
   network's subnet; local clients then arrive as the bridge gateway and share one rate-limit bucket.
+- **Internal `/metrics` blocked at the edge:** `deploy/Caddyfile` answers `404` for `/metrics` before
+  `reverse_proxy`, so external clients never reach Prometheus scrapes even when `prometheusMetrics` and
+  `METRICS_TOKEN` are enabled for internal collectors (see [slos.md](slos.md#2-prometheus-and-alertmanager-rules)).
 
 Caddy streams request bodies without buffering them, so a chunked upload reaches the app without a
 length and gets 411; browsers and the SDK always send `Content-Length`.

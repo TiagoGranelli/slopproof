@@ -3,7 +3,7 @@ import { log } from './log.ts'
 
 type Cleanup = () => Promise<void> | void
 
-const STEPS = ['auth-cleanup', 'background-tasks', 'mailer', 'effect-api', 'postgres-pool'] as const
+const STEPS = ['auth-cleanup', 'background-tasks', 'mailer', 'effect-api', 'telemetry-flush', 'postgres-pool'] as const
 export type ShutdownStep = (typeof STEPS)[number]
 
 const REGISTRY = Symbol.for('app.shutdown')

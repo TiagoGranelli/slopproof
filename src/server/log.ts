@@ -1,4 +1,5 @@
 import '@tanstack/react-start/server-only'
+import { currentRequestContext } from './request-context.ts'
 
 type Level = 'debug' | 'info' | 'warn' | 'error'
 // A log line takes any value its caller has (thrown errors are `unknown`); JSON.stringify is the boundary.
@@ -64,7 +65,16 @@ const serializeError = (error: unknown, depth = 0): SerializedError => {
 
 export const log = (level: Level, msg: string, fields: Fields = {}): void => {
   const { error, ...rest } = fields
-  const entry = { level, msg, time: new Date().toISOString(), ...rest, error: serializeError(error) }
+  const context = currentRequestContext()
+  const entry = {
+    level,
+    msg,
+    requestId: context?.requestId,
+    time: new Date().toISOString(),
+    traceId: context?.traceId,
+    ...rest,
+    error: serializeError(error),
+  }
   const line = `${JSON.stringify(entry)}\n`
   if (level === 'error') {
     process.stderr.write(line)

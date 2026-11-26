@@ -1,7 +1,9 @@
 # The stack
 
 What each piece is, why the template uses it, and what could go wrong with it. Versions are pinned exactly in
-`package.json`; the [ADRs](decisions/README.md) hold the longer reasoning.
+`package.json`; the [ADRs](decisions/README.md) hold the longer reasoning. For security controls, incident
+response and reliability targets, see the [threat model](security/threat-model.md),
+[runbooks](runbooks/README.md) and [SLOs and release recipes](slos.md).
 
 | Piece | Why it is here | Risk |
 | --- | --- | --- |
@@ -48,13 +50,15 @@ that change something here when they are fixed:
 | microsoft/playwright#42731 | Remove the Firefox COOP preference in `playwright.config.ts` after Playwright 1.63 |
 | evilmartians/lefthook#1167 | Run the `security` job of `.config/lefthook.yml` inline instead of through a pnpm script, once a release has the fix |
 | oxc-project/oxc#17021, #23695 | Lint directives through Oxlint instead of `tests/unit/repo-policy.test.ts`; the plain plugin specifier in `oxlint.config.ts` |
-| stryker-mutator/stryker-js#6210 | Add mutation testing as a gate (below) |
+| stryker-mutator/stryker-js#6210 | Fixed in `@stryker-mutator/vitest-runner@10.1.1`; the repo also ships zero-bloat incremental `scripts/mutate.ts` (`pnpm verify:mutate`, below) |
 
 ### Mutation testing
 
-StrykerJS 10's Vitest runner builds its per-test name filter in a way Vitest 5 no longer matches, so every
-test inside a `describe` is skipped and every mutant survives. Once a release fixes it, a `pnpm mutate` script
-can run Stryker on the files a pull request changes and on all of `src/` nightly, with these minimum scores:
+StrykerJS 10's Vitest runner originally failed on Vitest 5 per-test name filters (`stryker-mutator/stryker-js#6210`),
+which `@stryker-mutator/vitest-runner@10.1.1` has since fixed. To avoid adding Stryker's dependency tree to the
+template while still enforcing mutation scores incrementally (and nightly in `.github/workflows/deep-gates.yml`), the
+repo ships a zero-bloat incremental mutation runner in `scripts/mutate.ts` (`pnpm verify:mutate`) targeting these
+minimum scores:
 
 | Files | Minimum score |
 | --- | --- |

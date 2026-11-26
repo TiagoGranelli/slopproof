@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs'
 import { OpenApi } from 'effect/http-api'
 import { Api } from '#/contract/api.ts'
 
-const renderOpenApi = () => `${JSON.stringify(OpenApi.fromApi(Api), null, 2)}\n`
+export const renderOpenApi = (): string => `${JSON.stringify(OpenApi.fromApi(Api), null, 2)}\n`
 
 if (import.meta.main) {
   const target = new URL('../openapi.json', import.meta.url)

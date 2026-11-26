@@ -90,6 +90,7 @@ Each multi-step workflow is a project skill in `.agents/skills/` (linked into `.
 | A feature across database, API and UI | `add-feature` |
 | Account action, Better Auth config, creating users | `auth-change` |
 | New page, form or UI state | `add-page` |
+| Security, auth, CSP, headers, or exposure review | `security-review` |
 | Any dependency bump, above all the pre-release pins | `upgrade-prerelease-deps` |
 
 **First setup.** Run `pnpm install && pnpm bootstrap`. This creates `.env` with a secret, starts Postgres and
@@ -97,23 +98,22 @@ Mailpit (`pnpm mail:up`, the local inbox for account emails), and applies migrat
 
 ## Verify
 
-Read [tests/AGENTS.md](tests/AGENTS.md) before you write or change a test: it says which layer a behavior belongs
-in and how each layer's harness works.
+Read [tests/AGENTS.md](tests/AGENTS.md) before writing or changing tests (layers and harnesses).
 
 | Command | Covers |
 | --- | --- |
-| `pnpm check` | All no-DB, no-build gates (format, type-aware lint, typecheck, Effect diagnostics, dead code, complexity, dupes, security sinks, unit/api/component tests + coverage, drift, migration lint, licenses), ~16 s. Run before hand-off; pre-commit runs matching jobs |
+| `pnpm check:changed` | Fast incremental gate on changed files (`oxfmt`, `oxlint`, `effect-tsgo`, `vitest related`, `fallow`, `squawk`, `drift`); run during iteration |
+| `pnpm check` | All no-DB, no-build gates (format, type-aware lint, typecheck, Effect, dead code, complexity, dupes, security sinks, fast tests + coverage, drift, migrations, licenses), ~16 s. Run before hand-off |
 | `pnpm test:unit\|test:api\|test:component [filter ...]` | One fast layer; `pnpm test:fast` runs all three with coverage |
-| `pnpm test:db [filter ...]` | The `db` layer on a throwaway Postgres database. Needs Postgres, no build |
+| `pnpm test:db [filter ...]` | The `db` layer on a throwaway Postgres database (no build) |
 | `pnpm format`, `pnpm lint:fix` | Autofixes |
-| `pnpm check:drift [contract\|migrations\|auth\|database]` | Generated files match their sources, and the auth schema holds what Better Auth writes; `database` needs Postgres |
-| `pnpm test [filter ...]`, `pnpm test:e2e [filter ...]` | The integration or E2E layer against the built app; each starts its own servers on a throwaway database. Needs `pnpm build`, Postgres and Mailpit (`pnpm mail:up`) |
-| `pnpm build && pnpm verify:app` | The `db`, integration and E2E layers and contract coverage. Run it, and `test:e2e`, through the `verifier` subagent, and wait for its report before reporting the work |
-| `pnpm build && pnpm lighthouse [--page=<name>]` | The Lighthouse gate behind the Caddy edge (needs Docker) |
-| `pnpm ci:local [job ...]` | The CI jobs in the Playwright Ubuntu container (needs Docker) |
+| `pnpm check:drift [contract\|migrations\|auth\|database]` | Generated files and auth schema match sources (`database` needs Postgres) |
+| `pnpm test [filter ...]`, `pnpm test:e2e [filter ...]` | Integration or E2E on the built app (starts own servers on throwaway DB; needs `pnpm build`, Postgres, `pnpm mail:up`) |
+| `pnpm build && pnpm verify:app` | `db`, integration, E2E and contract coverage; run it and `test:e2e` via the `verifier` subagent |
+| `pnpm build && pnpm lighthouse [--page=<name>]` | Lighthouse behind Caddy edge (needs Docker) |
+| `pnpm ci:local [job ...]` | CI jobs in the Playwright Ubuntu container (needs Docker) |
 
-Failure messages say how to fix them; gate details, exceptions, Lighthouse, `verify:tla`, `verify:ui-properties` and `audit:check`/`sbom:release`
-are in [docs/agents/gates.md](docs/agents/gates.md).
+Gate details, exceptions, `check:caddy`, `verify:tla`, `verify:ui-properties`, `verify:mutate`, `verify:bench`, `verify:load`, `verify:dast`, `verify:visual`, `audit:check`/`sbom:release`: [docs/agents/gates.md](docs/agents/gates.md).
 
 ## Memory safety
 

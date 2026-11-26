@@ -4,6 +4,8 @@ import type { ErrorComponentProps } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { ApiErrorAlert } from '#/components/errors/api-error-alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { reportClientError } from '#/lib/client-telemetry.ts'
+import type { ClientTelemetryOptions } from '#/lib/client-telemetry.ts'
 
 function SectionError({ action, error, reset }: ErrorComponentProps & { action: string }) {
   const queryErrorResetBoundary = useQueryErrorResetBoundary()
@@ -25,11 +27,20 @@ function SectionError({ action, error, reset }: ErrorComponentProps & { action: 
   )
 }
 
-export function SectionErrorBoundary(props: { action: string; children: ReactNode }) {
+export function SectionErrorBoundary(props: {
+  action: string
+  children: ReactNode
+  telemetry?: ClientTelemetryOptions
+}) {
   return (
     <CatchBoundary
       errorComponent={(error: ErrorComponentProps) => <SectionError {...error} action={props.action} />}
       getResetKey={() => props.action}
+      onCatch={(caught) => {
+        if (props.telemetry) {
+          reportClientError(caught, props.telemetry)
+        }
+      }}
     >
       {props.children}
     </CatchBoundary>

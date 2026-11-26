@@ -1,9 +1,11 @@
-import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { createClient } from '@hey-api/openapi-ts'
 import { Client } from 'pg'
 import { x } from 'tinyexec'
+import sdkConfig from '../openapi-ts.config.ts'
+import { renderOpenApi } from './openapi.ts'
 import { dropTestDatabase, resetTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 if (existsSync('.env')) {
@@ -22,7 +24,42 @@ const pnpm = async (args: Array<string>) => {
   return output
 }
 
-const git = (args: Array<string>) => spawnSync('git', args, { encoding: 'utf8' })
+const readDirTree = (root: string): Map<string, Buffer> => {
+  const files = new Map<string, Buffer>()
+  if (!existsSync(root)) {
+    return files
+  }
+  for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue
+    }
+    const fullPath = join(entry.parentPath, entry.name)
+    files.set(relative(root, fullPath).replaceAll('\\', '/'), readFileSync(fullPath))
+  }
+  return files
+}
+
+const diffDirTrees = (actualRoot: string, generatedRoot: string, label: string): Array<string> => {
+  const actual = readDirTree(actualRoot)
+  const generated = readDirTree(generatedRoot)
+  const paths = [...new Set([...actual.keys(), ...generated.keys()])].toSorted()
+  return paths.flatMap((rel) => {
+    const current = actual.get(rel)
+    const next = generated.get(rel)
+    return current && next && current.equals(next) ? [] : [`${label}/${rel}`]
+  })
+}
+
+const generateSdkTo = async (openApiPath: string, outputPath: string): Promise<void> => {
+  const resolved = await sdkConfig
+  const baseOutput = typeof resolved.output === 'object' && !Array.isArray(resolved.output) ? resolved.output : {}
+  await createClient({
+    ...resolved,
+    input: openApiPath,
+    logs: { file: false, level: 'silent' },
+    output: { ...baseOutput, path: outputPath },
+  })
+}
 
 const checks = {
   async auth() {
@@ -45,13 +82,24 @@ const checks = {
   },
 
   async contract() {
-    const before = git(['stash', 'create']).stdout.trim() || 'HEAD'
-    await pnpm(['codegen'])
-    const diff = git(['diff', '--exit-code', '--stat', before, '--', 'openapi.json', 'src/sdk'])
-    if (diff.status === 0) {
-      return []
+    const scratchDir = mkdtempSync(join(tmpdir(), 'check-drift-contract-'))
+    try {
+      const generatedSpec = renderOpenApi()
+      const generatedSpecPath = join(scratchDir, 'openapi.json')
+      const generatedSdkDir = join(scratchDir, 'sdk')
+      writeFileSync(generatedSpecPath, generatedSpec)
+      await generateSdkTo(generatedSpecPath, generatedSdkDir)
+      const currentSpec = existsSync('openapi.json') ? readFileSync('openapi.json', 'utf8') : ''
+      const changed = [
+        ...(currentSpec === generatedSpec ? [] : ['openapi.json']),
+        ...diffDirTrees('src/sdk', generatedSdkDir, 'src/sdk'),
+      ]
+      return changed.length === 0
+        ? []
+        : [`\`pnpm codegen\` would change these files; run it and commit them:\n${changed.join('\n')}`]
+    } finally {
+      rmSync(scratchDir, { force: true, recursive: true })
     }
-    return [`\`pnpm codegen\` changed these files; review and commit them:\n${diff.stdout.trimEnd()}${diff.stderr}`]
   },
 
   async database() {

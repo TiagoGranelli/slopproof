@@ -5,21 +5,28 @@ import { stubEnvironment } from './process-fakes.ts'
 
 const BASE = {
   APP_URL: 'https://app.example.com',
+  AUDIT_IP_SALT: '',
   AUTH_SIGN_UP: '',
   BETTER_AUTH_SECRET: 'x'.repeat(32),
+  CLIENT_TELEMETRY_ENDPOINT: '',
   DATABASE_POOL_MAX: '',
   DATABASE_URL: 'postgres://app:not-a-secret@127.0.0.1:5432/app',
   DATABASE_URL_POOLED: '',
+  FEATURE_FLAGS: '',
   MAIL_FROM: '',
+  METRICS_TOKEN: '',
   NODE_ENV: 'test',
+  OTEL_EXPORTER_OTLP_ENDPOINT: '',
   SMTP_URL: '',
   TRUSTED_PROXIES: '',
 }
 
 const revealed = (env: Awaited<ReturnType<typeof load>>) => ({
   ...env,
+  auditIpSalt: env.auditIpSalt ? Redacted.value(env.auditIpSalt) : undefined,
   authSecret: Redacted.value(env.authSecret),
   databaseUrl: Redacted.value(env.databaseUrl),
+  metricsToken: env.metricsToken ? Redacted.value(env.metricsToken) : undefined,
   smtp: env.smtp && { ...env.smtp, url: Redacted.value(env.smtp.url) },
 })
 
@@ -33,12 +40,17 @@ describe('env', () => {
   it('reads a minimal environment with its defaults', async () => {
     expect(revealed(await load())).toEqual({
       appUrl: 'https://app.example.com',
+      auditIpSalt: undefined,
       authSecret: BASE.BETTER_AUTH_SECRET,
       authSignUp: 'closed',
+      clientTelemetryEndpoint: undefined,
       databasePoolMax: 10,
       databaseUrl: BASE.DATABASE_URL,
       databaseUrlPooled: false,
+      featureFlags: {},
       isProduction: false,
+      metricsToken: undefined,
+      otlpEndpoint: undefined,
       smtp: undefined,
       trustedProxies: [],
     })
@@ -46,10 +58,17 @@ describe('env', () => {
 
   it('never shows a credential when it is printed, logged or serialized', async () => {
     const smtpUrl = 'smtps://user:mail-not-a-secret@smtp.example.com:465'
-    const env = await load({ MAIL_FROM: 'no-reply@example.com', SMTP_URL: smtpUrl })
+    const auditSalt = 'audit-salt-not-a-secret-1234'
+    const metricsToken = 'metrics-token-not-a-secret-1234'
+    const env = await load({
+      AUDIT_IP_SALT: auditSalt,
+      MAIL_FROM: 'no-reply@example.com',
+      METRICS_TOKEN: metricsToken,
+      SMTP_URL: smtpUrl,
+    })
     const printed = [JSON.stringify(env), inspect(env, { depth: 5 })]
     for (const text of printed) {
-      for (const secret of [BASE.DATABASE_URL, BASE.BETTER_AUTH_SECRET, smtpUrl]) {
+      for (const secret of [BASE.DATABASE_URL, BASE.BETTER_AUTH_SECRET, smtpUrl, auditSalt, metricsToken]) {
         expect(text).not.toContain(secret)
       }
     }
@@ -187,6 +206,48 @@ describe('env', () => {
       ],
       ['a sender without an address', { MAIL_FROM: 'Acme', SMTP_URL: 'smtp://smtp.example.com' }, 'MAIL_FROM must be'],
       ['a sender with two @', { MAIL_FROM: 'a@b@', SMTP_URL: 'smtp://smtp.example.com' }, 'MAIL_FROM must be'],
+    ])('refuses %s', async (_, overrides, message) => {
+      await expect(load(overrides)).rejects.toThrow(message)
+    })
+  })
+
+  describe('observability and feature flags', () => {
+    it('reads optional telemetry, metrics, audit salt, and feature flag settings when valid', async () => {
+      const env = await load({
+        AUDIT_IP_SALT: 'salt-123456789012',
+        CLIENT_TELEMETRY_ENDPOINT: ' /api/rum ',
+        FEATURE_FLAGS: '{"prometheusMetrics":true}',
+        METRICS_TOKEN: 'token-123456789012',
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otel.example.com///',
+      })
+      expect(revealed(env)).toMatchObject({
+        auditIpSalt: 'salt-123456789012',
+        clientTelemetryEndpoint: '/api/rum',
+        featureFlags: { prometheusMetrics: true },
+        metricsToken: 'token-123456789012',
+        otlpEndpoint: 'https://otel.example.com',
+      })
+    })
+
+    it.each([
+      ['a short AUDIT_IP_SALT', { AUDIT_IP_SALT: 'short' }, 'AUDIT_IP_SALT must have at least 16 characters'],
+      ['a short METRICS_TOKEN', { METRICS_TOKEN: 'short' }, 'METRICS_TOKEN must have at least 16 characters'],
+      [
+        'an invalid OTLP endpoint',
+        { OTEL_EXPORTER_OTLP_ENDPOINT: 'file:///etc/passwd' },
+        'OTEL_EXPORTER_OTLP_ENDPOINT must be an http:// or https:// URL',
+      ],
+      [
+        'a cross-origin CLIENT_TELEMETRY_ENDPOINT',
+        { CLIENT_TELEMETRY_ENDPOINT: 'https://evil.example/rum' },
+        'CLIENT_TELEMETRY_ENDPOINT must be a same-origin path starting with /',
+      ],
+      [
+        'a protocol-relative CLIENT_TELEMETRY_ENDPOINT',
+        { CLIENT_TELEMETRY_ENDPOINT: '//evil.example/rum' },
+        'CLIENT_TELEMETRY_ENDPOINT must be a same-origin path starting with /',
+      ],
+      ['invalid FEATURE_FLAGS JSON', { FEATURE_FLAGS: '{bad' }, 'FEATURE_FLAGS must be a valid JSON object'],
     ])('refuses %s', async (_, overrides, message) => {
       await expect(load(overrides)).rejects.toThrow(message)
     })

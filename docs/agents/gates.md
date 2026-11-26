@@ -36,6 +36,8 @@ can hide a problem the commit has. CI checks the exact commit: `pnpm ci:static` 
 `repo-policy` (already covered by `tests`) and `secrets` (run in `repo-guards` with `fetch-depth: 0`). A job subset:
 `pnpm check --job lint --job tests`, or `LEFTHOOK_EXCLUDE=tests pnpm check`.
 
+**Fast incremental loop (`pnpm check:changed`).** During iteration, `pnpm check:changed [--since <ref>] [--quiet] [files ...]` (`scripts/check-changed.ts`) inspects changed and untracked files and runs only the affected checks in parallel: `oxfmt --check`, type-aware `oxlint --format=agent`, `effect-tsgo tsc --noEmit`, `vitest related` (skipping the Chromium `component` project unless UI files changed), `fallow dead-code`/`security --changed-since`, `squawk` on active migrations, targeted `check:drift`, and `licenses`. Run full `pnpm check` before hand-off.
+
 ## Escape hatches
 
 Fix what a gate reports; every failure message says how. `git commit --no-verify` skips the hook, and CI runs the
@@ -94,11 +96,12 @@ never enter the main conversation. It stays on Sonnet 5.5 (an exact id, not the 
 older models): on Haiku 4.5 it dropped two failed layers from a report.
 
 **Hook.** `PostToolUse` on `Edit|Write|MultiEdit` runs `scripts/format-edited-file.ts`: it reads the hook input on
-stdin, formats the edited file with oxfmt and lints that one file with oxlint (without `--type-aware` and without
-`no-unused-vars`, which an import is between the edit that adds it and the edit that uses it; `pnpm check` adds
-both). A problem goes back to Claude as `{"decision": "block", "reason": ...}`, which Claude Code adds
-next to the tool result. Files the Oxc configs ignore (generated code, Markdown, `node_modules`) and files outside
-the checkout are skipped. About 0.1 to 1 s per edit. Try it:
+stdin, classifies the path, formats with `oxfmt`, runs instant static pre-lint guards for ADR 0019 comments,
+ADR 0017 timers, and `as unknown as` in `src/`, lints code files with `oxlint --deny-warnings --format=agent`
+(without `--type-aware` and without `no-unused-vars`; `pnpm check` adds both), and runs `squawk` on active
+`drizzle/*.sql` migrations. A problem returns `{"decision": "block", "reason": ...}`; clean edits to contract,
+schema, auth, migration, or `package.json` files emit a concise `additionalContext` follow-up hint. Ignored paths
+and files outside the checkout are skipped. About 0.1 to 1 s per edit. Try it:
 `echo '{"tool_input":{"file_path":"'"$PWD"'/src/lib/utils.ts"}}' | node scripts/format-edited-file.ts`.
 
 **Deny rules.**
@@ -156,7 +159,7 @@ browser (`browsers`) and Caddy binary (`caddy: 'true'`, extracting `/usr/bin/cad
 
 | Job | Runner / needs | Covers |
 | --- | --- | --- |
-| `repo-guards` | `ubuntu-24.04` | `node scripts/ci-jobs.ts workflows` (actionlint, zizmor, image pins, deploy validation), `node scripts/ci-jobs.ts secrets` (`fetch-depth: 0` Betterleaks), and `pnpm ci:supply-chain` (`trust-lockfile: 'false'` deletes `lockfile-verified.jsonl` before live frozen install, then `audit signatures` and `audit:check`) |
+| `repo-guards` | `ubuntu-24.04` | `node scripts/ci-jobs.ts workflows` (actionlint, zizmor, image pins, compose, k8s, `caddy-validate` using cached `CADDY_BIN`), `node scripts/tla.ts` (preinstalled runner `java` + cached `~/.cache/tla2tools`), `node scripts/ci-jobs.ts secrets` (`fetch-depth: 0` Betterleaks), and `pnpm ci:supply-chain` (`trust-lockfile: 'false'` deletes `lockfile-verified.jsonl` before live frozen install, then `audit signatures` and `audit:check`) |
 | `static` | `ubuntu-24.04` | `pnpm ci:static` (`CHROME_PATH=/usr/bin/google-chrome`, `save-cache: 'false'`) |
 | `static-windows` | `windows-2025` (non-PR, non-blocking) | `pnpm ci:static` with `Add-MpPreference` Defender exclusions, `PNPM_CONFIG_STORE_DIR=D:\.pnpm-store`, `browsers: chromium-headless-shell`, sole Windows cache writer |
 | `build` | `ubuntu-24.04` | `pnpm ci:build`, uploads `.output` artifact, saves the pruned Linux pnpm store cache |
@@ -166,12 +169,20 @@ browser (`browsers`) and Caddy binary (`caddy: 'true'`, extracting `/usr/bin/cad
 | `lighthouse` | `ubuntu-24.04`, `needs: build`, Postgres (4 matrix jobs by `page`) | `pnpm ci:lighthouse -- "--page=$LH_PAGE"` (`mobile` + `desktop`) behind cached binary Caddy, uploads `lighthouse-report-<page>` |
 | `docker` | `ubuntu-24.04` | `node scripts/ci-jobs.ts docker` on preinstalled runner Node (`22.23.5`) with daily cached `grype-db` (no `./.github/actions/setup`) |
 
+Nightly deep gates run in `.github/workflows/deep-gates.yml` (`schedule: '17 3 * * *'` UTC, zero PR/push cost) and on `workflow_dispatch` with individual boolean toggles (`tla`, `bombadil`, `mutate`, `dast`, `load`, `visual`, `bench`).
+
 ## Less common commands
 
 | Command | Covers |
 | --- | --- |
-| `pnpm verify:tla [spec ...]` | TLC model checker (`tla2tools.jar` `v1.7.4`, SHA-256 verified, cached in `~/.cache/tla2tools`) over every `.tla`/`.cfg` pair in `specs/` (`RateLimit` and `KeysetPagination`). Uses native `java` or a pinned JRE container via Docker. Deterministic (~3 s); see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
-| `pnpm verify:ui-properties` | Bombadil (`@antithesishq/bombadil` `0.7.10`) autonomous browser property exploration (`tests/bombadil/app.ts`) against the built app (public and signed-in sessions): zero uncaught/console errors, single `h1` and `main` landmark, no focus drop to `document.body`, zero 5xx responses, zero CSP violations. Needs `pnpm build`, Postgres, and Playwright's Chromium (`BOMBADIL_TIME_LIMIT` defaults to `15s` per pass). Bombadil 0.7.10 has no RNG seed flag; every pass writes `test-results/bombadil/<pass>/trace.jsonl`, and a failure prints the replay command (`pnpm verify:ui-properties -- --reproduce=<trace-dir> --pass=<public\|authenticated>`, or `BOMBADIL_REPRODUCE` / `BOMBADIL_PASS`), which replays into `test-results/bombadil/reproduce-<pass>` without overwriting the trace; see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
+| `pnpm check:caddy` | Validates `deploy/Caddyfile` (`CADDY_BIN` or offline read-only `IMAGES.caddy` container with realistic `EDGE_*` env vars) and `deploy/fly.toml` (`kill_signal`, `release_command`, `force_https`, `/api/ready`, `TRUSTED_PROXIES`). Also part of `pnpm ci:workflows` |
+| `pnpm verify:tla [spec ...]` | TLC model checker (`tla2tools.jar` `v1.7.4`, SHA-256 verified, cached in `~/.cache/tla2tools`) over every `.tla`/`.cfg` pair in `specs/` (`RateLimit` and `KeysetPagination`). Uses native `java` or a pinned JRE container via Docker. Deterministic (~3 s); runs in CI `repo-guards` and `deep-gates.yml`; see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
+| `pnpm verify:ui-properties` | Bombadil (`@antithesishq/bombadil` `0.8.0`) autonomous browser property exploration (`tests/bombadil/app.ts`) against the built app (public and signed-in sessions): zero uncaught/console errors, single `h1` and `main` landmark, no focus drop to `document.body`, zero 5xx responses, zero CSP violations. Needs `pnpm build`, Postgres, and Playwright's Chromium (`BOMBADIL_TIME_LIMIT` defaults to `15s` per pass). Bombadil has no RNG seed flag; every pass writes `test-results/bombadil/<pass>/trace.jsonl`, and a failure prints the replay command (`pnpm verify:ui-properties -- --reproduce=<trace-dir> --pass=<public\|authenticated>`, or `BOMBADIL_REPRODUCE` / `BOMBADIL_PASS`), which replays into `test-results/bombadil/reproduce-<pass>` without overwriting the trace; see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
+| `pnpm verify:mutate [--file <path>\|--changed]` | Zero-bloat parallel TS mutation runner (`scripts/mutate.ts`) over `COVERAGE_GATE` modules with 100/90/80 kill thresholds (never mutates files on disk) |
+| `pnpm verify:bench` | Vitest hot-path benchmarks (`tests/bench/hot-paths.bench.ts` under `--project "api (bench)"`) covering cursors, `forwardedFor`, `safeRedirect`, CSP, post editor, and `GET /api/posts` |
+| `pnpm verify:load` / `pnpm verify:soak` | Smoke and soak HTTP load suites (`scripts/load-test.ts --mode=smoke\|soak`, optional `--k6` via pinned `IMAGES.k6`) verifying p95/p99 latency, 0% 5xx, 429 rate limits, and zero leaked DB connections. Needs `pnpm build` and Postgres |
+| `pnpm verify:dast` | OpenAPI-driven active HTTP security probe (`scripts/dast-smoke.ts`, optional `--zap` via pinned `IMAGES.zaproxy`) testing auth bypass, IDOR/BOLA, CSRF, cookie flags, CSP, and `X-Forwarded-For` spoofing. Needs `pnpm build` and Postgres |
+| `pnpm verify:visual` | Playwright visual regression suite (`PW_VISUAL=1 playwright test tests/e2e/visual.spec.ts`) across desktop/mobile, light/dark, and forced-colors. Needs `pnpm build`, Postgres, and Mailpit |
 | `pnpm audit:check` | `pnpm audit --audit-level high` over production and development packages: fails on a high or critical advisory not in `auditConfig.ignoreGhsas` (`pnpm-workspace.yaml`). Needs the npm registry; CI job `repo-guards` (`pnpm ci:supply-chain`) |
 | `pnpm sbom:release` | `pnpm sbom`: a CycloneDX 1.7 SBOM of the production npm dependencies, with licenses, in `sbom/npm.cdx.json`, for a release. Needs `node_modules`. Not a gate |
 | `pnpm ci:local [job ...]` | The CI jobs (`workflows secrets static supply-chain drift build verify lighthouse docker`, default all) as `pnpm ci:<job>` scripts in the Playwright Ubuntu container next to Postgres and Mailpit, all five browser projects included. Needs Docker. See [docs/operations.md](../operations.md#ci-and-local-ci) |

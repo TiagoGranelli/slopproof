@@ -39,9 +39,17 @@ jobs:
       # The frozen install verifies every lockfile entry against minimumReleaseAge and trustPolicy.
       - uses: ./.github/actions/setup
         with:
+          caddy: 'true'
           save-cache: 'false'
           trust-lockfile: 'false'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/tla2tools
+          key: tla2tools-${{ runner.os }}-${{ hashFiles('scripts/tla.ts') }}
+          restore-keys: |
+            tla2tools-${{ runner.os }}-
       - run: node scripts/ci-jobs.ts workflows
+      - run: node scripts/tla.ts
       - run: node scripts/ci-jobs.ts secrets
       - run: pnpm ci:supply-chain
 

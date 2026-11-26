@@ -52,8 +52,8 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/format-edited-file.ts\"",
-            "timeout": 30,
-            "statusMessage": "Formatting and linting the edited file"
+            "timeout": 15,
+            "statusMessage": "Checking edited file (format, lint, guards)"
           }
         ]
       }

@@ -1,0 +1,284 @@
+name: Deep Gates
+
+on:
+  schedule:
+    # Nightly at 03:17 UTC (off-peak, zero PR/push cost).
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      tla:
+        description: Run TLC model checking over specs/*.tla
+        type: boolean
+        default: true
+      bombadil:
+        description: Run Bombadil browser property exploration
+        type: boolean
+        default: true
+      mutate:
+        description: Run incremental mutation testing
+        type: boolean
+        default: true
+      dast:
+        description: Run active HTTP DAST security probe
+        type: boolean
+        default: true
+      load:
+        description: Run HTTP/k6 smoke load test
+        type: boolean
+        default: true
+      visual:
+        description: Run Playwright visual regression suite
+        type: boolean
+        default: true
+      bench:
+        description: Run Vitest hot-path benchmarks
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: true
+  DATABASE_URL: postgres://app:app-ci@localhost:5432/app
+
+jobs:
+  tla:
+    name: TLA+ model checking
+    if: ${{ github.event_name == 'schedule' || inputs.tla }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          install: 'false'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/tla2tools
+          key: tla2tools-${{ runner.os }}-${{ hashFiles('scripts/tla.ts') }}
+          restore-keys: |
+            tla2tools-${{ runner.os }}-
+      - run: node scripts/tla.ts
+
+  mutate:
+    name: Mutation testing
+    if: ${{ github.event_name == 'schedule' || inputs.mutate }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - run: node scripts/mutate.ts
+
+  bench:
+    name: Hot-path benchmarks
+    if: ${{ github.event_name == 'schedule' || inputs.bench }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - run: pnpm exec vitest bench --run --project "api (bench)" --no-color tests/bench/hot-paths.bench.ts
+
+  build:
+    name: Build for deep runtime gates
+    if: ${{ github.event_name == 'schedule' || inputs.bombadil || inputs.dast || inputs.load || inputs.visual }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - run: pnpm ci:build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deep-gates-output
+          path: .output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  bombadil:
+    name: UI property exploration (Bombadil)
+    needs: build
+    if: ${{ github.event_name == 'schedule' || inputs.bombadil }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres: &postgres
+        image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app-ci
+          POSTGRES_DB: app
+          POSTGRES_INITDB_ARGS: --nosync
+        ports:
+          - 5432:5432
+        options: >-
+          --tmpfs /var/lib/postgresql:rw,size=512m
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
+      mailpit: &mailpit
+        image: axllent/mailpit:v1.31.3@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
+        ports:
+          - 54325:1025
+          - 54380:8025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deep-gates-output
+          path: .output
+      - env:
+          ALLOW_STALE_BUILD: '1'
+          BOMBADIL_TIME_LIMIT: 60s
+          CHROME_PATH: /usr/bin/google-chrome
+        run: pnpm verify:ui-properties
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deep-gates-bombadil
+          path: |
+            test-results/bombadil
+            test-results/app-server-bombadil.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  dast:
+    name: DAST active security probe
+    needs: build
+    if: ${{ github.event_name == 'schedule' || inputs.dast }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres: *postgres
+      mailpit: *mailpit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deep-gates-output
+          path: .output
+      - env:
+          ALLOW_STALE_BUILD: '1'
+        run: node scripts/dast-smoke.ts
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deep-gates-dast
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  load:
+    name: Load smoke test
+    needs: build
+    if: ${{ github.event_name == 'schedule' || inputs.load }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres: *postgres
+      mailpit: *mailpit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          save-cache: 'false'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deep-gates-output
+          path: .output
+      - env:
+          ALLOW_STALE_BUILD: '1'
+        run: node scripts/load-test.ts --mode=smoke
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deep-gates-load
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  visual:
+    name: Visual regression (Playwright)
+    needs: build
+    if: ${{ github.event_name == 'schedule' || inputs.visual }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres: *postgres
+      mailpit: *mailpit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          browsers: chromium-headless-shell
+          save-cache: 'false'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deep-gates-output
+          path: .output
+      - env:
+          ALLOW_STALE_BUILD: '1'
+          PW_PROJECTS: chromium
+          PW_VISUAL: '1'
+        run: pnpm test:e2e tests/e2e/visual.spec.ts
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deep-gates-visual
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

@@ -73,6 +73,7 @@ const WORKFLOW_CHECKS: Array<[string, () => Promise<ProcessOutput>]> = [
   ['image pins', imagePins],
   ['compose.production.yaml', () => captureProcess('docker', ['compose', ...EXAMPLE_DEPLOY, 'config', '--quiet'])],
   ['kubernetes.yaml', () => captureProcess('docker', KUBECONFORM_ARGS)],
+  ['caddy & fly.toml', () => captureProcess(process.execPath, ['scripts/caddy-validate.ts'])],
 ]
 
 const workflows = () => runAll(WORKFLOW_CHECKS)

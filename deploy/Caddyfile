@@ -32,12 +32,19 @@
 	# Content-Encoding (the build's precompressed .br assets) pass through as they are.
 	encode zstd gzip
 
+	# Internal Prometheus scrape endpoint is never exposed through the public edge.
+	handle /metrics {
+		respond 404
+	}
+
 	# Caddy has no response cache: nothing is stored, and Cache-Control, ETag and Set-Cookie from the app
 	# reach the client unchanged. Host, Origin, Referer and Sec-Fetch-* are forwarded as received.
-	reverse_proxy {$EDGE_UPSTREAM:app:3000} {
-		# The client IP as Caddy resolved it: the TCP peer, or with EDGE_TRUSTED_PROXIES the rightmost
-		# untrusted X-Forwarded-For entry. It replaces the whole X-Forwarded-For chain, so the app sees one
-		# address plus this edge as the peer, and trusts it with TRUSTED_PROXIES set to the edge's address.
-		header_up X-Forwarded-For {client_ip}
+	handle {
+		reverse_proxy {$EDGE_UPSTREAM:app:3000} {
+			# The client IP as Caddy resolved it: the TCP peer, or with EDGE_TRUSTED_PROXIES the rightmost
+			# untrusted X-Forwarded-For entry. It replaces the whole X-Forwarded-For chain, so the app sees one
+			# address plus this edge as the peer, and trusts it with TRUSTED_PROXIES set to the edge's address.
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 }

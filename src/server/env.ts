@@ -1,6 +1,8 @@
 import '@tanstack/react-start/server-only'
 import { isIP } from 'node:net'
 import { Redacted } from 'effect'
+import { parseFeatureFlagsEnv } from './feature-flags.ts'
+import { resolveOtlpEndpoint } from './observability/telemetry.ts'
 
 const read = (name: string): string => {
   const value = process.env[name]?.trim()
@@ -117,14 +119,53 @@ const readSmtp = (): { from: string; url: Redacted.Redacted } | undefined => {
   return { from, url: Redacted.make(url, { label: 'SMTP_URL' }) }
 }
 
+const readOptionalSecret = (name: string): Redacted.Redacted | undefined => {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    return undefined
+  }
+  if (value.length < 16) {
+    throw new Error(`${name} must have at least 16 characters (got ${value.length})`)
+  }
+  return Redacted.make(value, { label: name })
+}
+
+const readOptionalOtlpEndpoint = (name: string): string | undefined => {
+  const raw = process.env[name]?.trim()
+  if (!raw) {
+    return undefined
+  }
+  const endpoint = resolveOtlpEndpoint(raw)
+  if (!endpoint) {
+    throw new Error(`${name} must be an http:// or https:// URL (got "${raw}")`)
+  }
+  return endpoint
+}
+
+const readOptionalSameOriginPath = (name: string): string | undefined => {
+  const raw = process.env[name]?.trim()
+  if (!raw) {
+    return undefined
+  }
+  if (!raw.startsWith('/') || raw.startsWith('//')) {
+    throw new Error(`${name} must be a same-origin path starting with / (got "${raw}")`)
+  }
+  return raw
+}
+
 export const env = {
   appUrl: readOrigin('APP_URL'),
+  auditIpSalt: readOptionalSecret('AUDIT_IP_SALT'),
   authSecret: readSecret('BETTER_AUTH_SECRET'),
   authSignUp: readChoice('AUTH_SIGN_UP', ['closed', 'open']),
+  clientTelemetryEndpoint: readOptionalSameOriginPath('CLIENT_TELEMETRY_ENDPOINT'),
   databasePoolMax: readInt('DATABASE_POOL_MAX', { fallback: 10, max: 100, min: 1 }),
   databaseUrl: readDatabaseUrl('DATABASE_URL'),
   databaseUrlPooled: readChoice('DATABASE_URL_POOLED', ['false', 'true']) === 'true',
+  featureFlags: parseFeatureFlagsEnv(process.env.FEATURE_FLAGS),
   isProduction: process.env.NODE_ENV === 'production',
+  metricsToken: readOptionalSecret('METRICS_TOKEN'),
+  otlpEndpoint: readOptionalOtlpEndpoint('OTEL_EXPORTER_OTLP_ENDPOINT'),
   smtp: readSmtp(),
   trustedProxies: readCidrList('TRUSTED_PROXIES'),
 }

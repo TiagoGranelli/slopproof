@@ -13,6 +13,7 @@ describe('runShutdown', () => {
       events.push(`${name} end`)
     }
     onShutdown('postgres-pool', step('postgres-pool', 0))
+    onShutdown('telemetry-flush', step('telemetry-flush', 0))
     onShutdown('effect-api', step('effect-api', 0))
     onShutdown('mailer', step('mailer', 5))
     onShutdown('background-tasks', step('background-tasks', 10))
@@ -29,11 +30,13 @@ describe('runShutdown', () => {
       'mailer end',
       'effect-api start',
       'effect-api end',
+      'telemetry-flush start',
+      'telemetry-flush end',
       'postgres-pool start',
       'postgres-pool end',
     ])
     expect(lines.at(-1)).toMatchObject({
-      cleanups: ['auth-cleanup', 'background-tasks', 'mailer', 'effect-api', 'postgres-pool'],
+      cleanups: ['auth-cleanup', 'background-tasks', 'mailer', 'effect-api', 'telemetry-flush', 'postgres-pool'],
       msg: 'shutdown complete',
     })
   })

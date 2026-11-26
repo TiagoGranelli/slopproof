@@ -20,6 +20,7 @@ description, then load the whole file.
 | `auth-change` | An account action, a Better Auth config change, or creating users |
 | `add-page` | A page, form or UI state is added, with its axe, landmark, tab-order and Lighthouse obligations |
 | `feature-map` | Starting any feature, bug-fix, route, API, or test task: maps features to files and targeted tests via `docs/agents/features.json` and `scripts/features.ts` |
+| `security-review` | Before finishing changes to API endpoints, server functions, auth, schemas, migrations, CSP, logging, or deploy configs: verifies STRIDE controls against `docs/security/threat-model.md` |
 | `upgrade-prerelease-deps` | Any dependency bump, above all the pinned pre-release packages; holds the version policy |
 
 Rules for editing them:
