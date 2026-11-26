@@ -149,7 +149,7 @@ Playwright's Chromium, runs `EDGE_RUNTIME=binary` with the cached Caddy binary (
 ## CI layout
 
 `.github/actions/setup/action.yml` uses `pnpm/setup` (pnpm, Node, and store caching; downstream jobs pass
-`save-cache: 'false'`, while cache-writing jobs run `pnpm store prune` right after `pnpm install`), aligns the pnpm
+`save-cache: 'false'`, while Linux cache-writing jobs run `pnpm store prune` right after `pnpm install`), aligns the pnpm
 store on `D:\.pnpm-store` on Windows and `/__w/.pnpm-store` inside Linux containers, and provides optional Playwright
 browser (`browsers`) and Caddy binary (`caddy: 'true'`, extracting `/usr/bin/caddy` from `IMAGES.caddy` into
 `~/.cache/caddy/<digest>` and exporting `EDGE_RUNTIME=binary` + `CADDY_BIN`) caches.

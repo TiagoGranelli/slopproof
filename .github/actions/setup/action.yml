@@ -55,7 +55,7 @@ runs:
         else
           pnpm install --frozen-lockfile --trust-lockfile --prefer-offline --no-runtime --ignore-scripts
         fi
-        if [ "$SAVE_CACHE" = 'true' ]; then
+        if [ "$SAVE_CACHE" = 'true' ] && [ "${RUNNER_OS:-}" != 'Windows' ]; then
           pnpm store prune
         fi
     - id: caddy
