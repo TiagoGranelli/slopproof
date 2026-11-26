@@ -145,8 +145,7 @@ jobs:
         with:
           name: output
           path: .output
-      - run: pnpm ci:drift
-      - run: pnpm ci:verify -- --only=core
+      - run: node scripts/ci-jobs.ts drift && node scripts/ci-jobs.ts verify -- --only=core
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -292,4 +291,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: node scripts/ci-jobs.ts docker
+      - id: grype-cache-meta
+        shell: bash
+        run: |
+          grype_dir="$HOME/.cache/grype-db"
+          mkdir -p "$grype_dir"
+          printf 'today=%s\ngrype_dir=%s\n' "$(date -u +%F)" "$grype_dir" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.grype-cache-meta.outputs.grype_dir }}
+          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-meta.outputs.today }}
+          restore-keys: |
+            grype-db-${{ runner.os }}-
+      - env:
+          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
+        run: node scripts/ci-jobs.ts docker
+      - if: always()
+        env:
+          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
+        run: sudo chown -R "$(id -u):$(id -g)" "$GRYPE_DB_DIR"

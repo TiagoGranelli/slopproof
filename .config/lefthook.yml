@@ -41,7 +41,7 @@ pre-commit:
           # New security-sink candidates on lines changed since CHECK_BASE_REF (default HEAD: uncommitted changes).
           - name: security
             glob: 'src/**/*.{ts,tsx}'
-            run: ./node_modules/.bin/fallow security --gate new --changed-since "${CHECK_BASE_REF:-HEAD}" src
+            run: pnpm run --silent security:check
             fail_text: >-
               keep untrusted input away from the sink (validate, encode, allowlist). A reviewed false positive gets
               `// fallow-ignore-next-line security-sink` above it with the reason

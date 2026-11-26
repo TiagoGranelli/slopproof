@@ -2,10 +2,8 @@ import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { setTimeout as delay } from 'node:timers/promises'
 import { pullDockerImage } from './edge.ts'
 import { dockerPrefix, IMAGES } from './images.ts'
-import { captureProcess } from './process-log.ts'
 
 const PROJECT = `${dockerPrefix()}-smoke-${process.pid}`
 const IMAGE = `${PROJECT}-app:smoke`
@@ -79,43 +77,14 @@ const buildImage = () =>
     )
   })
 
-const grypeRunArgs = (...tail: Array<string>) =>
-  ['run', '--rm', '--memory', '2g', '--volume', `${grypeDbMount()}:/grype-db`]
-    .concat(['--env', 'GRYPE_DB_CACHE_DIR=/grype-db'])
-    .concat(tail)
-
-const updateGrypeDb = async () => {
-  const args = grypeRunArgs(IMAGES.grype, 'db', 'update')
-  const first = await captureProcess('docker', args)
-  if (first.status === 0) {
-    return
-  }
-  console.warn(`  grype db update failed (exit ${first.status}), retrying once`)
-  await delay(1000)
-  const second = await captureProcess('docker', args)
-  if (second.status !== 0) {
-    throw new Error(`grype db update failed (exit ${second.status}, expected 0)\n${second.output.trim()}`)
-  }
-}
-
 const prepareStack = () =>
-  Promise.all([
-    buildImage(),
-    composeAsync(['up', '--detach', '--wait', 'pooler']),
-    pullDockerImage(IMAGES.grype).then(() => updateGrypeDb()),
-  ])
+  Promise.all([buildImage(), composeAsync(['up', '--detach', '--wait', 'pooler']), pullDockerImage(IMAGES.grype)])
 
 const grypeArgs = () =>
-  grypeRunArgs(
-    '--volume',
-    '/var/run/docker.sock:/var/run/docker.sock',
-    '--volume',
-    `${resolve('.config/grype.yaml')}:/grype.yaml:ro`,
-    '--env',
-    'GRYPE_DB_AUTO_UPDATE=false',
-    IMAGES.grype,
-    `docker:${IMAGE}`,
-  ).concat(['--only-fixed', '--fail-on', 'high', '--config', '/grype.yaml'])
+  ['run', '--rm', '--memory', '2g', '--volume', '/var/run/docker.sock:/var/run/docker.sock']
+    .concat(['--volume', `${grypeDbMount()}:/grype-db`, '--env', 'GRYPE_DB_CACHE_DIR=/grype-db'])
+    .concat(['--volume', `${resolve('.config/grype.yaml')}:/grype.yaml:ro`, IMAGES.grype, `docker:${IMAGE}`])
+    .concat(['--only-fixed', '--fail-on', 'high', '--config', '/grype.yaml'])
 
 const startScanImage = (): ActiveScan => {
   const started = performance.now()
@@ -276,7 +245,7 @@ process.once('SIGINT', () => {
   process.exit(130)
 })
 try {
-  await step(`build ${IMAGE}, start Postgres/PgBouncer, and update scanner database`, prepareStack)
+  await step(`build ${IMAGE}, start Postgres/PgBouncer, and pull scanner image`, prepareStack)
   activeScan = startScanImage()
   await step('migrate: three runs at once through the pooler (and pull edge image)', () =>
     Promise.all([migrateConcurrently(), pullDockerImage(IMAGES.caddy)]),

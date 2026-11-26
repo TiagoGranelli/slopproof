@@ -177,61 +177,18 @@ const lighthouseFlags = (run: LighthouseRun, port: number): Flags => ({
 
 type WarmRun = { chrome: Chrome; cookie: string | undefined; url: string }
 
-const pageTargetWsUrl = async (port: number): Promise<string> => {
-  const response = await fetch(`http://127.0.0.1:${port}/json/list`)
-  const targets = (await response.json()) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
-  const wsUrl = (targets.find((entry) => entry.type === 'page') ?? targets[0])?.webSocketDebuggerUrl
-  if (!response.ok || !wsUrl) {
-    throw new Error(`No CDP page target (${response.status})`)
-  }
-  return wsUrl
-}
-
-const sendWarmup = (ws: WebSocket, { cookie, url }: WarmRun): number => {
-  const cookieCmds: Array<[string, Record<string, Json>?]> = cookie
-    ? [['Network.enable'], ['Network.setExtraHTTPHeaders', { headers: { cookie } }]]
-    : []
-  const commands: Array<[string, Record<string, Json>?]> = [['Page.enable'], ...cookieCmds, ['Page.navigate', { url }]]
-  commands.forEach(([method, params], index) => ws.send(JSON.stringify({ id: index + 1, method, params })))
-  return commands.length
-}
-
-const attachWarmup = (ws: WebSocket, run: WarmRun, settle: (error?: Error) => void) => {
-  let [navId, navigated, loaded] = [0, false, false]
-  ws.addEventListener('open', () => (navId = sendWarmup(ws, run)), { once: true })
-  ws.addEventListener('error', () => settle(new Error('CDP WebSocket error')), { once: true })
-  ws.addEventListener('close', () => settle(new Error('CDP WebSocket closed unexpectedly')), { once: true })
-  ws.addEventListener('message', (event) => {
-    const packet = JSON.parse(String(event.data)) as { error?: { message?: string }; id?: number; method?: string }
-    const nav = new Map(Object.entries(packet)).get('result') as { errorText?: string } | undefined
-    const failure = packet.error?.message ?? nav?.errorText
-    if (failure) {
-      settle(new Error(`CDP error: ${failure}`))
-    }
-    navigated ||= packet.id === navId
-    loaded ||= packet.method === 'Page.loadEventFired'
-    if (navigated && loaded) {
-      settle()
-    }
-  })
-}
-
 export const warmBrowser = async (run: WarmRun): Promise<void> => {
   const browser = await launchChrome(run.chrome)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let ws: WebSocket | undefined
   try {
-    ws = new WebSocket(await pageTargetWsUrl(browser.port))
-    const socket = ws
-    await new Promise<void>((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('CDP warmup timed out after 15000ms')), 15_000)
-      attachWarmup(socket, run, (error) => (error ? reject(error) : resolve()))
+    await lighthouse(run.url, {
+      disableFullPageScreenshot: true,
+      extraHeaders: run.cookie ? { cookie: run.cookie } : undefined,
+      logLevel: 'error',
+      onlyAudits: ['first-contentful-paint'],
+      output: 'json',
+      port: browser.port,
     })
   } finally {
-    clearTimeout(timer)
-    if (ws && ws.readyState <= WebSocket.OPEN) {
-      ws.close()
-    }
     await browser.stop()
   }
 }

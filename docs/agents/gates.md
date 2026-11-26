@@ -160,11 +160,11 @@ browser (`browsers`) and Caddy binary (`caddy: 'true'`, extracting `/usr/bin/cad
 | `static` | `ubuntu-24.04` | `pnpm ci:static` (`CHROME_PATH=/usr/bin/google-chrome`, `save-cache: 'false'`) |
 | `static-windows` | `windows-2025` (non-PR, non-blocking) | `pnpm ci:static` with `Add-MpPreference` Defender exclusions, `PNPM_CONFIG_STORE_DIR=D:\.pnpm-store`, `browsers: chromium-headless-shell`, sole Windows cache writer |
 | `build` | `ubuntu-24.04` | `pnpm ci:build`, uploads `.output` artifact, saves the pruned Linux pnpm store cache |
-| `verify-core` | `ubuntu-24.04`, `needs: build`, Postgres (`--tmpfs`, `--nosync`, `1s` healthcheck) + Mailpit | `pnpm ci:drift` then `pnpm ci:verify -- --only=core` (`api`, `db`, `integration`, contract coverage) |
+| `verify-core` | `ubuntu-24.04`, `needs: build`, Postgres (`--tmpfs`, `--nosync`, `1s` healthcheck) + Mailpit | `node scripts/ci-jobs.ts drift` then `node scripts/ci-jobs.ts verify -- --only=core` (`api`, `db`, `integration`, contract coverage) |
 | `verify-e2e` | `ubuntu-24.04`, `needs: build`, Postgres + Mailpit (2 matrix jobs) | `chromium` (`PW_PROJECTS=chromium,Pixel 7` with `chromium-headless-shell`) and unsharded `firefox` (`browsers: firefox`) |
 | `verify-e2e-webkit` | Playwright Noble container, Postgres + Mailpit (3 matrix jobs) | `webkit-1` (`save-cache: 'true'`, seeding `/__w/.pnpm-store`), `webkit-2`, `iphone-15`; each runs `pnpm ci:build` so image pull overlaps `build` |
 | `lighthouse` | `ubuntu-24.04`, `needs: build`, Postgres (4 matrix jobs by `page`) | `pnpm ci:lighthouse -- "--page=$LH_PAGE"` (`mobile` + `desktop`) behind cached binary Caddy, uploads `lighthouse-report-<page>` |
-| `docker` | `ubuntu-24.04` | `node scripts/ci-jobs.ts docker` on preinstalled runner Node (`22.23.5`), skipping `./.github/actions/setup` and `actions/cache` `grype-db` (`prepareStack` updates Grype DB directly and runs with `GRYPE_DB_AUTO_UPDATE=false`) |
+| `docker` | `ubuntu-24.04` | `node scripts/ci-jobs.ts docker` on preinstalled runner Node (`22.23.5`) with daily cached `grype-db` (no `./.github/actions/setup`) |
 
 ## Less common commands
 
