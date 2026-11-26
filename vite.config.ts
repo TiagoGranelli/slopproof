@@ -76,7 +76,7 @@ export default defineConfig({
       prerender: { crawlLinks: false, failOnError: true, routes: ['/about'] },
     }),
     react(),
-    babel({ presets: [reactCompilerPreset()] }),
+    babel({ include: /[/\\]src[/\\].*\.tsx(?:$|\?)/, parallel: true, presets: [reactCompilerPreset()] }),
     adoptedStylesheetSingleton,
     noDevtoolsInProduction,
   ],

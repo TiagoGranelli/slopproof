@@ -6,6 +6,7 @@ import { Pool } from 'pg'
 import { post, user } from '#/server/db/schema/index.ts'
 import { startApp } from './app-server.ts'
 import type { RunningApp } from './app-server.ts'
+import { ensureEdgeImage } from './edge.ts'
 import { judge, PAGES } from './lighthouse-policy.ts'
 import type { FormFactor, Page, PerformanceBar } from './lighthouse-policy.ts'
 import { exitCodeOf, progressLine, writeReport } from './lighthouse-report.ts'
@@ -153,12 +154,18 @@ const measureAll = async (target: Target): Promise<Array<PageOutcome>> => {
   return pageOutcomes
 }
 
+const PAGES_WITHOUT_POSTS = new Set(['about', 'login'])
+
+const needsPosts = () => pages.some((page) => !PAGES_WITHOUT_POSTS.has(page.name))
+
 const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<PageOutcome>> => {
   const flags = chromeFlags({ edgeCertificateSpki: app.edgeCertificateSpki, http1: protocol === 'h1' })
   console.log(
     `measuring ${app.url}${direct ? ' (Node server, no edge)' : ` (edge in front of ${app.directUrl}, ${protocol})`}`,
   )
-  await seedPosts(app.databaseUrl, app.user.email)
+  if (needsPosts()) {
+    await seedPosts(app.databaseUrl, app.user.email)
+  }
   const cookie = pages.some((page) => page.auth)
     ? await signIn(app.url, { email: app.user.email, password: app.user.password })
     : undefined
@@ -179,11 +186,15 @@ const databaseUrl = testDatabaseUrl('lighthouse', process.env.LIGHTHOUSE_DATABAS
 let outcomes: Array<PageOutcome> = []
 let app: RunningApp | undefined
 try {
-  app = await startApp({
-    databaseUrl,
-    edge: direct ? undefined : { logFile: join(OUT, 'edge.log'), tls },
-    logFile: join(OUT, 'app-server.log'),
-  })
+  const [started] = await Promise.all([
+    startApp({
+      databaseUrl,
+      edge: direct ? undefined : { logFile: join(OUT, 'edge.log'), tls },
+      logFile: join(OUT, 'app-server.log'),
+    }),
+    direct ? Promise.resolve() : ensureEdgeImage(),
+  ])
+  app = started
   outcomes = await measureApp(app, chromePath)
 } finally {
   await app?.stop()

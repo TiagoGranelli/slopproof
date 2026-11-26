@@ -1,6 +1,7 @@
-import { Schema, SchemaTransformation } from 'effect'
+import { decodeTo, String as SchemaString, Struct } from 'effect/Schema'
+import { trim } from 'effect/SchemaTransformation'
 import { PostBody } from '#/contract/post-input.ts'
 
-export const PostDraft = Schema.Struct({
-  body: Schema.String.pipe(Schema.decodeTo(PostBody, SchemaTransformation.trim())),
+export const PostDraft = Struct({
+  body: SchemaString.pipe(decodeTo(PostBody, trim())),
 })

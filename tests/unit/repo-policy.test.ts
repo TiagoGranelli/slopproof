@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { APP_NAME } from '#/config/app.ts'
@@ -93,6 +93,22 @@ describe('applied migrations', () => {
   })
 })
 
+const BINARY_SAMPLE_BYTES = 8192
+
+const readTextFile = (file: string) => {
+  const fd = openSync(file, 'r')
+  try {
+    const sample = Buffer.alloc(BINARY_SAMPLE_BYTES)
+    const readBytes = readSync(fd, sample, 0, BINARY_SAMPLE_BYTES, 0)
+    if (sample.subarray(0, readBytes).includes(0)) {
+      return undefined
+    }
+    return readBytes < BINARY_SAMPLE_BYTES ? sample.toString('utf8', 0, readBytes) : read(file)
+  } finally {
+    closeSync(fd)
+  }
+}
+
 const NAME_ALLOWED = [/^package\.json$/, /^src\/config\/app\.ts$/, /^openapi\.json$/, /^LICENSE$/, /\.md$/]
 
 it('names the app only in package.json, src/config/app.ts and docs', () => {
@@ -101,7 +117,13 @@ it('names the app only in package.json, src/config/app.ts and docs', () => {
   const offenders = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
     .stdout.split('\0')
     .filter((file) => file !== '' && !NAME_ALLOWED.some((pattern) => pattern.test(file)))
-    .filter((file) => existsSync(file) && statSync(file).isFile() && name.test(read(file)))
+    .filter((file) => {
+      if (!existsSync(file) || !statSync(file).isFile()) {
+        return false
+      }
+      const content = readTextFile(file)
+      return content !== undefined && name.test(content)
+    })
     .map((file) => `${file}: import APP_NAME or pageTitle from #/config/app.ts, or use a neutral name (app_, CHECK_…)`)
   expect(offenders).toEqual([])
 })

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { assertFreshBuild } from './build-freshness.ts'
+import { createVerifiedUser } from './create-user.ts'
 import { edgePeers, startEdge } from './edge.ts'
 import type { RunningEdge } from './edge.ts'
-import { captureProcess } from './process-log.ts'
 import { spawnServer, waitForServer } from './server-process.ts'
 import type { ServerProcess } from './server-process.ts'
 import { resetTestDatabase } from './test-db.ts'
@@ -13,6 +13,12 @@ if (existsSync('.env')) {
 }
 
 type User = { email: string; name: string; password: string }
+
+export type AppSeed = {
+  authSecret: string
+  otherUser: User
+  user: User
+}
 
 export type RunningApp = {
   databaseUrl: string
@@ -39,13 +45,6 @@ const freePort = () =>
     })
   })
 
-const runQuiet = async (command: string, args: Array<string>, env: NodeJS.ProcessEnv) => {
-  const { output, status } = await captureProcess(command, args, env)
-  if (status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed (exit ${status}, expected 0)\n${output.trim()}`)
-  }
-}
-
 type EdgeOptions = {
   logFile: string
   tls?: boolean
@@ -57,22 +56,27 @@ type StartAppOptions = {
   databaseUrl: string
   edge?: EdgeOptions
   logFile: string
+  seed?: AppSeed
   settings?: NodeJS.ProcessEnv
   trustedProxies?: string
 }
 
-const accounts = (alongside: RunningApp | undefined) => ({
-  otherUser: alongside?.otherUser ?? { email: 'other@example.test', name: 'Other Author', password: password() },
-  user: alongside?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
+const accounts = (source: Pick<AppSeed, 'otherUser' | 'user'> | undefined) => ({
+  otherUser: source?.otherUser ?? { email: 'other@example.test', name: 'Other Author', password: password() },
+  user: source?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
 })
 
-const seedDatabase = async (databaseUrl: string, env: NodeJS.ProcessEnv, users: Array<User>) => {
+const seedDatabase = async (databaseUrl: string, users: Array<User>) => {
   await resetTestDatabase(databaseUrl)
-  await Promise.all(
-    users.map((u) =>
-      runQuiet('node', ['scripts/create-user.ts', u.email, u.name], { ...env, CREATE_USER_PASSWORD: u.password }),
-    ),
-  )
+  await Promise.all(users.map((u) => createVerifiedUser({ databaseUrl, ...u })))
+}
+
+export const seedAppDatabase = async (databaseUrl: string): Promise<AppSeed> => {
+  assertFreshBuild()
+  const { otherUser, user } = accounts(undefined)
+  const authSecret = process.env.BETTER_AUTH_SECRET || crypto.randomUUID().repeat(2)
+  await seedDatabase(databaseUrl, [user, otherUser])
+  return { authSecret, otherUser, user }
 }
 
 type Ports = { app: string; directUrl: string; edge?: string; url: string }
@@ -91,7 +95,10 @@ const serverEnv = (options: StartAppOptions, ports: Ports): NodeJS.ProcessEnv =>
   ...process.env,
   APP_URL: ports.url,
   BETTER_AUTH_SECRET:
-    options.alongside?.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || crypto.randomUUID().repeat(2),
+    options.seed?.authSecret ||
+    options.alongside?.env.BETTER_AUTH_SECRET ||
+    process.env.BETTER_AUTH_SECRET ||
+    crypto.randomUUID().repeat(2),
   DATABASE_URL: options.databaseUrl,
   NODE_ENV: 'production',
   PORT: ports.app,
@@ -129,10 +136,10 @@ const startServing = async (options: StartAppOptions, ports: Ports, server: Serv
 export const startApp = async (options: StartAppOptions): Promise<RunningApp> => {
   assertFreshBuild()
   const ports = await choosePorts(options.edge)
-  const { otherUser, user } = accounts(options.alongside)
+  const { otherUser, user } = accounts(options.seed ?? options.alongside)
   const env = serverEnv(options, ports)
-  if (!options.alongside) {
-    await seedDatabase(options.databaseUrl, env, [user, otherUser])
+  if (!options.alongside && !options.seed) {
+    await seedDatabase(options.databaseUrl, [user, otherUser])
   }
   const { edgeCertificateSpki, stop } = await startServing(options, ports, spawnServer(env, options.logFile))
   const { directUrl, url } = ports

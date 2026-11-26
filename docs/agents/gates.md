@@ -5,9 +5,10 @@ covers and how to make an exception.
 
 ## What `pnpm check` runs
 
-`pnpm check` is `lefthook run pre-commit --all-files`: every job in `.config/lefthook.yml` (the lightweight checks in
-parallel, the type-aware and test jobs one at a time), then a summary with each failed job's fix. No database, no
-build; it needs Playwright's Chromium.
+`pnpm check` is `lefthook run pre-commit --all-files --no-auto-install`: every job in `.config/lefthook.yml` (the
+lightweight checks in parallel, the type-aware and test jobs one at a time), then a summary with each failed job's
+fix. No database, no build; component tests need Playwright's headless Chromium (`chromium-headless-shell` in CI, or
+`CHROME_PATH` when pointing Vitest at a local Chrome binary).
 
 | Job | What fails it |
 | --- | --- |
@@ -143,7 +144,18 @@ Lantern then adds four times that task before every preloaded script ([ADR 0011]
 
 `pnpm build && pnpm lighthouse [--runs=3] [--page=<name>] [--form-factor=mobile|desktop] [--direct]
 [--edge-protocol=h2|h1|http]` runs the gate on the built app behind the Caddy edge over HTTPS and HTTP/2, as in
-production (needs Docker); see [ADR 0011](../decisions/0011-lighthouse-over-https-http2.md).
+production (needs Docker); see [ADR 0011](../decisions/0011-lighthouse-over-https-http2.md). CI sets
+`CHROME_PATH=/usr/bin/google-chrome` so `lighthouse` reuses the runner's preinstalled Chrome without downloading
+Playwright's Chromium.
+
+## CI layout
+
+`.github/actions/setup/action.yml` uses `pnpm/setup` (pnpm, Node, and store caching; downstream jobs pass
+`save-cache: 'false'`) and optional `vitest-cache` (`node_modules/.vite/vitest`) and Playwright browser caches.
+`supply-chain` clears `lockfile-verified.jsonl` before installing so `minimumReleaseAge` and `trustPolicy` verify
+live against the registry. `verify-e2e` runs `chromium`/`Pixel 7` (`chromium-headless-shell`) and sharded `firefox`
+(`PW_SHARD=1/2`, `2/2`) on `ubuntu-24.04` after `build`; `verify-e2e-webkit` runs sharded `webkit` and `iPhone 15`
+inside the pinned Playwright container with its own `pnpm ci:build` so image pull overlaps `build`.
 
 ## Less common commands
 

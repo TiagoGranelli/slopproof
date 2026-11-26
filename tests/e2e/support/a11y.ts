@@ -18,10 +18,12 @@ export async function expectAccessible(page: Page, state: string) {
     }
   })
   const scan = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
-  await test.info().attach(`axe ${state}.json`, {
-    body: JSON.stringify(scan.violations, null, 2),
-    contentType: 'application/json',
-  })
+  if (scan.violations.length > 0) {
+    await test.info().attach(`axe ${state}.json`, {
+      body: JSON.stringify(scan.violations, null, 2),
+      contentType: 'application/json',
+    })
+  }
   const violations = scan.violations.map(
     (v) => `${v.id} (${v.impact}): ${v.help} at ${v.nodes.map((node) => node.target.join(' ')).join(', ')}`,
   )
@@ -78,31 +80,36 @@ const walkToSentinel = async (page: Page, { backwards, max }: { backwards: boole
   throw new Error(`focus did not get past the page after ${max} key presses: ${walked()}`)
 }
 
-const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) | 'sentinel' | 'lost'> => {
-  const focused = page.locator(':focus')
-  if ((await focused.count()) === 0) {
-    return 'lost'
-  }
-  const visit = await focused.evaluate((element) => {
+const inspectFocused = (page: Page) =>
+  page.evaluate(() => {
+    const element = document.querySelector(':focus')
+    if (!element) {
+      return { kind: 'lost' as const }
+    }
     if (element.id === 'tab-walk-end') {
-      return 'sentinel'
+      return { kind: 'sentinel' as const }
     }
     const seen = ((globalThis as WalkState).tabWalkSeen ??= new WeakSet())
     const again = seen.has(element)
     seen.add(element)
-    return again ? 'again' : 'first'
-  })
-  if (visit === 'sentinel') {
-    return 'sentinel'
-  }
-  const snapshot = await focused.ariaSnapshot()
-  const [, role, label] = /^- '?([\w-]+)(?: "((?:[^"\\]|\\.)*)")?/.exec(snapshot) ?? []
-  const visibleFocus = await focused.evaluate((element) => {
     const style = getComputedStyle(element)
     const outline = style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0
-    return element.matches(':focus-visible') && (outline || style.boxShadow !== 'none')
+    const visibleFocus = element.matches(':focus-visible') && (outline || style.boxShadow !== 'none')
+    return { again, kind: 'stop' as const, visibleFocus }
   })
-  return { again: visit === 'again', name: label === undefined ? `${role}` : `${role} "${label}"`, visibleFocus }
+
+const focusedStop = async (page: Page): Promise<(TabStop & { again: boolean }) | 'sentinel' | 'lost'> => {
+  const inspected = await inspectFocused(page)
+  if (inspected.kind !== 'stop') {
+    return inspected.kind
+  }
+  const snapshot = await page.locator(':focus').ariaSnapshot()
+  const [, role, label] = /^- '?([\w-]+)(?: "((?:[^"\\]|\\.)*)")?/.exec(snapshot) ?? []
+  return {
+    again: inspected.again,
+    name: label === undefined ? `${role}` : `${role} "${label}"`,
+    visibleFocus: inspected.visibleFocus,
+  }
 }
 
 export async function tabOrder(page: Page, max?: number) {

@@ -1,6 +1,7 @@
-import { Schema } from 'effect'
+import { decodeSync, toStandardSchemaV1 } from 'effect/Schema'
+import type { ConstraintDecoder } from 'effect/Schema'
 
-export const toFormSchema = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) => ({
-  decode: Schema.decodeSync(schema),
-  validator: Schema.toStandardSchemaV1(schema),
+export const toFormSchema = <S extends ConstraintDecoder<unknown>>(schema: S) => ({
+  decode: decodeSync(schema),
+  validator: toStandardSchemaV1(schema),
 })

@@ -1,5 +1,5 @@
-import { LOOPBACK, startApp } from './app-server.ts'
-import type { RunningApp } from './app-server.ts'
+import { LOOPBACK, seedAppDatabase, startApp } from './app-server.ts'
+import type { AppSeed, RunningApp } from './app-server.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
 
 type User = RunningApp['user']
@@ -18,6 +18,13 @@ type StartedTestServers = { servers: TestServers; stop: () => Promise<void> }
 
 type Mail = { api: string; settings: { MAIL_FROM: string; SMTP_URL: string } }
 
+type ServerSpec = {
+  databaseUrl: string
+  mail: Mail
+  runner: 'integration' | 'e2e'
+  seed: AppSeed
+}
+
 const mailpit = async (): Promise<Mail> => {
   const host = process.env.MAILPIT_HOST || '127.0.0.1'
   const api = `http://${host}:${process.env.MAILPIT_HTTP_PORT || '54380'}`
@@ -34,7 +41,7 @@ const mailpit = async (): Promise<Mail> => {
 
 const SERVER_SETTINGS = ['DATABASE_URL', 'APP_URL', 'BETTER_AUTH_SECRET', 'AUTH_SIGN_UP', 'SMTP_URL', 'MAIL_FROM']
 
-const startOpenServer = (runner: string, databaseUrl: string, mail: Mail) =>
+const startOpenServer = ({ databaseUrl, mail, runner, seed }: ServerSpec) =>
   startApp({
     databaseUrl,
     edge:
@@ -42,15 +49,16 @@ const startOpenServer = (runner: string, databaseUrl: string, mail: Mail) =>
         ? { logFile: `test-results/edge-${runner}.log`, trustedProxies: 'private_ranges' }
         : undefined,
     logFile: `test-results/app-server-${runner}.log`,
+    seed,
     settings: { AUTH_SIGN_UP: 'open', ...mail.settings },
     trustedProxies: LOOPBACK,
   })
 
-const startClosedServer = (runner: string, open: RunningApp, mail: Mail) =>
+const startClosedServer = ({ databaseUrl, mail, runner, seed }: ServerSpec) =>
   startApp({
-    alongside: open,
-    databaseUrl: open.databaseUrl,
+    databaseUrl,
     logFile: `test-results/app-server-${runner}-closed.log`,
+    seed,
     settings: { AUTH_SIGN_UP: 'closed', ...mail.settings },
     trustedProxies: '10.0.0.0/8',
   })
@@ -72,16 +80,31 @@ const stopAll = (running: ReadonlyArray<RunningApp>, databaseUrl: string) => asy
   }
 }
 
+const track = (started: Promise<RunningApp>, running: Array<RunningApp>) =>
+  started.then((app) => {
+    running.push(app)
+    return app
+  })
+
+const startPair = async (spec: ServerSpec, running: Array<RunningApp>): Promise<[RunningApp, RunningApp]> => {
+  const open = track(startOpenServer(spec), running)
+  const closed = track(startClosedServer(spec), running)
+  try {
+    return await Promise.all([open, closed])
+  } catch (error) {
+    await Promise.allSettled([open, closed])
+    throw error
+  }
+}
+
 export const startTestServers = async (runner: 'integration' | 'e2e'): Promise<StartedTestServers> => {
   const mail = await mailpit()
   const databaseUrl = testDatabaseUrl(runner)
   const running: Array<RunningApp> = []
   const stop = stopAll(running, databaseUrl)
   try {
-    const open = await startOpenServer(runner, databaseUrl, mail)
-    running.push(open)
-    const closed = await startClosedServer(runner, open, mail)
-    running.push(closed)
+    const seed = await seedAppDatabase(databaseUrl)
+    const [open, closed] = await startPair({ databaseUrl, mail, runner, seed }, running)
     return { servers: handOver(open, closed, mail), stop }
   } catch (error) {
     await stop()

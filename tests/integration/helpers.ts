@@ -1,8 +1,6 @@
-import { execFile } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import { inject } from 'vitest'
 import { createClient } from '#/sdk/client/index.ts'
+import { createVerifiedUser } from '../../scripts/create-user.ts'
 
 const servers = inject('servers')
 
@@ -50,16 +48,12 @@ export const signIn = async (credentials: { email: string; password: string }, i
 export const sdkClient = (cookie?: string) =>
   createClient({ baseUrl: appUrl, headers: cookie ? { cookie, origin: appUrl } : {} })
 
-const CREATE_USER = fileURLToPath(new URL('../../scripts/create-user.ts', import.meta.url))
-
 export const createUser = async (label: string) => {
   const account = {
     email: `${label}-${crypto.randomUUID()}@example.test`,
     name: `Integration ${label}`,
     password: `pw-${crypto.randomUUID()}`,
   }
-  await promisify(execFile)(process.execPath, [CREATE_USER, account.email, account.name], {
-    env: { ...process.env, CREATE_USER_PASSWORD: account.password },
-  })
+  await createVerifiedUser({ databaseUrl, ...account })
   return account
 }

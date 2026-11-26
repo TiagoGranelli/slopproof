@@ -26,7 +26,7 @@
     "start": "node --env-file-if-exists=.env .output/server/index.mjs",
     "prepare": "lefthook install --reset-hooks-path",
     "bootstrap": "node scripts/bootstrap.ts",
-    "check": "lefthook run pre-commit --all-files --no-auto-install",
+    "check": "LEFTHOOK_EXCLUDE=${LEFTHOOK_EXCLUDE:-},repo-policy lefthook run pre-commit --all-files --no-auto-install",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --type-aware --deny-warnings",

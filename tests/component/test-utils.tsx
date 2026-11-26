@@ -12,7 +12,6 @@ import {
 import type { AnyRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
-import { renderToString } from 'react-dom/server'
 import { expect, onTestFinished } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
@@ -75,6 +74,7 @@ export async function serverRendered(ui: ReactNode, options: { url?: string } = 
       <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
     </RouterContextProvider>
   )
+  const { renderToString } = await import('react-dom/server')
   const container = document.createElement('div')
   container.innerHTML = renderToString(tree)
   document.body.append(container)

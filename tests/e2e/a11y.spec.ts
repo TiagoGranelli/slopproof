@@ -10,8 +10,8 @@ import {
   navigateWithApiResponse,
   overTheLimit,
   seedPost,
+  sharedPageTest as test,
   signIn,
-  test,
   visit,
 } from './support/app.ts'
 import type { Author } from './support/app.ts'

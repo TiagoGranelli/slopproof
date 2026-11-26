@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { APP_NAME, pageTitle } from '#/config/app.ts'
-import { authenticate, expect, test, visit } from './support/app.ts'
+import { authenticate, expect, sharedPageTest as test, visit } from './support/app.ts'
 
 const navLink = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { exact: true, name })

@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { copyFileSync, existsSync, mkdtempSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import lighthouse, { desktopConfig } from 'lighthouse'
+import lighthouse, { desktopConfig, generateReport } from 'lighthouse'
 import type { Flags } from 'lighthouse'
 import { computeMedianRun } from 'lighthouse/core/lib/median-run.js'
 import type { Json } from '#/contract/json.ts'
@@ -40,8 +40,15 @@ const METRIC_AUDITS: Record<Metric, string> = {
 }
 
 export const findChromium = async (): Promise<string> => {
+  const configured = process.env.CHROME_PATH
+  if (configured) {
+    if (!existsSync(configured)) {
+      throw new Error(`CHROME_PATH does not exist (${configured})`)
+    }
+    return configured
+  }
   const { chromium } = await import('@playwright/test')
-  const path = process.env.CHROME_PATH ?? chromium.executablePath()
+  const path = chromium.executablePath()
   if (!existsSync(path)) {
     throw new Error(`Chromium for Playwright is not installed (${path}). Run: pnpm exec playwright install chromium`)
   }
@@ -160,18 +167,18 @@ const launchChrome = async (chrome: Chrome) => {
   }
 }
 
-const writeReports = (outputBase: string, report: string | Array<string>): Lhr => {
-  const [json = '', html = ''] = Array.isArray(report) ? report : [report, '']
+const writeJsonReport = (outputBase: string, report: string | Array<string>): Lhr => {
+  const json = Array.isArray(report) ? (report[0] ?? '') : report
   writeFileSync(`${outputBase}.report.json`, json)
-  writeFileSync(`${outputBase}.report.html`, html)
   return JSON.parse(json) as Lhr
 }
 
 const lighthouseFlags = (run: LighthouseRun, port: number): Flags => ({
+  disableFullPageScreenshot: true,
   extraHeaders: run.cookie ? { cookie: run.cookie } : undefined,
   logLevel: 'error',
   onlyCategories: REPORTED,
-  output: ['json', 'html'],
+  output: 'json',
   port,
 })
 
@@ -183,7 +190,7 @@ export const runLighthouse = async (run: LighthouseRun): Promise<Lhr> => {
     if (!outcome) {
       throw new Error(`lighthouse returned nothing for ${run.url} (${run.formFactor})`)
     }
-    return writeReports(run.outputBase, outcome.report)
+    return writeJsonReport(run.outputBase, outcome.report)
   } finally {
     await browser.stop()
   }
@@ -272,6 +279,6 @@ type MedianReport = { medianLhr: Lhr; medianRun: number }
 export const keepMedianReport = (lhrs: Array<Lhr>, prefix: string): MedianReport => {
   const medianLhr = computeMedianRun(lhrs as never) as Lhr
   const medianRun = lhrs.indexOf(medianLhr) + 1
-  copyFileSync(`${prefix}-${medianRun}.report.html`, `${prefix}-median.report.html`)
+  writeFileSync(`${prefix}-median.report.html`, generateReport(medianLhr as never, 'html'))
   return { medianLhr, medianRun }
 }

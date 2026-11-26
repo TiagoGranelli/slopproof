@@ -20,7 +20,7 @@ RUN npm install --global --no-fund --no-audit \
 # --ignore-scripts: `prepare` installs the git hooks, and there is no git here. No dependency may run a build
 # script anyway (allowBuilds in pnpm-workspace.yaml).
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --ignore-scripts --trust-lockfile --store-dir /pnpm-store
+    pnpm install --frozen-lockfile --ignore-scripts --trust-lockfile --no-runtime --store-dir /pnpm-store
 COPY . .
 # Nitro prerenders /about during the build, which loads the server config. These placeholders only
 # satisfy validation; nothing connects to them and none of them ends up in the output.
@@ -37,12 +37,12 @@ ENV NODE_ENV=production \
     PORT=3000
 # Debian's security updates as of this build: the base image is rebuilt some days after Debian publishes a fix
 # (the OpenSSL and PCRE2 fixes of 2026-10-01 failed the image scan while the pinned digest was still the newest).
-RUN apt-get update \
- && apt-get upgrade -y --no-install-recommends \
- && rm -rf /var/lib/apt/lists/*
 # The server needs only node. npm (and corepack or yarn, which newer base images no longer ship) would add a
 # package manager and its dependency tree to the attack surface and to every vulnerability scan.
-RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
       /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* \
  && node --version
 WORKDIR /app
@@ -58,7 +58,7 @@ STOPSIGNAL SIGTERM
 # The probe runs inside the container and resolves the address the way Nitro's server does: NITRO_PORT or
 # PORT (default 3000), NITRO_HOST or HOST, with loopback when that is unset or a wildcard. It speaks plain
 # HTTP, so replace it if the server itself terminates TLS (NITRO_SSL_CERT).
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --start-interval=1s --retries=3 \
   CMD ["node", "-e", "const e = process.env, h = e.NITRO_HOST || e.HOST || '', port = e.NITRO_PORT || e.PORT || 3000; const host = ['', '0.0.0.0', '::'].includes(h) ? '127.0.0.1' : h.includes(':') ? `[${h}]` : h; fetch(`http://${host}:${port}/api/health`).then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 # Node's permission model (docs/decisions/0012-node-permission-model.md): the server may read only its own
 # bundle and use the network; no file writes, child processes, workers, native addons or WASI. --allow-net is

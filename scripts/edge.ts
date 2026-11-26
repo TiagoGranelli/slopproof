@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { readRootCertificate, servedCertificateSpki, trustCertificateAuthority } from './edge-certificate.ts'
 import { dockerPrefix, IMAGES } from './images.ts'
-import { spawnToLog } from './process-log.ts'
+import { captureProcess, spawnToLog } from './process-log.ts'
 import { answersReady } from './server-process.ts'
 
 export type RunningEdge = {
@@ -67,10 +67,30 @@ const containerNetwork = (ports: Array<string>): Array<string> => {
 
 type CaddyContainer = { env: EdgeEnv; name: string; ports: Array<string> }
 
-const dockerRunCaddy = ({ env, name, ports }: CaddyContainer): Array<string> => {
-  if (spawnSync('docker', ['image', 'inspect', IMAGES.caddy], { stdio: 'ignore' }).status !== 0) {
-    spawnSync('docker', ['pull', '--quiet', IMAGES.caddy], { stdio: 'inherit' })
+export const pullDockerImage = async (image: string): Promise<void> => {
+  if ((await captureProcess('docker', ['image', 'inspect', image])).status === 0) {
+    return
   }
+  const { output, status } = await captureProcess('docker', ['pull', '--quiet', image])
+  if (status !== 0) {
+    throw new Error(`docker pull ${image} failed (exit ${status}, expected 0)\n${output.trim()}`)
+  }
+}
+
+let edgeImagePull: Promise<void> | undefined
+
+export const ensureEdgeImage = (): Promise<void> => {
+  if ((process.env.EDGE_RUNTIME ?? 'docker') !== 'docker') {
+    return Promise.resolve()
+  }
+  edgeImagePull ??= pullDockerImage(IMAGES.caddy).catch((error: unknown) => {
+    edgeImagePull = undefined
+    throw error
+  })
+  return edgeImagePull
+}
+
+const dockerRunCaddy = ({ env, name, ports }: CaddyContainer): Array<string> => {
   const sandbox = ['--memory', '256m', '--read-only', '--tmpfs', '/data', '--tmpfs', '/config']
   const envNames = Object.keys(env).flatMap((key) => ['--env', key])
   const caddyfile = ['--volume', `${CADDYFILE}:/etc/caddy/Caddyfile:ro`]
@@ -192,6 +212,7 @@ const waitForEdge = async (edge: LaunchedEdge): Promise<EdgePoll> => {
 }
 
 export const startEdge = async (options: EdgeOptions): Promise<RunningEdge> => {
+  await ensureEdgeImage()
   const edge = launchEdge(options)
   const { certificateSpki, ready } = await waitForEdge(edge)
   if (ready) {

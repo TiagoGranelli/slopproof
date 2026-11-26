@@ -61,13 +61,31 @@ test('the public list loads more posts after the first page, without repeating a
   await loadMoreWithKeyboard(page, 'public-posts', 'Enter')
 })
 
+const waitForLoadMoreAlert = async (page: Page) => {
+  const alert = page.getByRole('alert')
+  await expect
+    .poll(
+      async () => {
+        if (await alert.isVisible()) {
+          return true
+        }
+        await page.clock.fastForward(4000)
+        return alert.isVisible()
+      },
+      { intervals: [50, 50, 50, 100, 100, 250], timeout: 15_000 },
+    )
+    .toBe(true)
+  await expect(alert).toContainText('Could not load more posts')
+}
+
 test('a failed Load more says so, keeps focus on the button and can be retried', async ({ page }) => {
+  await page.clock.install()
   await visit(page, '/')
   await page.route(publicListRequest, (route) => route.abort())
   const button = page.getByRole('button', { name: 'Load more posts' })
   await button.focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('alert')).toContainText('Could not load more posts', { timeout: 15_000 })
+  await waitForLoadMoreAlert(page)
   await expect(button).toBeFocused()
   await page.unroute(publicListRequest)
   await page.keyboard.press('Enter')

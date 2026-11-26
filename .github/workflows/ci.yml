@@ -50,7 +50,8 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           # The component tests in `pnpm check` run in Chromium (Vitest browser mode).
-          browsers: chromium
+          browsers: chromium-headless-shell
+          vitest-cache: 'true'
       - run: pnpm ci:static
 
   # The same static gates on Windows, so a script that only works on Linux and macOS (a `.cmd` shim started
@@ -69,7 +70,8 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup
         with:
-          browsers: chromium
+          browsers: chromium-headless-shell
+          vitest-cache: 'true'
       - run: pnpm ci:static
 
   supply-chain:
@@ -162,6 +164,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          save-cache: 'false'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: output
@@ -184,21 +188,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - browser: chromium
+          - browser: chromium-headless-shell
             name: chromium
             project: chromium
-          - browser: chromium
+            shard: ''
+          - browser: chromium-headless-shell
             name: pixel-7
             project: Pixel 7
+            shard: ''
           - browser: firefox
-            name: firefox
+            name: firefox-1
             project: firefox
-          - browser: webkit
-            name: webkit
-            project: webkit
-          - browser: webkit
-            name: iphone-15
-            project: iPhone 15
+            shard: '1/2'
+          - browser: firefox
+            name: firefox-2
+            project: firefox
+            shard: '2/2'
     services:
       postgres: *postgres
       mailpit: *mailpit
@@ -209,18 +214,70 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           browsers: ${{ matrix.browser }}
+          save-cache: 'false'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: output
           path: .output
       - env:
           PW_PROJECTS: ${{ matrix.project }}
+          PW_SHARD: ${{ matrix.shard }}
         run: pnpm ci:verify -- --only=e2e
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verify-e2e-${{ matrix.name }}
           # test-results/app-server-e2e.log (server output), test-results/playwright (traces), playwright-report.
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+  verify-e2e-webkit:
+    name: Verify E2E (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+      options: --ipc=host
+    services:
+      db: *postgres
+      mailpit: *mailpit
+    env:
+      DATABASE_URL: postgres://app:app-ci@db:5432/app
+      MAILPIT_HOST: mailpit
+      MAILPIT_SMTP_PORT: '1025'
+      MAILPIT_HTTP_PORT: '8025'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: webkit-1
+            project: webkit
+            shard: '1/2'
+          - name: webkit-2
+            project: webkit
+            shard: '2/2'
+          - name: iphone-15
+            project: iPhone 15
+            shard: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          save-cache: 'false'
+      - run: pnpm ci:build
+      - env:
+          PW_PROJECTS: ${{ matrix.project }}
+          PW_SHARD: ${{ matrix.shard }}
+        run: pnpm ci:verify -- --only=e2e
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verify-e2e-${{ matrix.name }}
           path: |
             test-results
             playwright-report
@@ -245,12 +302,13 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          browsers: chromium
+          save-cache: 'false'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: output
           path: .output
       - env:
+          CHROME_PATH: /usr/bin/google-chrome
           LH_FORM_FACTOR: ${{ matrix.form_factor }}
           LH_PAGE: ${{ matrix.page }}
         run: pnpm ci:lighthouse -- "--page=$LH_PAGE" "--form-factor=$LH_FORM_FACTOR"
@@ -273,33 +331,22 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           install: 'false'
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - id: cache-meta
+      - id: grype-cache-meta
         shell: bash
         run: |
           grype_dir="$HOME/.cache/grype-db"
-          buildx_dir="$HOME/.cache/buildx-app"
-          mkdir -p "$grype_dir" "$buildx_dir"
-          printf 'today=%s\ngrype_dir=%s\nbuildx_dir=%s\n' \
-            "$(date -u +%F)" "$grype_dir" "$buildx_dir" >> "$GITHUB_OUTPUT"
+          mkdir -p "$grype_dir"
+          printf 'today=%s\ngrype_dir=%s\n' "$(date -u +%F)" "$grype_dir" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.cache-meta.outputs.grype_dir }}
-          key: grype-db-${{ runner.os }}-${{ steps.cache-meta.outputs.today }}
+          path: ${{ steps.grype-cache-meta.outputs.grype_dir }}
+          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-meta.outputs.today }}
           restore-keys: grype-db-${{ runner.os }}-
-      - id: buildx-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.cache-meta.outputs.buildx_dir }}
-          key: docker-buildx-${{ runner.os }}-${{ hashFiles('Dockerfile', 'package.json', 'pnpm-lock.yaml') }}
-          restore-keys: docker-buildx-${{ runner.os }}-
       - env:
-          DOCKER_BUILD_CACHE_DIR: ${{ steps.cache-meta.outputs.buildx_dir }}
-          DOCKER_BUILD_CACHE_WRITE: ${{ steps.buildx-cache.outputs.cache-hit != 'true' && '1' || '0' }}
-          GRYPE_DB_DIR: ${{ steps.cache-meta.outputs.grype_dir }}
+          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
         run: node scripts/ci-jobs.ts docker
       - if: always()
         shell: bash
         env:
-          GRYPE_DB_DIR: ${{ steps.cache-meta.outputs.grype_dir }}
+          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
         run: sudo chown -R "$(id -u):$(id -g)" "$GRYPE_DB_DIR"

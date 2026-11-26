@@ -1,5 +1,5 @@
 name: Setup
-description: pnpm (version from package.json#packageManager), Node (package.json#devEngines.runtime), cached store, frozen install, Playwright browsers.
+description: pnpm (package.json#packageManager), Node (package.json#devEngines.runtime), cached store, frozen install, optional Vitest/Playwright caches.
 inputs:
   install:
     description: Run `pnpm install --frozen-lockfile`. Jobs whose script needs only Node and Docker skip it.
@@ -7,38 +7,48 @@ inputs:
   trust-lockfile:
     description: Skip re-verifying minimumReleaseAge and trustPolicy during frozen install (set to 'false' in supply-chain).
     default: 'true'
+  save-cache:
+    description: Save the pnpm store cache (set to 'false' in downstream jobs that only read the cache).
+    default: 'true'
+  vitest-cache:
+    description: Cache Vitest pre-bundled browser dependencies (node_modules/.vite/vitest).
+    default: 'false'
   browsers:
-    description: Space-separated Playwright browsers to install (cached), with their system dependencies, e.g. `chromium firefox webkit`.
+    description: Space-separated Playwright browsers to install (cached), with their system dependencies, e.g. `chromium-headless-shell firefox`.
     default: ''
 runs:
   using: composite
   steps:
     - if: inputs.install == 'true'
-      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
+      with:
+        cache: true
+        save-cache: ${{ inputs.save-cache }}
+        install: false
+    - if: inputs.install != 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version-file: package.json
         package-manager-cache: false
-    - id: pnpm-store
-      if: inputs.install == 'true'
-      shell: bash
-      run: printf 'path=%s\n' "$(pnpm store path --silent | tr -d '\r')" >> "$GITHUB_OUTPUT"
-    - if: inputs.install == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ${{ steps.pnpm-store.outputs.path }}
-        key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
-        restore-keys: pnpm-store-${{ runner.os }}-${{ runner.arch }}-
     - if: inputs.install == 'true'
       shell: bash
       env:
         TRUST_LOCKFILE: ${{ inputs.trust-lockfile }}
       run: |
         if [ "$TRUST_LOCKFILE" = 'false' ]; then
-          pnpm install --frozen-lockfile --ignore-scripts
+          cache_dir=$(pnpm config get cache-dir | tr -d '\r')
+          if [ -n "$cache_dir" ]; then
+            rm -f "$cache_dir/lockfile-verified.jsonl"
+          fi
+          pnpm install --frozen-lockfile --no-runtime --ignore-scripts
         else
-          pnpm install --frozen-lockfile --trust-lockfile --prefer-offline --ignore-scripts
+          pnpm install --frozen-lockfile --trust-lockfile --prefer-offline --no-runtime --ignore-scripts
         fi
+    - if: inputs.vitest-cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: node_modules/.vite/vitest
+        key: vitest-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'vitest.config.ts') }}
     - id: playwright
       if: inputs.browsers != ''
       shell: bash
@@ -48,9 +58,8 @@ runs:
       run: |
         cache_dir=$(node -p "const os=require('node:os'),p=require('node:path'),f=process.platform;p.join(f==='win32'?(process.env.LOCALAPPDATA||p.join(os.homedir(),'AppData','Local')):f==='darwin'?p.join(os.homedir(),'Library','Caches'):(process.env.XDG_CACHE_HOME||p.join(os.homedir(),'.cache')),'ms-playwright')" | tr -d '\r')
         pw_version=$(pnpm exec playwright --version | cut -d' ' -f2 | tr -d '\r')
-        printf 'path=%s\n' "$cache_dir" >> "$GITHUB_OUTPUT"
-        printf 'version=%s\n' "$pw_version" >> "$GITHUB_OUTPUT"
-        printf 'browsers=%s\n' "$(tr -s ' ' '\n' <<< "$BROWSERS" | sort | paste -sd- -)" >> "$GITHUB_OUTPUT"
+        printf 'path=%s\nversion=%s\nbrowsers=%s\n' \
+          "$cache_dir" "$pw_version" "$(tr -s ' ' '\n' <<< "$BROWSERS" | sort | paste -sd- -)" >> "$GITHUB_OUTPUT"
     - id: playwright-cache
       if: inputs.browsers != ''
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

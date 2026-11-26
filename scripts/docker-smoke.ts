@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { pullDockerImage } from './edge.ts'
 import { dockerPrefix, IMAGES } from './images.ts'
 
 const PROJECT = `${dockerPrefix()}-smoke-${process.pid}`
@@ -67,41 +68,24 @@ const grypeDbMount = () => {
   return resolve(dir)
 }
 
-const buildxCacheArgs = (cachePath: string, nextCachePath: string, writeCache: boolean) => {
-  const from = existsSync(resolve(cachePath, 'index.json')) ? ['--cache-from', `type=local,src=${cachePath}`] : []
-  if (!writeCache) {
-    return from
-  }
-  rmSync(nextCachePath, { force: true, recursive: true })
-  return [...from, '--cache-to', `type=local,dest=${nextCachePath},mode=max`]
-}
-
-const buildWithLocalCache = (cacheDir: string) => {
-  const cachePath = resolve(cacheDir)
-  const nextCachePath = `${cachePath}.new`
-  const writeCache = process.env.DOCKER_BUILD_CACHE_WRITE !== '0'
-  const cacheArgs = buildxCacheArgs(cachePath, nextCachePath, writeCache)
-  const buildx = spawnSync('docker', ['buildx', 'build', '--load', ...cacheArgs, '-t', IMAGE, '.'], {
-    stdio: 'inherit',
+const buildImage = () =>
+  new Promise<void>((done, reject) => {
+    const child = spawn('docker', [...COMPOSE, 'build', 'migrate'], { env, stdio: 'inherit' })
+    child.once('error', reject)
+    child.once('exit', (code, signal) =>
+      code === 0
+        ? done()
+        : reject(new Error(`docker compose build migrate failed (exit ${code ?? signal}, expected 0)`)),
+    )
   })
-  if (buildx.status !== 0) {
-    rmSync(nextCachePath, { force: true, recursive: true })
-    throw new Error(`docker buildx build failed (exit ${buildx.status ?? buildx.signal}, expected 0)`)
-  }
-  if (writeCache && existsSync(nextCachePath)) {
-    rmSync(cachePath, { force: true, recursive: true })
-    renameSync(nextCachePath, cachePath)
-  }
-}
 
-const buildImage = () => {
-  const cacheDir = process.env.DOCKER_BUILD_CACHE_DIR?.trim()
-  if (cacheDir) {
-    buildWithLocalCache(cacheDir)
-  } else {
-    compose(['build', 'migrate'])
-  }
-}
+const prepareStack = () =>
+  Promise.all([
+    buildImage(),
+    composeAsync(['up', '--detach', '--wait', 'pooler']),
+    pullDockerImage(IMAGES.caddy),
+    pullDockerImage(IMAGES.grype),
+  ])
 
 const grypeArgs = () =>
   ['run', '--rm', '--memory', '2g', '--volume', '/var/run/docker.sock:/var/run/docker.sock']
@@ -268,9 +252,8 @@ process.once('SIGINT', () => {
   process.exit(130)
 })
 try {
-  await step(`build ${IMAGE}`, buildImage)
+  await step(`build ${IMAGE}, start Postgres/PgBouncer, and pull edge/scanner images`, prepareStack)
   activeScan = startScanImage()
-  await step('start Postgres and PgBouncer (transaction mode)', () => compose(['up', '--detach', '--wait', 'pooler']))
   await step('migrate: three runs at once through the pooler', migrateConcurrently)
   await step('migrate: one direct run, which applies nothing', migrateDirectly)
   await step('create the first account with the bundled create-user', createFirstAccount)

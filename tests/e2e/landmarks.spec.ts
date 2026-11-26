@@ -6,8 +6,8 @@ import {
   fakePost,
   lastPage,
   navigateWithApiResponse,
+  sharedPageTest as test,
   signIn,
-  test,
   visit,
 } from './support/app.ts'
 

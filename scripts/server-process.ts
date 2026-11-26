@@ -47,14 +47,14 @@ export const answersReady = async (url: string): Promise<boolean> => {
 }
 
 export const waitForServer = async (server: ChildProcess, directUrl: string, logFile: string): Promise<void> => {
-  for (let attempt = 0; attempt < 120; attempt++) {
+  for (let attempt = 0; attempt < 600; attempt++) {
     if (server.exitCode !== null) {
       throw new Error(`server exited with ${server.exitCode}. Log (${logFile}):\n${tail(logFile)}`)
     }
     if (await answersReady(directUrl)) {
       return
     }
-    await delay(250)
+    await delay(50)
   }
   throw new Error(`server did not become ready in 30 s. Log (${logFile}):\n${tail(logFile)}`)
 }

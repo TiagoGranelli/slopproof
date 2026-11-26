@@ -1,12 +1,18 @@
-import { execFile } from 'node:child_process'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import type { APIRequestContext, Cookie, Page, Route, TestInfo } from '@playwright/test'
 import { APP_NAME } from '#/config/app.ts'
 import { POST_MAX_LENGTH, POSTS_PAGE_DEFAULT } from '#/contract/limits.ts'
 import type { Post, PostPage } from '#/sdk/types.gen.ts'
-import { test as base, expect } from '../fixtures.ts'
+import { createVerifiedUser } from '../../../scripts/create-user.ts'
+import {
+  assertNoCspViolations,
+  closeSharedBrowser,
+  expect,
+  openSharedBrowser,
+  resetSharedPage,
+  test as base,
+} from '../fixtures.ts'
+import type { SharedBrowser } from '../fixtures.ts'
 
 const appUrl = process.env.APP_URL ?? 'http://localhost:3000'
 
@@ -14,21 +20,19 @@ const HYDRATION_TIMEOUT = 15_000
 
 export type Author = { email: string; name: string; password: string }
 
-const CREATE_USER = fileURLToPath(new URL('../../../scripts/create-user.ts', import.meta.url))
-
-export const createAuthor = async (name: string): Promise<Author> => {
+export const createAuthor = async (name: string): Promise<Author & { id: string }> => {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not set for E2E author creation')
+  }
   const author = { email: `e2e-${crypto.randomUUID()}@example.test`, name, password: `pw-${crypto.randomUUID()}` }
   try {
-    await promisify(execFile)(process.execPath, [CREATE_USER, author.email, author.name], {
-      env: { ...process.env, CREATE_USER_PASSWORD: author.password },
-    })
+    const created = await createVerifiedUser({ databaseUrl, ...author })
+    return { ...author, id: created.id }
   } catch (error) {
-    const { stderr } = error as { stderr?: string }
-    throw new Error(`could not create the E2E author ${author.email}: ${stderr?.trim() || String(error)}`, {
-      cause: error,
-    })
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`could not create the E2E author ${author.email}: ${reason}`, { cause: error })
   }
-  return author
 }
 
 let clientCount = 0
@@ -70,6 +74,38 @@ export const test = base.extend<object, { author: Author }>({
     await request.dispose()
   },
 })
+
+export const sharedPageTest = test.extend<object, { sharedBrowser: SharedBrowser }>({
+  context: async ({ sharedBrowser }, provide, testInfo) => {
+    await sharedBrowser.context.setExtraHTTPHeaders({ 'x-forwarded-for': nextClientIp(testInfo.workerIndex) })
+    await provide(sharedBrowser.context)
+  },
+  cspViolations: async ({ sharedBrowser }, provide) => {
+    sharedBrowser.violations.length = 0
+    await provide(sharedBrowser.violations)
+    assertNoCspViolations(sharedBrowser.violations)
+  },
+  page: async ({ sharedBrowser }, provide, testInfo) => {
+    await sharedBrowser.context.setExtraHTTPHeaders({ 'x-forwarded-for': nextClientIp(testInfo.workerIndex) })
+    try {
+      await provide(sharedBrowser.page)
+    } finally {
+      await resetSharedPage(sharedBrowser)
+    }
+  },
+  sharedBrowser: [
+    async ({ browser }, provide, workerInfo) => {
+      const shared = await openSharedBrowser(browser, workerInfo, appUrl)
+      try {
+        await provide(shared)
+      } finally {
+        await closeSharedBrowser(shared)
+      }
+    },
+    { scope: 'worker' },
+  ],
+})
+
 export { expect }
 
 export const expectHydrated = (page: Page) =>

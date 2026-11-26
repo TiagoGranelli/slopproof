@@ -84,11 +84,11 @@ export default defineConfig({
             'react',
             'react/jsx-dev-runtime',
             'react-dom/client',
-            'react-dom/server',
             '@tanstack/react-form',
             '@tanstack/react-query',
             '@tanstack/react-router',
-            'effect',
+            'effect/Schema',
+            'effect/SchemaTransformation',
             'class-variance-authority',
             'cn',
             'radix-ui',
@@ -98,7 +98,12 @@ export default defineConfig({
             'vitest-browser-react',
           ],
         },
-        plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mswWorkerScript()],
+        plugins: [
+          react(),
+          babel({ include: /[/\\]src[/\\].*\.tsx(?:$|\?)/, parallel: true, presets: [reactCompilerPreset()] }),
+          tailwindcss(),
+          mswWorkerScript(),
+        ],
         resolve: {
           alias: [
             {
