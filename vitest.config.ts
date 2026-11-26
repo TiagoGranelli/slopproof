@@ -60,6 +60,7 @@ export default defineConfig({
       {
         test: {
           include: ['tests/unit/**/*.test.ts'],
+          isolate: false,
           name: 'unit',
           testTimeout: 5000,
         },
@@ -74,6 +75,7 @@ export default defineConfig({
             TRUSTED_PROXIES: '',
           },
           include: ['tests/api/**/*.test.ts'],
+          isolate: false,
           name: 'api',
           testTimeout: 5000,
         },
@@ -82,8 +84,12 @@ export default defineConfig({
         optimizeDeps: {
           include: [
             'react',
+            'react/compiler-runtime',
             'react/jsx-dev-runtime',
+            'react/jsx-runtime',
+            'react-dom',
             'react-dom/client',
+            'get-nonce',
             '@tanstack/react-form',
             '@tanstack/react-query',
             '@tanstack/react-router',
@@ -125,6 +131,7 @@ export default defineConfig({
             screenshotFailures: false,
           },
           include: ['tests/component/**/*.test.tsx'],
+          isolate: true,
           name: 'component',
           setupFiles: ['tests/component/setup.ts'],
           testTimeout: 10_000,

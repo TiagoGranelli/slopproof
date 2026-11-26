@@ -140,7 +140,7 @@ const JOBS = {
   static: (args) =>
     runPnpm(['check', ...args], {
       CHECK_BASE_REF: process.env.CHECK_BASE_REF ?? 'HEAD^',
-      LEFTHOOK_EXCLUDE: 'drift,repo-policy',
+      LEFTHOOK_EXCLUDE: 'drift,repo-policy,secrets',
     }),
   'supply-chain': supplyChain,
   verify: (args) =>

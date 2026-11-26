@@ -51,12 +51,19 @@ type EdgeOptions = {
   trustedProxies?: string
 }
 
+type SeedUsers = 'none' | 'primary' | 'all'
+
+type SeedOptions = {
+  seedUsers?: SeedUsers
+}
+
 type StartAppOptions = {
   alongside?: RunningApp
   databaseUrl: string
   edge?: EdgeOptions
   logFile: string
   seed?: AppSeed
+  seedUsers?: SeedUsers
   settings?: NodeJS.ProcessEnv
   trustedProxies?: string
 }
@@ -66,16 +73,23 @@ const accounts = (source: Pick<AppSeed, 'otherUser' | 'user'> | undefined) => ({
   user: source?.user ?? { email: 'author@example.test', name: 'Test Author', password: password() },
 })
 
+const usersToSeed = (seedUsers: SeedUsers, account: { otherUser: User; user: User }): Array<User> => {
+  if (seedUsers === 'none') {
+    return []
+  }
+  return seedUsers === 'primary' ? [account.user] : [account.user, account.otherUser]
+}
+
 const seedDatabase = async (databaseUrl: string, users: Array<User>) => {
   await resetTestDatabase(databaseUrl)
   await Promise.all(users.map((u) => createVerifiedUser({ databaseUrl, ...u })))
 }
 
-export const seedAppDatabase = async (databaseUrl: string): Promise<AppSeed> => {
+export const seedAppDatabase = async (databaseUrl: string, options?: SeedOptions): Promise<AppSeed> => {
   assertFreshBuild()
   const { otherUser, user } = accounts(undefined)
   const authSecret = process.env.BETTER_AUTH_SECRET || crypto.randomUUID().repeat(2)
-  await seedDatabase(databaseUrl, [user, otherUser])
+  await seedDatabase(databaseUrl, usersToSeed(options?.seedUsers ?? 'all', { otherUser, user }))
   return { authSecret, otherUser, user }
 }
 
@@ -139,7 +153,7 @@ export const startApp = async (options: StartAppOptions): Promise<RunningApp> =>
   const { otherUser, user } = accounts(options.seed ?? options.alongside)
   const env = serverEnv(options, ports)
   if (!options.alongside && !options.seed) {
-    await seedDatabase(options.databaseUrl, [user, otherUser])
+    await seedDatabase(options.databaseUrl, usersToSeed(options.seedUsers ?? 'all', { otherUser, user }))
   }
   const { edgeCertificateSpki, stop } = await startServing(options, ports, spawnServer(env, options.logFile))
   const { directUrl, url } = ports

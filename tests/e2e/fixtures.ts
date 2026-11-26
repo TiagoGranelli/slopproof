@@ -106,6 +106,7 @@ export const resetSharedPage = async (shared: SharedBrowser) => {
     return
   }
   shared.page.removeAllListeners('request')
+  shared.page.removeAllListeners('console')
   await shared.page.unrouteAll({ behavior: 'ignoreErrors' })
   await shared.context.unrouteAll({ behavior: 'ignoreErrors' })
   await shared.page.emulateMedia({ colorScheme: null })

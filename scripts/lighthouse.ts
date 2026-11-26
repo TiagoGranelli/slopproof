@@ -138,7 +138,7 @@ const measurePage = async (target: Target, page: Page, formFactor: FormFactor): 
 }
 
 const warmPages = async (appUrl: string, cookie: string | undefined) => {
-  for (const page of pages) {
+  for (const page of pages.slice(1)) {
     await fetch(appUrl + page.path, { headers: page.auth && cookie ? { cookie } : {} })
   }
 }
@@ -197,6 +197,7 @@ try {
       databaseUrl,
       edge: direct ? undefined : { logFile: join(OUT, 'edge.log'), tls },
       logFile: join(OUT, 'app-server.log'),
+      seedUsers: needsPosts() || pages.some((page) => page.auth) ? 'primary' : 'none',
     }),
     direct ? Promise.resolve() : ensureEdgeImage(),
   ])

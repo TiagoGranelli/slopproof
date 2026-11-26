@@ -13,7 +13,7 @@ import {
   signInWithForm,
   signUpWithForm,
 } from './support/accounts.ts'
-import { expect, expectFlash, followLink, signIn, test, visit } from './support/app.ts'
+import { expect, expectFlash, followLink, sharedPageTest as test, signIn, visit } from './support/app.ts'
 import type { Author } from './support/app.ts'
 
 const expectApiSignInUnverified = async (request: APIRequestContext, account: Author) => {

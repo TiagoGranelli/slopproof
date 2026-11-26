@@ -34,6 +34,7 @@ services:
 
   migrate:
     build: ..
+    pull_policy: never
     environment:
       DATABASE_URL: postgres://app:${APP_DB_PASSWORD}@pooler:5432/app
     depends_on:

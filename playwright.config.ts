@@ -45,7 +45,8 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL,
-    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    trace: 'on-first-retry',
   },
   workers: process.env.CI
     ? Math.min(4, availableParallelism())

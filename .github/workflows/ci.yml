@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Each job only provides tooling and services and runs one `scripts/ci-jobs.ts` script (`pnpm ci:<job>` when npm
-# dependencies are installed, or `node scripts/ci-jobs.ts <job>` when `install: 'false'`), so `pnpm ci:local <job>`
+# dependencies are installed, or `node scripts/ci-jobs.ts <job>` when `pnpm install` is skipped), so `pnpm ci:local <job>`
 # reproduces it locally. Job logic belongs in the scripts, not here.
 env:
   CI: true
@@ -24,18 +24,26 @@ env:
   DATABASE_URL: postgres://app:app-ci@localhost:5432/app
 
 jobs:
-  workflows:
-    name: Workflow lint (actionlint, zizmor)
+  repo-guards:
+    name: Repo guards (workflows, secrets, supply chain)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Every commit, not only the tree: a secret removed later is still in the history.
+          fetch-depth: 0
+      # The frozen install verifies every lockfile entry against minimumReleaseAge and trustPolicy.
       - uses: ./.github/actions/setup
         with:
-          install: 'false'
+          save-cache: 'false'
+          trust-lockfile: 'false'
       - run: node scripts/ci-jobs.ts workflows
+      - run: node scripts/ci-jobs.ts secrets
+      - run: pnpm ci:supply-chain
 
   static:
     name: Static gates
@@ -49,11 +57,11 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup
         with:
-          # The component tests in `pnpm check` run in Chromium (Vitest browser mode).
-          browsers: chromium-headless-shell
           save-cache: 'false'
-          vitest-cache: 'true'
-      - run: pnpm ci:static
+      - env:
+          # The component tests in `pnpm check` reuse the runner's preinstalled Chrome without downloading Playwright's Chromium.
+          CHROME_PATH: /usr/bin/google-chrome
+        run: pnpm ci:static
 
   # The same static gates on Windows, so a script that only works on Linux and macOS (a `.cmd` shim started
   # without a shell, a path joined with `/`) shows up. Not a gate yet: it has not had a green run, and Windows
@@ -64,73 +72,22 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 30
     continue-on-error: true
+    env:
+      PNPM_CONFIG_STORE_DIR: D:\.pnpm-store
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
+      - name: Exclude build and cache paths from Windows Defender
+        shell: pwsh
+        run: >-
+          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, 'D:\.pnpm-store', "$env:USERPROFILE\setup-pnpm",
+          "$env:LOCALAPPDATA\ms-playwright", $env:RUNNER_TEMP
       - uses: ./.github/actions/setup
         with:
           browsers: chromium-headless-shell
-          vitest-cache: 'true'
       - run: pnpm ci:static
-
-  supply-chain:
-    name: Supply chain (release age, trust, signatures, advisories)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The frozen install verifies every lockfile entry against minimumReleaseAge and trustPolicy.
-      - uses: ./.github/actions/setup
-        with:
-          save-cache: 'false'
-          trust-lockfile: 'false'
-      - run: pnpm ci:supply-chain
-
-  secrets:
-    name: Secret scan (Betterleaks, full history)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          # Every commit, not only the tree: a secret removed later is still in the history.
-          fetch-depth: 0
-      - uses: ./.github/actions/setup
-        with:
-          install: 'false'
-      - run: node scripts/ci-jobs.ts secrets
-
-  drift:
-    name: Contract and database drift
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    services:
-      postgres: &postgres
-        image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
-        env:
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app-ci
-          POSTGRES_DB: app
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U app -d app"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          save-cache: 'false'
-      - run: pnpm ci:drift
 
   build:
     name: Build
@@ -151,12 +108,26 @@ jobs:
           retention-days: 3
 
   verify-core:
-    name: Verify API, DB and integration
+    name: Verify drift, API, DB and integration
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
-      postgres: *postgres
+      postgres: &postgres
+        image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app-ci
+          POSTGRES_DB: app
+          POSTGRES_INITDB_ARGS: --nosync
+        ports:
+          - 5432:5432
+        options: >-
+          --tmpfs /var/lib/postgresql:rw,size=512m
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
       # Integration and E2E send account emails here (default ports of verify:app).
       mailpit: &mailpit
         image: axllent/mailpit:v1.31.3@sha256:ed9b00c609e77e99c79b93f1178255ebc271868920f2c69a8d166bd5634ed10d
@@ -174,6 +145,7 @@ jobs:
         with:
           name: output
           path: .output
+      - run: pnpm ci:drift
       - run: pnpm ci:verify -- --only=core
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -194,20 +166,10 @@ jobs:
         include:
           - browser: chromium-headless-shell
             name: chromium
-            project: chromium
-            shard: ''
-          - browser: chromium-headless-shell
-            name: pixel-7
-            project: Pixel 7
-            shard: ''
+            projects: 'chromium,Pixel 7'
           - browser: firefox
-            name: firefox-1
-            project: firefox
-            shard: '1/2'
-          - browser: firefox
-            name: firefox-2
-            project: firefox
-            shard: '2/2'
+            name: firefox
+            projects: firefox
     services:
       postgres: *postgres
       mailpit: *mailpit
@@ -224,8 +186,7 @@ jobs:
           name: output
           path: .output
       - env:
-          PW_PROJECTS: ${{ matrix.project }}
-          PW_SHARD: ${{ matrix.shard }}
+          PW_PROJECTS: ${{ matrix.projects }}
         run: pnpm ci:verify -- --only=e2e
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -272,7 +233,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
-          save-cache: 'false'
+          save-cache: ${{ matrix.name == 'webkit-1' && 'true' || 'false' }}
       - run: pnpm ci:build
       - env:
           PW_PROJECTS: ${{ matrix.project }}
@@ -289,14 +250,13 @@ jobs:
           retention-days: 7
 
   lighthouse:
-    name: Lighthouse (${{ matrix.page }}, ${{ matrix.form_factor }})
+    name: Lighthouse (${{ matrix.page }})
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        form_factor: [mobile, desktop]
         page: [home, about, login, dashboard]
     services:
       postgres: *postgres
@@ -306,6 +266,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
+          caddy: 'true'
           save-cache: 'false'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -313,14 +274,13 @@ jobs:
           path: .output
       - env:
           CHROME_PATH: /usr/bin/google-chrome
-          LH_FORM_FACTOR: ${{ matrix.form_factor }}
           LH_PAGE: ${{ matrix.page }}
-        run: pnpm ci:lighthouse -- "--page=$LH_PAGE" "--form-factor=$LH_FORM_FACTOR"
+        run: pnpm ci:lighthouse -- "--page=$LH_PAGE"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Includes app-server.log and edge.log.
-          name: lighthouse-report-${{ matrix.page }}-${{ matrix.form_factor }}
+          name: lighthouse-report-${{ matrix.page }}
           path: lighthouse-report
           retention-days: 14
 
@@ -332,25 +292,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
-        with:
-          install: 'false'
-      - id: grype-cache-meta
-        shell: bash
-        run: |
-          grype_dir="$HOME/.cache/grype-db"
-          mkdir -p "$grype_dir"
-          printf 'today=%s\ngrype_dir=%s\n' "$(date -u +%F)" "$grype_dir" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.grype-cache-meta.outputs.grype_dir }}
-          key: grype-db-${{ runner.os }}-${{ steps.grype-cache-meta.outputs.today }}
-          restore-keys: grype-db-${{ runner.os }}-
-      - env:
-          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
-        run: node scripts/ci-jobs.ts docker
-      - if: always()
-        shell: bash
-        env:
-          GRYPE_DB_DIR: ${{ steps.grype-cache-meta.outputs.grype_dir }}
-        run: sudo chown -R "$(id -u):$(id -g)" "$GRYPE_DB_DIR"
+      - run: node scripts/ci-jobs.ts docker

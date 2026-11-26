@@ -4,8 +4,8 @@ import {
   dashboardWithMyPost,
   expect,
   failServerFunctionPosts,
+  sharedPageTest as test,
   signIn,
-  test,
   visit,
 } from './support/app.ts'
 
@@ -33,7 +33,7 @@ test.describe('editing from the keyboard', () => {
     await page.keyboard.type(' (saved)')
     await page.keyboard.press('Tab')
     await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: 'Save' })).toBeFocused()
+    await expect(page.getByRole('button', { exact: true, name: 'Save' })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('status')).toHaveText('Post saved.')
     const saved = page
@@ -48,7 +48,7 @@ test.describe('editing from the keyboard', () => {
     await edit.click()
     const field = page.getByLabel('Edit post')
     await field.fill('x'.repeat(281))
-    await page.getByRole('button', { name: 'Save' }).press('Enter')
+    await page.getByRole('button', { exact: true, name: 'Save' }).press('Enter')
     const alert = page.getByRole('alert')
     await expect(alert).toContainText('Use at most 280 characters')
     await expect(field).toHaveAttribute('aria-invalid', 'true')
@@ -61,9 +61,9 @@ test.describe('announcements', () => {
   test('publishing is announced and puts focus back in the empty composer', async ({ author, page }) => {
     await authenticate(page, author)
     await visit(page, '/dashboard')
-    const body = `publish announce ${randomUUID()}`
+    const body = `post announce ${randomUUID()}`
     await page.getByLabel('New post').fill(body)
-    await page.getByRole('button', { name: 'Publish' }).click()
+    await page.getByRole('button', { exact: true, name: 'Publish' }).click()
     await expect(page.getByRole('status')).toHaveText('Post published.')
     await expect(page.getByLabel('New post')).toBeFocused()
     await expect(page.getByLabel('New post')).toHaveValue('')
@@ -101,7 +101,7 @@ test.describe('announcements', () => {
     await signIn(page, author)
     await visit(page, '/dashboard')
     const restore = await failServerFunctionPosts(page)
-    const signOut = page.getByRole('button', { name: 'Sign out' })
+    const signOut = page.getByRole('button', { exact: true, name: 'Sign out' })
     await signOut.focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('alert')).toHaveText('Could not sign out. Check your connection and try again.')
@@ -116,7 +116,7 @@ test.describe('announcements', () => {
 test('Sign out on the home page moves focus to the page heading, not to <body>', async ({ author, page }) => {
   await signIn(page, author)
   await visit(page, '/')
-  const signOut = page.getByRole('button', { name: 'Sign out' })
+  const signOut = page.getByRole('button', { exact: true, name: 'Sign out' })
   await signOut.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
@@ -131,7 +131,7 @@ test('a post with a supplementary Unicode character at index 39 keeps well-forme
   await visit(page, '/dashboard')
   const body = `${'a'.repeat(39)}🀀 ${randomUUID()}`
   await page.getByLabel('New post').fill(body)
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await page.getByRole('button', { exact: true, name: 'Publish' }).click()
   const post = page.getByTestId('my-posts').locator(':scope > li').filter({ hasText: body })
   await expect(post).toBeVisible()
   const labels = await post.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.textContent))
@@ -167,7 +167,7 @@ test('Sign out from /about after visiting / keeps a single h1 and never drops fo
     await gate.promise
     await route.continue()
   })
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
   await started.promise
   const stateDuringLoad = await page.evaluate(() => ({
     activeTag: document.activeElement?.tagName.toLowerCase(),

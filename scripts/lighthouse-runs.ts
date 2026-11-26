@@ -47,8 +47,7 @@ export const findChromium = async (): Promise<string> => {
     }
     return configured
   }
-  const { chromium } = await import('@playwright/test')
-  const path = chromium.executablePath()
+  const path = (await import('@playwright/test')).chromium.executablePath()
   if (!existsSync(path)) {
     throw new Error(`Chromium for Playwright is not installed (${path}). Run: pnpm exec playwright install chromium`)
   }
@@ -96,10 +95,7 @@ const CHROME_QUIET_FLAGS = [
   '--mute-audio',
 ]
 
-const profileBaseDir = () => {
-  const dir = tmpdir()
-  return dir.length > 40 && existsSync('/tmp') ? '/tmp' : dir
-}
+const profileBaseDir = () => (tmpdir().length > 40 && existsSync('/tmp') ? '/tmp' : tmpdir())
 
 const devToolsMatch = (text: string) => /DevTools listening on ws:\/\/[^/]+:(\d+)\//.exec(text)?.[1]
 
@@ -107,16 +103,13 @@ const createPortSettler = (child: ChildProcess, reject: (reason: Error) => void)
   let timer: ReturnType<typeof setTimeout> | undefined
   const clear = (reason?: Error) => {
     clearTimeout(timer)
-    child.removeAllListeners('error').removeAllListeners('exit')
-    child.stderr?.removeAllListeners('data')
+    child.removeAllListeners('error').removeAllListeners('exit').stderr?.removeAllListeners('data')
     if (reason) {
       reject(reason)
     }
   }
   return {
-    arm: (ms: number, message: () => string) => {
-      timer = setTimeout(() => clear(new Error(message())), ms)
-    },
+    arm: (ms: number, message: () => string) => (timer = setTimeout(() => clear(new Error(message())), ms)),
     clear,
   }
 }
@@ -129,8 +122,7 @@ const readDevToolsPort = (child: ChildProcess): Promise<number> =>
     child.once('error', clear)
     child.once('exit', (code) => clear(new Error(`Chrome exited (${code}): ${stderr.trim()}`)))
     child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-      const found = devToolsMatch(stderr)
+      const found = devToolsMatch((stderr += chunk.toString()))
       if (found) {
         clear()
         resolve(Number(found))
@@ -180,22 +172,66 @@ const lighthouseFlags = (run: LighthouseRun, port: number): Flags => ({
   onlyCategories: REPORTED,
   output: 'json',
   port,
+  skipAudits: ['bf-cache'],
 })
 
 type WarmRun = { chrome: Chrome; cookie: string | undefined; url: string }
 
+const pageTargetWsUrl = async (port: number): Promise<string> => {
+  const response = await fetch(`http://127.0.0.1:${port}/json/list`)
+  const targets = (await response.json()) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
+  const wsUrl = (targets.find((entry) => entry.type === 'page') ?? targets[0])?.webSocketDebuggerUrl
+  if (!response.ok || !wsUrl) {
+    throw new Error(`No CDP page target (${response.status})`)
+  }
+  return wsUrl
+}
+
+const sendWarmup = (ws: WebSocket, { cookie, url }: WarmRun): number => {
+  const cookieCmds: Array<[string, Record<string, Json>?]> = cookie
+    ? [['Network.enable'], ['Network.setExtraHTTPHeaders', { headers: { cookie } }]]
+    : []
+  const commands: Array<[string, Record<string, Json>?]> = [['Page.enable'], ...cookieCmds, ['Page.navigate', { url }]]
+  commands.forEach(([method, params], index) => ws.send(JSON.stringify({ id: index + 1, method, params })))
+  return commands.length
+}
+
+const attachWarmup = (ws: WebSocket, run: WarmRun, settle: (error?: Error) => void) => {
+  let [navId, navigated, loaded] = [0, false, false]
+  ws.addEventListener('open', () => (navId = sendWarmup(ws, run)), { once: true })
+  ws.addEventListener('error', () => settle(new Error('CDP WebSocket error')), { once: true })
+  ws.addEventListener('close', () => settle(new Error('CDP WebSocket closed unexpectedly')), { once: true })
+  ws.addEventListener('message', (event) => {
+    const packet = JSON.parse(String(event.data)) as { error?: { message?: string }; id?: number; method?: string }
+    const nav = new Map(Object.entries(packet)).get('result') as { errorText?: string } | undefined
+    const failure = packet.error?.message ?? nav?.errorText
+    if (failure) {
+      settle(new Error(`CDP error: ${failure}`))
+    }
+    navigated ||= packet.id === navId
+    loaded ||= packet.method === 'Page.loadEventFired'
+    if (navigated && loaded) {
+      settle()
+    }
+  })
+}
+
 export const warmBrowser = async (run: WarmRun): Promise<void> => {
   const browser = await launchChrome(run.chrome)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let ws: WebSocket | undefined
   try {
-    await lighthouse(run.url, {
-      disableFullPageScreenshot: true,
-      extraHeaders: run.cookie ? { cookie: run.cookie } : undefined,
-      logLevel: 'error',
-      onlyAudits: ['first-contentful-paint'],
-      output: 'json',
-      port: browser.port,
+    ws = new WebSocket(await pageTargetWsUrl(browser.port))
+    const socket = ws
+    await new Promise<void>((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('CDP warmup timed out after 15000ms')), 15_000)
+      attachWarmup(socket, run, (error) => (error ? reject(error) : resolve()))
     })
   } finally {
+    clearTimeout(timer)
+    if (ws && ws.readyState <= WebSocket.OPEN) {
+      ws.close()
+    }
     await browser.stop()
   }
 }
@@ -239,10 +275,8 @@ const metricMedians = (lhrs: Array<Lhr>): Record<Metric, number> =>
 
 export const LANTERN_TASK_THRESHOLD_MS = 10
 
-const numberIn = (entry: AuditItem, key: string): number | undefined => {
-  const value = entry[key]
-  return typeof value === 'number' ? value : undefined
-}
+const numberIn = (entry: AuditItem, key: string): number | undefined =>
+  typeof entry[key] === 'number' ? entry[key] : undefined
 
 export const preloadTaskMs = (lhr: Lhr): number | null => {
   const requests = lhr.audits['network-requests']?.details?.items ?? []

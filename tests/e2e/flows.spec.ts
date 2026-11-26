@@ -7,8 +7,8 @@ import {
   expectHydrated,
   failServerFunctionPosts,
   seedPost,
+  sharedPageTest as test,
   signIn,
-  test,
   visit,
 } from './support/app.ts'
 import type { Author } from './support/app.ts'
@@ -16,7 +16,7 @@ import type { Author } from './support/app.ts'
 const expectDashboard = async (page: Page) => {
   await expect(page).toHaveURL(/\/dashboard$/)
   await expectHydrated(page)
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.getByRole('button', { exact: true, name: 'Sign out' })).toBeVisible()
 }
 
 const exactly = (text: string) => new RegExp(`^${text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`)
@@ -33,14 +33,14 @@ const editing = (page: Page) =>
 
 const publish = async (page: Page, body: string) => {
   await page.getByLabel('New post').fill(body)
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await page.getByRole('button', { exact: true, name: 'Publish' }).click()
   await expect(myPost(page, body)).toBeVisible()
 }
 
 const editPost = async (page: Page, body: string, draft: string) => {
   await myPost(page, body).getByRole('button', { name: /^Edit/ }).click()
   await page.getByLabel('Edit post').fill(draft)
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { exact: true, name: 'Save' }).click()
 }
 
 const expectEditDiscarded = async (page: Page, body: string, how: 'the Cancel button' | 'Escape') => {
@@ -50,7 +50,7 @@ const expectEditDiscarded = async (page: Page, body: string, how: 'the Cancel bu
   if (how === 'Escape') {
     await page.keyboard.press('Escape')
   } else {
-    await page.getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('button', { exact: true, name: 'Cancel' }).click()
   }
   await expect(page.getByLabel('Edit post')).toHaveCount(0)
   await expect(myPost(page, body)).toBeVisible()
@@ -88,7 +88,7 @@ const signInThroughForm = async (page: Page, author: Author) => {
 }
 
 const signOutFromDashboard = async (page: Page) => {
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
   await expect(navLink(page, 'Sign in')).toBeVisible()
@@ -147,7 +147,7 @@ test('dashboard hydrates from SSR without refetching its data', async ({ author,
   page.on('request', (r) => new URL(r.url()).pathname.startsWith('/api/') && refetches.push(r.url()))
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   await visit(page, '/dashboard')
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  await expect(page.getByRole('button', { exact: true, name: 'Sign out' })).toBeVisible()
   await page.waitForLoadState('networkidle')
   expect(refetches).toEqual([])
   expect(errors).toEqual([])
@@ -227,7 +227,7 @@ test('a rejected save shows the error in the post and keeps the draft', async ({
   await expect(editing(page).getByRole('alert')).toContainText('Use at most 280 characters')
   await expect(page.getByLabel('Edit post')).toHaveValue(draft)
 
-  await page.getByRole('button', { name: 'Cancel' }).click()
+  await page.getByRole('button', { exact: true, name: 'Cancel' }).click()
   await expect(myPost(page, body)).toBeVisible()
   await deletePost(page, body)
 })
@@ -263,10 +263,10 @@ test('a failed sign-out says so and can be retried', async ({ author, page }) =>
   await signIn(page, author)
   await visit(page, '/dashboard')
   const restore = await failServerFunctionPosts(page)
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
   await expect(page.getByRole('alert')).toContainText('Could not sign out')
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled()
+  await expect(page.getByRole('button', { exact: true, name: 'Sign out' })).toBeEnabled()
   await restore()
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/$/)
 })

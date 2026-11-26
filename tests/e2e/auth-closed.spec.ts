@@ -1,4 +1,4 @@
-import { expect, expectHydrated, test } from './support/app.ts'
+import { expect, expectHydrated, sharedPageTest as test } from './support/app.ts'
 
 const closedAppUrl = process.env.CLOSED_APP_URL!
 

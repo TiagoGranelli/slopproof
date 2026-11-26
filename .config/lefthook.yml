@@ -31,38 +31,17 @@ pre-commit:
             run: ./node_modules/.bin/oxfmt --check
             fail_text: run `pnpm format`
 
-          - name: typecheck
-            glob: ['**/*.{ts,tsx}', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml']
-            run: ./node_modules/.bin/tsrs --noEmit
-            fail_text: fix the type errors; in src/sdk run `pnpm codegen`, in src/routeTree.gen.ts run `pnpm build`
-
-          - name: deadcode
+          - name: fallow
             glob: ['**/*.{ts,tsx}', 'package.json', '.fallowrc.json']
-            run: ./node_modules/.bin/fallow dead-code --fail-on-issues
+            run: ./node_modules/.bin/fallow --quiet --fail-on-issues --dupes-threshold 0.000001
             fail_text: >-
-              remove the unused file, export or dependency; intentional public surface gets a commented exception in
-              .fallowrc.json. A boundary violation: `boundaries` in .fallowrc.json says which zone may import which
+              fix the unused code or boundary finding (.fallowrc.json), split functions above the complexity ceiling, or
+              extract duplicated blocks (`pnpm exec fallow dupes --trace <file>:<line>`)
 
-          - name: complexity
-            glob: ['**/*.{ts,tsx}', '.fallowrc.json']
-            run: ./node_modules/.bin/fallow health --complexity
-            fail_text: >-
-              split the function named above into smaller, named steps. Only an irreducible one gets a
-              `health.thresholdOverrides` entry in .fallowrc.json with its reason
-
-          # Any clone group fails: the threshold is a percentage of duplicated lines, so a tiny one means "none".
-          - name: dupes
-            glob: ['**/*.{ts,tsx}', '.fallowrc.json']
-            run: ./node_modules/.bin/fallow dupes --threshold 0.000001
-            fail_text: >-
-              extract the duplicated block into one function and call it from both places (`pnpm exec fallow dupes --trace
-              <file>:<line>` shows every copy). A deliberate clone goes in `duplicates.ignoredClones` in .fallowrc.json
-
-          # New security-sink candidates on lines changed since CHECK_BASE_REF (default HEAD: uncommitted changes). A pnpm
-          # script: lefthook 2.1.14 mangles "${VAR:-default}" on Windows (evilmartians/lefthook#1167, fixed by #1464).
+          # New security-sink candidates on lines changed since CHECK_BASE_REF (default HEAD: uncommitted changes).
           - name: security
             glob: 'src/**/*.{ts,tsx}'
-            run: pnpm run --silent security:check
+            run: ./node_modules/.bin/fallow security --gate new --changed-since "${CHECK_BASE_REF:-HEAD}" src
             fail_text: >-
               keep untrusted input away from the sink (validate, encode, allowlist). A reviewed false positive gets
               `// fallow-ignore-next-line security-sink` above it with the reason
@@ -106,10 +85,10 @@ pre-commit:
 
     - name: effect
       glob: ['**/*.{ts,tsx}', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml']
-      run: ./node_modules/.bin/effect-tsgo diagnostics --project tsconfig.json --strict
+      run: ./node_modules/.bin/effect-tsgo tsc --noEmit
       fail_text: >-
-        do what the Effect diagnostic says. A deliberate exception takes the JSDoc tag or
-        `// @effect-diagnostics <rule>:off` comment the message names, with the reason next to it
+        fix the TypeScript or Effect diagnostic above (in src/sdk run `pnpm codegen`, in src/routeTree.gen.ts run
+        `pnpm build`; deliberate Effect exception takes the JSDoc tag or `// @effect-diagnostics <rule>:off` with reason)
 
     # unit, api and component tests with the coverage gate (vitest.config.ts); needs Playwright's Chromium.
     - name: tests

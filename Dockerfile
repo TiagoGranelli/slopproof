@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # Production image: `docker build -t app .`
 # Runtime needs only .output/ (server bundle, public assets, the migrate.mjs and create-user.mjs commands) and
 # drizzle/ (SQL migrations).
@@ -17,18 +16,41 @@ RUN npm install --global --no-fund --no-audit \
       "$(node -p "require('./package.json').packageManager.split('+')[0]")" \
  && npm cache clean --force \
  && pnpm --version
+# Keep only the Vite/Nitro build plugins (+ `node` for devEngines.runtime) so `--frozen-lockfile` hashes stay
+# strict without installing ~400 unused lint/test packages. `COPY --link . .` restores the full manifests after.
 # --ignore-scripts: `prepare` installs the git hooks, and there is no git here. No dependency may run a build
 # script anyway (allowBuilds in pnpm-workspace.yaml).
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --ignore-scripts --trust-lockfile --no-runtime --store-dir /pnpm-store
-COPY . .
+    node -e ' \
+      const fs = require("fs"); \
+      const keep = new Set(["@babel/core", "@rolldown/plugin-babel", "@tailwindcss/vite", "@vitejs/plugin-react", "babel-plugin-react-compiler", "nitro", "parse5", "tailwindcss", "vite", "node"]); \
+      const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); \
+      pkg.devDependencies = Object.fromEntries(Object.entries(pkg.devDependencies ?? {}).filter(([k]) => keep.has(k))); \
+      fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n"); \
+      let inImporters = false, inRoot = false, inDev = false, keeping = false; \
+      const out = []; \
+      for (const line of fs.readFileSync("pnpm-lock.yaml", "utf8").split("\n")) { \
+        if (/^\S/.test(line)) { inImporters = line === "importers:"; inRoot = false; inDev = false; keeping = false; } \
+        else if (inImporters && /^ {2}\S/.test(line)) { inRoot = line === "  .:"; inDev = false; keeping = false; } \
+        else if (inRoot && /^ {4}\S/.test(line)) { inDev = line === "    devDependencies:"; keeping = false; if (inDev) { out.push(line); continue; } } \
+        if (inDev) { \
+          const m = /^ {6}(?:\x27([^\x27]+)\x27|"([^"]+)"|([^:\s]+)):$/.exec(line); \
+          if (m) keeping = keep.has(m[1] || m[2] || m[3]); \
+          if (!keeping) continue; \
+        } \
+        out.push(line); \
+      } \
+      fs.writeFileSync("pnpm-lock.yaml", out.join("\n")); \
+    ' \
+ && pnpm install --frozen-lockfile --ignore-scripts --trust-lockfile --no-runtime --store-dir /pnpm-store
+COPY --link . .
 # Nitro prerenders /about during the build, which loads the server config. These placeholders only
 # satisfy validation; nothing connects to them and none of them ends up in the output.
 RUN DATABASE_URL=postgres://build:build@127.0.0.1:1/build \
     APP_URL=http://localhost:3000 \
     BETTER_AUTH_SECRET=build-time-placeholder-not-used-at-runtime \
     NODE_OPTIONS=--max-old-space-size=3072 \
-    pnpm build \
+    ./node_modules/.bin/vite build \
  && test -f .output/public/about/index.html \
  && node scripts/bundle-cli.ts
 
@@ -39,16 +61,16 @@ ENV NODE_ENV=production \
 # (the OpenSSL and PCRE2 fixes of 2026-10-01 failed the image scan while the pinned digest was still the newest).
 # The server needs only node. npm (and corepack or yarn, which newer base images no longer ship) would add a
 # package manager and its dependency tree to the attack surface and to every vulnerability scan.
-RUN apt-get update \
- && apt-get upgrade -y --no-install-recommends \
+RUN apt-get update -o Acquire::ForceIPv4=true \
+ && apt-get upgrade -y --no-install-recommends -o Acquire::ForceIPv4=true -o Dpkg::Options::=--force-unsafe-io \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
       /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* \
  && node --version
 WORKDIR /app
 # Application files stay owned by root: the server process cannot modify its own code.
-COPY --from=build /app/.output ./.output
-COPY --from=build /app/drizzle ./drizzle
+COPY --link --from=build /app/.output ./.output
+COPY --link --from=build /app/drizzle ./drizzle
 USER node
 EXPOSE 3000
 # srvx (Nitro's server) drains in-flight requests on SIGTERM, then Nitro's close hook runs the shutdown

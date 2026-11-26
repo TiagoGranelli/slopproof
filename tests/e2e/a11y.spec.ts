@@ -12,6 +12,7 @@ import {
   seedPost,
   sharedPageTest as test,
   signIn,
+  test as standardTest,
   visit,
 } from './support/app.ts'
 import type { Author } from './support/app.ts'
@@ -65,21 +66,21 @@ const STATES = {
     await authenticate(page, author)
     await visit(page, '/dashboard')
     await page.getByLabel('New post').fill(overTheLimit)
-    await page.getByRole('button', { name: 'Publish' }).click()
+    await page.getByRole('button', { exact: true, name: 'Publish' }).click()
     await expect(page.getByRole('alert')).toContainText('Use at most 280 characters')
   },
   'dashboard, save rejected': async ({ author, page }) => {
     const { edit } = await dashboardWithMyPost(page, author)
     await edit.click()
     await page.getByLabel('Edit post').fill(overTheLimit)
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { exact: true, name: 'Save' }).click()
     await expect(page.getByRole('alert')).toContainText('Use at most 280 characters')
   },
   'dashboard, sign-out failed': async ({ author, page }) => {
     await signIn(page, author)
     await visit(page, '/dashboard')
     await failServerFunctionPosts(page)
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
     await expect(page.getByRole('alert')).toContainText('Could not sign out')
   },
   'dashboard with posts': async ({ author, page }) => {
@@ -98,14 +99,8 @@ const STATES = {
   'home, flash message after signing out': async ({ author, page }) => {
     await signIn(page, author)
     await visit(page, '/dashboard')
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
     await expect(page.getByTestId('flash')).toHaveText('You are signed out.')
-  },
-  'home, loading': async ({ page }) => {
-    await visit(page, '/about')
-    await page.route('**/api/posts', () => {})
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: APP_NAME }).click()
-    await expect(page.getByText('Loading…')).toBeVisible()
   },
   'home, no posts yet': async ({ page }) => {
     await navigateWithApiResponse(page, '/api/posts', { json: lastPage() })
@@ -173,4 +168,27 @@ test.describe('axe', () => {
       await expectAccessible(page, state)
     })
   }
+})
+
+standardTest.describe('axe', () => {
+  standardTest('home, loading', async ({ page }) => {
+    await page.clock.install()
+    await visit(page, '/about')
+    const loading = page.getByText('Loading…')
+    await page.route('**/api/posts', () => {})
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: APP_NAME }).click()
+    await expect
+      .poll(
+        async () => {
+          if (await loading.isVisible()) {
+            return true
+          }
+          await page.clock.fastForward(1100)
+          return loading.isVisible()
+        },
+        { intervals: [20, 50, 100, 100, 250], timeout: 15_000 },
+      )
+      .toBe(true)
+    await expectAccessible(page, 'home, loading')
+  })
 })

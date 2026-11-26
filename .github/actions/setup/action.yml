@@ -1,17 +1,17 @@
 name: Setup
-description: pnpm (package.json#packageManager), Node (package.json#devEngines.runtime), cached store, frozen install, optional Vitest/Playwright caches.
+description: pnpm (package.json#packageManager), Node (package.json#devEngines.runtime), cached store, frozen install, optional Playwright/Caddy caches.
 inputs:
   install:
     description: Run `pnpm install --frozen-lockfile`. Jobs whose script needs only Node and Docker skip it.
     default: 'true'
   trust-lockfile:
-    description: Skip re-verifying minimumReleaseAge and trustPolicy during frozen install (set to 'false' in supply-chain).
+    description: Skip re-verifying minimumReleaseAge and trustPolicy during frozen install (set to 'false' in repo-guards).
     default: 'true'
   save-cache:
     description: Save the pnpm store cache (set to 'false' in downstream jobs that only read the cache).
     default: 'true'
-  vitest-cache:
-    description: Cache Vitest pre-bundled browser dependencies (node_modules/.vite/vitest).
+  caddy:
+    description: Cache and expose the pinned Caddy binary from scripts/images.ts via EDGE_RUNTIME=binary and CADDY_BIN (Linux only).
     default: 'false'
   browsers:
     description: Space-separated Playwright browsers to install (cached), with their system dependencies, e.g. `chromium-headless-shell firefox`.
@@ -19,6 +19,16 @@ inputs:
 runs:
   using: composite
   steps:
+    - if: inputs.install == 'true' && (runner.os == 'Windows' || runner.os == 'Linux')
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS:-}" = 'Windows' ] && [ -z "${PNPM_CONFIG_STORE_DIR:-}" ] && [ -d /d ]; then
+          echo 'PNPM_CONFIG_STORE_DIR=D:\.pnpm-store' >> "$GITHUB_ENV"
+        elif [ "${RUNNER_OS:-}" = 'Linux' ] && [ -z "${PNPM_CONFIG_STORE_DIR:-}" ] && [ -d /__w ]; then
+          case "${GITHUB_WORKSPACE:-}" in
+            /__w/*) echo 'PNPM_CONFIG_STORE_DIR=/__w/.pnpm-store' >> "$GITHUB_ENV" ;;
+          esac
+        fi
     - if: inputs.install == 'true'
       uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3.2.0
       with:
@@ -33,6 +43,7 @@ runs:
     - if: inputs.install == 'true'
       shell: bash
       env:
+        SAVE_CACHE: ${{ inputs.save-cache }}
         TRUST_LOCKFILE: ${{ inputs.trust-lockfile }}
       run: |
         if [ "$TRUST_LOCKFILE" = 'false' ]; then
@@ -44,11 +55,38 @@ runs:
         else
           pnpm install --frozen-lockfile --trust-lockfile --prefer-offline --no-runtime --ignore-scripts
         fi
-    - if: inputs.vitest-cache == 'true'
+        if [ "$SAVE_CACHE" = 'true' ]; then
+          pnpm store prune
+        fi
+    - id: caddy
+      if: runner.os == 'Linux' && inputs.caddy == 'true'
+      shell: bash
+      run: |
+        caddy_image=$(node -e "import('./scripts/images.ts').then((m) => console.log(m.IMAGES.caddy))")
+        digest=${caddy_image#*@sha256:}
+        if [ -z "$digest" ] || [ "$digest" = "$caddy_image" ]; then
+          echo "Missing @sha256: digest in IMAGES.caddy: $caddy_image" >&2
+          exit 1
+        fi
+        caddy_dir="$HOME/.cache/caddy/$digest"
+        printf 'image=%s\ndigest=%s\ndir=%s\n' "$caddy_image" "$digest" "$caddy_dir" >> "$GITHUB_OUTPUT"
+    - id: caddy-cache
+      if: runner.os == 'Linux' && inputs.caddy == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: node_modules/.vite/vitest
-        key: vitest-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'vitest.config.ts') }}
+        path: ${{ steps.caddy.outputs.dir }}
+        key: caddy-${{ runner.os }}-${{ runner.arch }}-${{ steps.caddy.outputs.digest }}
+    - if: runner.os == 'Linux' && inputs.caddy == 'true'
+      shell: bash
+      env:
+        CADDY_IMAGE: ${{ steps.caddy.outputs.image }}
+        CADDY_DIR: ${{ steps.caddy.outputs.dir }}
+      run: |
+        if [ ! -x "$CADDY_DIR/caddy" ]; then
+          mkdir -p "$CADDY_DIR"
+          cid=$(docker create "$CADDY_IMAGE") && docker cp "$cid:/usr/bin/caddy" "$CADDY_DIR/caddy" && docker rm "$cid" && chmod +x "$CADDY_DIR/caddy"
+        fi
+        node -e "const fs=require('node:fs'),d=process.env.CADDY_DIR;if(!d||/[\r\n]/.test(d))throw new Error('Invalid CADDY_DIR');fs.appendFileSync(process.env.GITHUB_ENV,'EDGE_RUNTIME=binary\nCADDY_BIN='+d+'/caddy\n')"
     - id: playwright
       if: inputs.browsers != ''
       shell: bash

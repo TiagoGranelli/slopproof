@@ -7,21 +7,18 @@ covers and how to make an exception.
 
 `pnpm check` is `lefthook run pre-commit --all-files --no-auto-install`: every job in `.config/lefthook.yml` (the
 lightweight checks in parallel, the type-aware and test jobs one at a time), then a summary with each failed job's
-fix. No database, no build; component tests need Playwright's headless Chromium (`chromium-headless-shell` in CI, or
-`CHROME_PATH` when pointing Vitest at a local Chrome binary).
+fix. No database, no build; component tests need headless Chromium (`CHROME_PATH=/usr/bin/google-chrome` on Linux CI,
+`chromium-headless-shell` on Windows CI, or `CHROME_PATH` when pointing Vitest at a local Chrome binary).
 
 | Job | What fails it |
 | --- | --- |
-| `secrets` | Betterleaks on the staged changes, only when a `betterleaks` 2 binary is on the `PATH` (CI's `secrets` job always runs). Until 2.0.0 is released Homebrew installs version 1, which the job skips: take 2.0.0-rc.1 from the [release](https://github.com/betterleaks/betterleaks/releases/tag/v2.0.0-rc.1) |
+| `secrets` | Betterleaks on the staged changes, only when a `betterleaks` 2 binary is on the `PATH` (CI's `repo-guards` job always runs `secrets`). Until 2.0.0 is released Homebrew installs version 1, which the job skips: take 2.0.0-rc.1 from the [release](https://github.com/betterleaks/betterleaks/releases/tag/v2.0.0-rc.1) |
 | `format` | `oxfmt --check` |
 | `lint` | type-aware Oxlint (through tsrs) on `@nkzw/oxlint-config` 3 with sorting, the `pedantic` category, TanStack Query/Router, Playwright, `eslint-plugin-react-you-might-not-need-an-effect` (`strict`), `repo/no-comments` (ADR 0019), and the repository's syntax rules (below); zero warnings: `--deny-warnings`, every rule is error or off |
-| `typecheck` | `tsrs --noEmit` (TypeScript 7.1 beta, the same checker the type-aware lint uses: ADR 0016) |
-| `effect` | Effect language-service diagnostics (`effect-tsgo diagnostics --strict`); every rule whose default is a suggestion is promoted to a warning in `tsconfig.json`, so it fails too |
-| `deadcode` | Fallow with `--fail-on-issues`: unused files, exports, types and dependencies, zones |
-| `complexity` | Fallow: cognitive 15, cyclomatic 20 per function |
-| `dupes` | any clone group outside generated code and tests (`fallow dupes --threshold 0.000001`) |
-| `security` | a new security-sink candidate in `src/` on a line changed since `CHECK_BASE_REF` (default `HEAD`). The generated SDK carries `// fallow-ignore-file security-sink` (Hey API `output.header`) |
-| `tests` | `pnpm test:fast`: Vitest projects `unit`, `api` and `component` with the coverage gate ([tests/AGENTS.md](../../tests/AGENTS.md)). Two of the tests are gates themselves: `tests/unit/repo-policy.test.ts` and `tests/api/public-operations.test.ts` (below) |
+| `effect` | `effect-tsgo tsc --noEmit`: TypeScript 7 typecheck plus Effect language-service diagnostics (every rule whose default is a suggestion is promoted to a warning in `tsconfig.json`, so it fails too; `pnpm typecheck` keeps `tsrs --noEmit` standalone per ADR 0016) |
+| `fallow` | `fallow --quiet --fail-on-issues --dupes-threshold 0.000001`: unused files, exports, types and dependencies, boundaries (`zones`), complexity (cognitive 15, cyclomatic 20 per function), and any clone group outside generated code and tests |
+| `security` | `fallow security --gate new --changed-since "${CHECK_BASE_REF:-HEAD}" src`: a new security-sink candidate in `src/` on a line changed since `CHECK_BASE_REF` (default `HEAD`). The generated SDK carries `// fallow-ignore-file security-sink` (Hey API `output.header`) |
+| `tests` | `pnpm test:fast`: Vitest projects `unit` (`isolate: false`), `api` (`isolate: false`) and `component` (`isolate: true`) with the coverage gate ([tests/AGENTS.md](../../tests/AGENTS.md)). Two of the tests are gates themselves: `tests/unit/repo-policy.test.ts` and `tests/api/public-operations.test.ts` (below) |
 | `repo-policy` | `tests/unit/repo-policy.test.ts` alone, on every commit (under a second), so a commit without code runs it too |
 | `drift` | `check:drift contract migrations auth`. `contract` runs `pnpm codegen` in place and fails if it changed `openapi.json` or `src/sdk` (the regenerated files stay, ready to commit) |
 | `migrations` | `squawk --config .config/squawk.toml drizzle/*.sql` (`squawk-cli` from npm) over the migrations after 0004 |
@@ -35,9 +32,9 @@ runs `secrets` and `repo-policy`, in about a second. `pnpm install` installs the
 It sets aside the unstaged part of a partially staged file while the jobs run, but a modified file that is not
 staged at all, or an untracked one, is checked as if it were part of the commit: a file left out of the commit
 can hide a problem the commit has. CI checks the exact commit: `pnpm ci:static` runs `pnpm check` with
-`CHECK_BASE_REF=HEAD^` (the commit under test against its parent) and excludes `drift` (run in the `drift` job) and
-`repo-policy` (already covered by `tests`). A job subset: `pnpm check --job lint --job tests`, or
-`LEFTHOOK_EXCLUDE=tests pnpm check`.
+`CHECK_BASE_REF=HEAD^` (the commit under test against its parent) and excludes `drift` (run in `verify-core`),
+`repo-policy` (already covered by `tests`) and `secrets` (run in `repo-guards` with `fetch-depth: 0`). A job subset:
+`pnpm check --job lint --job tests`, or `LEFTHOOK_EXCLUDE=tests pnpm check`.
 
 ## Escape hatches
 
@@ -146,16 +143,28 @@ Lantern then adds four times that task before every preloaded script ([ADR 0011]
 [--edge-protocol=h2|h1|http]` runs the gate on the built app behind the Caddy edge over HTTPS and HTTP/2, as in
 production (needs Docker); see [ADR 0011](../decisions/0011-lighthouse-over-https-http2.md). CI sets
 `CHROME_PATH=/usr/bin/google-chrome` so `lighthouse` reuses the runner's preinstalled Chrome without downloading
-Playwright's Chromium.
+Playwright's Chromium, runs `EDGE_RUNTIME=binary` with the cached Caddy binary (`caddy: 'true'` in setup), skips the
+`weight: 0` `bf-cache` audit, and runs both `mobile` and `desktop` per page.
 
 ## CI layout
 
 `.github/actions/setup/action.yml` uses `pnpm/setup` (pnpm, Node, and store caching; downstream jobs pass
-`save-cache: 'false'`) and optional `vitest-cache` (`node_modules/.vite/vitest`) and Playwright browser caches.
-`supply-chain` clears `lockfile-verified.jsonl` before installing so `minimumReleaseAge` and `trustPolicy` verify
-live against the registry. `verify-e2e` runs `chromium`/`Pixel 7` (`chromium-headless-shell`) and sharded `firefox`
-(`PW_SHARD=1/2`, `2/2`) on `ubuntu-24.04` after `build`; `verify-e2e-webkit` runs sharded `webkit` and `iPhone 15`
-inside the pinned Playwright container with its own `pnpm ci:build` so image pull overlaps `build`.
+`save-cache: 'false'`, while cache-writing jobs run `pnpm store prune` right after `pnpm install`), aligns the pnpm
+store on `D:\.pnpm-store` on Windows and `/__w/.pnpm-store` inside Linux containers, and provides optional Playwright
+browser (`browsers`) and Caddy binary (`caddy: 'true'`, extracting `/usr/bin/caddy` from `IMAGES.caddy` into
+`~/.cache/caddy/<digest>` and exporting `EDGE_RUNTIME=binary` + `CADDY_BIN`) caches.
+
+| Job | Runner / needs | Covers |
+| --- | --- | --- |
+| `repo-guards` | `ubuntu-24.04` | `node scripts/ci-jobs.ts workflows` (actionlint, zizmor, image pins, deploy validation), `node scripts/ci-jobs.ts secrets` (`fetch-depth: 0` Betterleaks), and `pnpm ci:supply-chain` (`trust-lockfile: 'false'` deletes `lockfile-verified.jsonl` before live frozen install, then `audit signatures` and `audit:check`) |
+| `static` | `ubuntu-24.04` | `pnpm ci:static` (`CHROME_PATH=/usr/bin/google-chrome`, `save-cache: 'false'`) |
+| `static-windows` | `windows-2025` (non-PR, non-blocking) | `pnpm ci:static` with `Add-MpPreference` Defender exclusions, `PNPM_CONFIG_STORE_DIR=D:\.pnpm-store`, `browsers: chromium-headless-shell`, sole Windows cache writer |
+| `build` | `ubuntu-24.04` | `pnpm ci:build`, uploads `.output` artifact, saves the pruned Linux pnpm store cache |
+| `verify-core` | `ubuntu-24.04`, `needs: build`, Postgres (`--tmpfs`, `--nosync`, `1s` healthcheck) + Mailpit | `pnpm ci:drift` then `pnpm ci:verify -- --only=core` (`api`, `db`, `integration`, contract coverage) |
+| `verify-e2e` | `ubuntu-24.04`, `needs: build`, Postgres + Mailpit (2 matrix jobs) | `chromium` (`PW_PROJECTS=chromium,Pixel 7` with `chromium-headless-shell`) and unsharded `firefox` (`browsers: firefox`) |
+| `verify-e2e-webkit` | Playwright Noble container, Postgres + Mailpit (3 matrix jobs) | `webkit-1` (`save-cache: 'true'`, seeding `/__w/.pnpm-store`), `webkit-2`, `iphone-15`; each runs `pnpm ci:build` so image pull overlaps `build` |
+| `lighthouse` | `ubuntu-24.04`, `needs: build`, Postgres (4 matrix jobs by `page`) | `pnpm ci:lighthouse -- "--page=$LH_PAGE"` (`mobile` + `desktop`) behind cached binary Caddy, uploads `lighthouse-report-<page>` |
+| `docker` | `ubuntu-24.04` | `node scripts/ci-jobs.ts docker` on preinstalled runner Node (`22.23.5`), skipping `./.github/actions/setup` and `actions/cache` `grype-db` (`prepareStack` updates Grype DB directly and runs with `GRYPE_DB_AUTO_UPDATE=false`) |
 
 ## Less common commands
 
@@ -163,7 +172,7 @@ inside the pinned Playwright container with its own `pnpm ci:build` so image pul
 | --- | --- |
 | `pnpm verify:tla [spec ...]` | TLC model checker (`tla2tools.jar` `v1.7.4`, SHA-256 verified, cached in `~/.cache/tla2tools`) over every `.tla`/`.cfg` pair in `specs/` (`RateLimit` and `KeysetPagination`). Uses native `java` or a pinned JRE container via Docker. Deterministic (~3 s); see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
 | `pnpm verify:ui-properties` | Bombadil (`@antithesishq/bombadil` `0.7.10`) autonomous browser property exploration (`tests/bombadil/app.ts`) against the built app (public and signed-in sessions): zero uncaught/console errors, single `h1` and `main` landmark, no focus drop to `document.body`, zero 5xx responses, zero CSP violations. Needs `pnpm build`, Postgres, and Playwright's Chromium (`BOMBADIL_TIME_LIMIT` defaults to `15s` per pass). Bombadil 0.7.10 has no RNG seed flag; every pass writes `test-results/bombadil/<pass>/trace.jsonl`, and a failure prints the replay command (`pnpm verify:ui-properties -- --reproduce=<trace-dir> --pass=<public\|authenticated>`, or `BOMBADIL_REPRODUCE` / `BOMBADIL_PASS`), which replays into `test-results/bombadil/reproduce-<pass>` without overwriting the trace; see [ADR 0018](../decisions/0018-formal-verification-and-property-tests.md) |
-| `pnpm audit:check` | `pnpm audit --audit-level high` over production and development packages: fails on a high or critical advisory not in `auditConfig.ignoreGhsas` (`pnpm-workspace.yaml`). Needs the npm registry; CI job `supply-chain` |
+| `pnpm audit:check` | `pnpm audit --audit-level high` over production and development packages: fails on a high or critical advisory not in `auditConfig.ignoreGhsas` (`pnpm-workspace.yaml`). Needs the npm registry; CI job `repo-guards` (`pnpm ci:supply-chain`) |
 | `pnpm sbom:release` | `pnpm sbom`: a CycloneDX 1.7 SBOM of the production npm dependencies, with licenses, in `sbom/npm.cdx.json`, for a release. Needs `node_modules`. Not a gate |
 | `pnpm ci:local [job ...]` | The CI jobs (`workflows secrets static supply-chain drift build verify lighthouse docker`, default all) as `pnpm ci:<job>` scripts in the Playwright Ubuntu container next to Postgres and Mailpit, all five browser projects included. Needs Docker. See [docs/operations.md](../operations.md#ci-and-local-ci) |
 | `harbor run -p .agents/evals/tasks -a <agent> -m <model>` | The agent eval ([evals.md](evals.md)): an agent solves each task in a container, graded by `pnpm check`, drift and hidden checks. Needs Docker and Harbor, and runs a paid agent; not a gate |

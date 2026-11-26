@@ -31,8 +31,14 @@ lefthook-local.yml
 .agents/
 .claude/
 .repos/
+astgrep/
 docs/
 deploy/
+gitleaks/
+opengrep/
+specs/
+squawk/
 tests/
+*.md
 Dockerfile
 .dockerignore

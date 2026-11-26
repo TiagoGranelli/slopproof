@@ -103,7 +103,7 @@ export const startTestServers = async (runner: 'integration' | 'e2e'): Promise<S
   const running: Array<RunningApp> = []
   const stop = stopAll(running, databaseUrl)
   try {
-    const seed = await seedAppDatabase(databaseUrl)
+    const seed = await seedAppDatabase(databaseUrl, { seedUsers: runner === 'e2e' ? 'none' : 'all' })
     const [open, closed] = await startPair({ databaseUrl, mail, runner, seed }, running)
     return { servers: handOver(open, closed, mail), stop }
   } catch (error) {
