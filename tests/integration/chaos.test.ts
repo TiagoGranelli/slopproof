@@ -43,8 +43,9 @@ const terminateAppBackends = async (url: string) => {
   }
 }
 
-const expectNoPii = (text: string, label: string) => {
-  for (const secret of piiSamples) {
+const expectNoPii = (text: string, label: string, excluded: ReadonlyArray<string> = []) => {
+  const checked = piiSamples.filter((secret) => !excluded.includes(secret))
+  for (const secret of checked) {
     expect(text.includes(secret), `${label} leaked sensitive value`).toBe(false)
   }
 }
@@ -141,7 +142,11 @@ describe('chaos and fault injection', () => {
     const responses = (await Promise.all(inFlight)).filter((res): res is Response => res !== undefined)
     for (const res of responses) {
       expect(res.status).toBeLessThan(500)
-      expectNoPii(await res.text(), `drain response ${res.url}`)
+      expectNoPii(
+        await res.text(),
+        `drain response ${res.url}`,
+        res.ok && new URL(res.url).pathname === '/api/me' ? [app.user.email] : [],
+      )
     }
     expect(stopped).toMatchObject({ code: 0, signal: null })
     expect(stopped.ms).toBeLessThanOrEqual(MAX_SHUTDOWN_MS)
