@@ -182,6 +182,24 @@ const lighthouseFlags = (run: LighthouseRun, port: number): Flags => ({
   port,
 })
 
+type WarmRun = { chrome: Chrome; cookie: string | undefined; url: string }
+
+export const warmBrowser = async (run: WarmRun): Promise<void> => {
+  const browser = await launchChrome(run.chrome)
+  try {
+    await lighthouse(run.url, {
+      disableFullPageScreenshot: true,
+      extraHeaders: run.cookie ? { cookie: run.cookie } : undefined,
+      logLevel: 'error',
+      onlyAudits: ['first-contentful-paint'],
+      output: 'json',
+      port: browser.port,
+    })
+  } finally {
+    await browser.stop()
+  }
+}
+
 export const runLighthouse = async (run: LighthouseRun): Promise<Lhr> => {
   const browser = await launchChrome(run.chrome)
   const config = run.formFactor === 'desktop' ? desktopConfig : undefined

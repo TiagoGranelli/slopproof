@@ -20,6 +20,7 @@ import {
   SHM_BYTES,
   SMALL_SHM,
   summarizeRuns,
+  warmBrowser,
 } from './lighthouse-runs.ts'
 import type { Chrome, Lhr } from './lighthouse-runs.ts'
 import { dropTestDatabase, testDatabaseUrl } from './test-db.ts'
@@ -170,7 +171,12 @@ const measureApp = async (app: RunningApp, chromePath: string): Promise<Array<Pa
     ? await signIn(app.url, { email: app.user.email, password: app.user.password })
     : undefined
   await warmPages(app.url, cookie)
-  return measureAll({ chrome: { flags, path: chromePath }, cookie, url: app.url })
+  const chrome = { flags, path: chromePath }
+  const firstPage = pages[0]
+  if (firstPage) {
+    await warmBrowser({ chrome, cookie: firstPage.auth ? cookie : undefined, url: app.url + firstPage.path })
+  }
+  return measureAll({ chrome, cookie, url: app.url })
 }
 
 const chromePath = await findChromium()
